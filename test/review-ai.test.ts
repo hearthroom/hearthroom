@@ -337,6 +337,24 @@ describe('AI 分歧仲裁', () => {
     expect(ev).toEqual({ actor_kind: 'reviewer', source: 'ai_right', ai_suggestion_id: sa });
   });
 
+  it('駁回後改判為通過（版本列轉給改判單）：自己寫的卡照樣排除、卡名照樣顯示', async () => {
+    const { b, sb } = await setup();
+    // 模擬改判通過：新的一張改判單通過，版本列從原本的駁回單轉過去
+    const flip = crypto.randomUUID();
+    await env.DB.prepare(`INSERT INTO review_submissions (id,card_id,provider,source_role_id,kind,status,content_hash,submitted_at,decided_at,flip_of,flip_by)
+      SELECT ?,card_id,provider,source_role_id,kind,'approved',content_hash,?,?,id,? FROM review_submissions WHERE id=?`).bind(flip, Date.now(), Date.now(), managerId, b.id).run();
+    await env.DB.prepare('UPDATE hosting_versions SET submission_id=? WHERE submission_id=?').bind(flip, b.id).run();
+    const item = (await json(await get('/v1/review-ai/disagreements', 'mgr'))).items.find((i: any) => i.suggestionId === sb);
+    expect(item.name).not.toBe('');
+    await makeReviewer(AUTHOR);
+    expect((await json(await get('/v1/review-ai/disagreements', 'author'))).items.map((i: any) => i.suggestionId)).not.toContain(sb);
+    expect((await get(`/v1/review-ai/disagreements/${sb}`, 'author')).status).toBe(404);
+    expect((await send('PUT', `/v1/review-ai/disagreements/${sb}/persuasion`, 'author', { value: 'convinced' })).status).toBe(404);
+    const authorMember = (await env.DB.prepare('SELECT member_id FROM hosting_versions WHERE submission_id=?').bind(flip).first<{ member_id: string }>())!.member_id;
+    await env.DB.prepare("UPDATE reviewers SET role='manager' WHERE member_id=?").bind(authorMember).run();
+    expect((await arbitrate(sb, { value: 'human_right' }, 'author')).status).toBe(404);
+  });
+
   it('同一個操作重送不重複寫；都說得通不能加入參考範例；一致的單不能仲裁', async () => {
     const { sa, c } = await setup();
     const op = crypto.randomUUID();
@@ -425,16 +443,41 @@ describe('AI 說服你了嗎（owner 2026-11-24）', () => {
     expect(monday.getUTCHours()).toBe(0);
     expect(Date.now() - week.weekStart).toBeLessThan(7 * 86_400_000);
     expect(week).toMatchObject({ convinced: 1, rated: 1, suppressed: true });
-    // 再補 10 筆本週、1 筆上週（直接寫表，只看統計口徑）
+    // 再補 10 位審核員本週、1 位上週對同一筆分歧的選擇（直接寫表，只看統計口徑）
     const now = Date.now();
+    const at = (await env.DB.prepare('SELECT updated_at FROM review_ai_suggestions WHERE id=?').bind(sa).first<{ updated_at: number }>())!.updated_at;
+    const sub = (await env.DB.prepare('SELECT submission_id FROM review_ai_suggestions WHERE id=?').bind(sa).first<{ submission_id: string }>())!.submission_id;
     for (let i = 0; i < 10; i++) {
-      await env.DB.prepare('INSERT INTO review_ai_persuasion (suggestion_id,member_id,submission_id,value,created_at,updated_at) VALUES (?,?,?,?,?,?)')
-        .bind(`g-${i}`, managerId, 's', i < 4 ? 'convinced' : 'not_convinced', now, now).run();
+      await env.DB.prepare('INSERT INTO review_ai_persuasion (suggestion_id,member_id,submission_id,value,created_at,updated_at,suggestion_at) VALUES (?,?,?,?,?,?,?)')
+        .bind(sa, `m-${i}`, sub, i < 4 ? 'convinced' : 'not_convinced', now, now, at).run();
     }
-    await env.DB.prepare('INSERT INTO review_ai_persuasion (suggestion_id,member_id,submission_id,value,created_at,updated_at) VALUES (?,?,?,?,?,?)')
-      .bind('g-old', managerId, 's', 'convinced', week.weekStart - 1, week.weekStart - 1).run();
+    await env.DB.prepare('INSERT INTO review_ai_persuasion (suggestion_id,member_id,submission_id,value,created_at,updated_at,suggestion_at) VALUES (?,?,?,?,?,?,?)')
+      .bind(sa, 'm-old', sub, 'convinced', week.weekStart - 1, week.weekStart - 1, at).run();
     week = (await json(await get('/v1/review-ai/disagreements', 'human'))).persuasion;
     expect(week).toMatchObject({ convinced: 5, rated: 11, suppressed: false });
+  });
+
+  it('AI 重判（同一筆建議覆寫）後，之前的選擇不再算：我的選擇回到未評，本週與報表都不計', async () => {
+    const { a, sa } = await setup();
+    await persuade(sa, 'convinced');
+    expect((await json(await get('/v1/review-ai/disagreements', 'human'))).persuasion).toMatchObject({ rated: 1 });
+    await env.DB.prepare('UPDATE review_ai_suggestions SET updated_at=updated_at+1000, reasons=? WHERE id=?').bind('["opening.too_short"]', sa).run();
+    expect((await json(await get(`/v1/review-ai/disagreements/${sa}`, 'human'))).myPersuasion).toBeNull();
+    expect((await json(await get('/v1/review-ai/disagreements', 'human'))).persuasion).toMatchObject({ rated: 0 });
+    expect((await json(await get('/v1/review-ai/report', 'mgr'))).versions.find((v: any) => v.criteriaVersion === 'v1').persuasion).toEqual({ convinced: 0, rated: 0 });
+    expect((await persuade(sa, 'not_convinced')).status).toBe(200);
+    expect((await json(await get(`/v1/review-ai/disagreements/${sa}`, 'human'))).myPersuasion).toBe('not_convinced');
+    void a;
+  });
+
+  it('已不是分歧的（例如之後被改判）不算進本週與報表', async () => {
+    const { a, sa } = await setup();
+    await persuade(sa, 'convinced');
+    // AI 那邊改成通過（跟人工一致），這筆就不再是分歧
+    await env.DB.prepare("UPDATE review_ai_suggestions SET verdict='pass', reasons='[]' WHERE id=?").bind(sa).run();
+    void a;
+    expect((await json(await get('/v1/review-ai/disagreements', 'human'))).persuasion).toMatchObject({ rated: 0 });
+    expect((await json(await get('/v1/review-ai/report', 'mgr'))).versions.find((v: any) => v.criteriaVersion === 'v1').persuasion ?? { rated: 0 }).toMatchObject({ rated: 0 });
   });
 
   it('報表每個判準版本帶被說服筆數（沒仲裁過也有），每人每筆取最後一次', async () => {

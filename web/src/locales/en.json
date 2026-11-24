@@ -6187,7 +6187,7 @@
   "reviewAi.arb.persuade.weeklyTitle": "Convinced rate this week",
   "reviewAi.arb.persuade.weeklyValue": "{pct} ({yes} convinced / {total} rated)",
   "reviewAi.arb.persuade.weeklySmall": "Not enough samples ({yes} convinced / {total} rated)",
-  "reviewAi.arb.persuade.weeklyRule": "Counted by UTC week across disagreements rated “Convinced me” or “Not convinced” (latest choice per item). Shows “Not enough samples” under 10 rated.",
+  "reviewAi.arb.persuade.weeklyRule": "Counted by UTC week across “Convinced me” and “Not convinced” ratings (one per reviewer per disagreement, using their latest choice). Shows “Not enough samples” under 10 rated.",
   "reviewAi.arb.report.col.persuaded": "Convinced",
   "reviewAi.arb.report.persuadedCell": "{pct} ({yes}/{total})",
   "reviewAi.arb.refs.title": "Reference examples",

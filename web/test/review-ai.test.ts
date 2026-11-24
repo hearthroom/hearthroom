@@ -867,6 +867,18 @@ it('persuade: the AI column shows its trade-offs once, reviewers only; the two-w
   await vi.waitFor(() => expect($('[data-persuade-recorded]')!.textContent).toContain(t('reviewAi.arb.persuade.yes')));
 });
 
+it('persuade: the item stopped being a disagreement (404) — the page reloads and says it is gone instead of asking to retry', async () => {
+  let gone = false;
+  routes['/v1/review-ai/disagreements/g1/persuasion'] = () => { gone = true; return [404, { error: 'disagreement_not_found' }]; };
+  routes['/v1/review-ai/disagreements/g1'] = () => (gone ? [404, { error: 'disagreement_not_found' }] : [200, disagreement()]);
+  routes['/v1/review-ai/disagreements?'] = () => [200, { total: 0, items: [] }];
+  await mountPage('/en/review/ai/g1');
+  await vi.waitFor(() => expect($('[data-persuade]')).not.toBeNull());
+  host.querySelector<HTMLInputElement>('[data-persuade-value=convinced]')!.click();
+  await vi.waitFor(() => expect(host.textContent).toContain(t('reviewAi.arb.detail.notFound')));
+  expect($('[data-persuade-error]')).toBeNull();
+});
+
 it('persuade: my earlier choice comes back checked; no AI note says so', async () => {
   routes['/v1/review-ai/disagreements/g1'] = () => [200, disagreement({ myPersuasion: 'not_convinced', ai: { ...disagreement().ai, note: '' } })];
   await mountPage('/en/review/ai/g1');

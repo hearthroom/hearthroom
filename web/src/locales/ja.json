@@ -6187,7 +6187,7 @@
   "reviewAi.arb.persuade.weeklyTitle": "今週の納得率",
   "reviewAi.arb.persuade.weeklyValue": "{pct}（納得 {yes}／回答 {total}）",
   "reviewAi.arb.persuade.weeklySmall": "サンプル不足（納得 {yes}／回答 {total}）",
-  "reviewAi.arb.persuade.weeklyRule": "UTC週で集計し、「納得できた」または「納得できない」を選んだ不一致だけを数えます（1件につき最新の選択）。回答が10件未満のときは「サンプル不足」と表示します。",
+  "reviewAi.arb.persuade.weeklyRule": "UTC週で集計し、「納得できた」または「納得できない」の回答を数えます（不一致1件につき審査員ごとに最新の1回）。回答が10回未満のときは「サンプル不足」と表示します。",
   "reviewAi.arb.report.col.persuaded": "AIに納得",
   "reviewAi.arb.report.persuadedCell": "{pct}（{yes}/{total}）",
   "reviewAi.arb.refs.title": "参考例",

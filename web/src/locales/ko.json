@@ -6187,7 +6187,7 @@
   "reviewAi.arb.persuade.weeklyTitle": "이번 주 설득 비율",
   "reviewAi.arb.persuade.weeklyValue": "{pct}(설득 {yes} / 응답 {total})",
   "reviewAi.arb.persuade.weeklySmall": "표본 부족(설득 {yes} / 응답 {total})",
-  "reviewAi.arb.persuade.weeklyRule": "UTC 주 단위로 집계하며, '설득됐어요' 또는 '설득되지 않았어요'를 고른 불일치만 세요(건당 마지막 선택 기준). 응답이 10건 미만이면 '표본 부족'으로 표시해요.",
+  "reviewAi.arb.persuade.weeklyRule": "UTC 주 단위로 집계하며, '설득됐어요' 또는 '설득되지 않았어요' 응답을 세요(불일치 건당 심사자별로 마지막 선택 1회 기준). 응답이 10회 미만이면 '표본 부족'으로 표시해요.",
   "reviewAi.arb.report.col.persuaded": "AI에 설득됨",
   "reviewAi.arb.report.persuadedCell": "{pct}({yes}/{total})",
   "reviewAi.arb.refs.title": "참고 예시",

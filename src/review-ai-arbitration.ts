@@ -30,6 +30,8 @@ const HUMAN_NOW = `COALESCE(CASE WHEN (${LIVE}) IS NOT NULL THEN (${HUMAN}) END,
 
 // 看過 AI 判斷才蓋章的單不算分歧（人工那邊不是獨立判斷）
 const base = `FROM review_ai_suggestions a JOIN review_submissions s ON s.id=a.submission_id`;
+// 自己寫的卡不列：以卡為準（作者在這張卡任何一版的版本列上）。駁回後改判為通過時，原本那張單的版本列已轉給改判單，
+// 以單為準就會漏掉作者自己（各處的 NOT EXISTS(... ov.card_id=s.card_id ...)）
 
 export interface DisagreementFilter {
   state: "open" | "done" | "all"; criteria: string | null; direction: Direction | null; reason: string | null; limit: number; offset: number;
@@ -51,12 +53,14 @@ export async function listDisagreements(db: D1Database, f: DisagreementFilter) {
     AND (?2 IS NULL OR ${DIRECTION} = ?2)
     AND (?3='all' OR (?3='open' AND ${LATEST} IS NULL) OR (?3='done' AND ${LATEST} IS NOT NULL))
     AND (?4 IS NULL OR EXISTS(SELECT 1 FROM json_each(a.reasons) r WHERE r.value=?4) OR EXISTS(SELECT 1 FROM json_each(COALESCE(s.reject_reasons,'[]')) r WHERE r.value=?4))
-    AND NOT EXISTS(SELECT 1 FROM hosting_versions ov WHERE ov.submission_id=s.id AND ov.member_id=?5)`;
+    AND NOT EXISTS(SELECT 1 FROM hosting_versions ov WHERE ov.card_id=s.card_id AND ov.member_id=?5)`;
   const args = [f.criteria, f.direction, f.state, f.reason, f.viewer];
   const [rows, total] = await Promise.all([
     db.prepare(`SELECT a.id, a.submission_id, s.card_id, a.criteria_version, a.verdict, a.reasons, a.flags, a.confidence, a.created_at,
         s.decided_at, s.reject_reasons, ${HUMAN_NOW} AS human, ${DIRECTION} AS direction, ${LATEST} AS arbitration,
-        (SELECT json_extract(v.public_role,'$.names') FROM hosting_versions v WHERE v.submission_id=s.id) AS names
+        -- 卡名：這一版的公開資料（改判通過後版本列在改判單上），都沒有就用卡片現在的名字
+        COALESCE((SELECT json_extract(v.public_role,'$.names') FROM hosting_versions v WHERE v.submission_id IN (s.id, (SELECT f.id FROM review_submissions f WHERE f.flip_of=s.id AND f.status='approved'))),
+          (SELECT c.names FROM cards c WHERE c.id=s.card_id)) AS names
       ${base} ${where} ORDER BY a.created_at ASC, a.id ASC LIMIT ${f.limit} OFFSET ${f.offset}`).bind(...args).all<Record<string, any>>(),
     db.prepare(`SELECT COUNT(*) AS n ${base} ${where}`).bind(...args).first<{ n: number }>(),
   ]);
@@ -77,7 +81,7 @@ export async function disagreementSides(db: D1Database, suggestionId: string, op
   // 審核員、仲裁人的名字只給管理員（PM 2026-11-23）；一般審核員看得到結論，不看是誰
   const hideNames = (rows: Record<string, unknown>[], key: string) => (opts.names ? rows : rows.map((r) => ({ ...r, [key]: null })));
   const row = await db.prepare(`SELECT a.*, s.status, s.card_id, s.decided_at, s.reject_reasons, s.note AS human_note, s.source_role_id, s.provider, s.submitted_at,
-      ${HUMAN_NOW} AS human, ${DIRECTION} AS direction ${base} WHERE a.id=?1 AND NOT EXISTS(SELECT 1 FROM hosting_versions ov WHERE ov.submission_id=s.id AND ov.member_id=?2)`)
+      ${HUMAN_NOW} AS human, ${DIRECTION} AS direction ${base} WHERE a.id=?1 AND NOT EXISTS(SELECT 1 FROM hosting_versions ov WHERE ov.card_id=s.card_id AND ov.member_id=?2)`)
     .bind(suggestionId, opts.viewer).first<Record<string, any>>();
   if (!row || !row.direction) throw new HttpError(404, "disagreement_not_found");
   const [stamps, feedback, history] = await Promise.all([
@@ -113,7 +117,7 @@ export async function arbitrate(db: D1Database, input: { suggestionId: string; m
   const noteTypes = parseAiNote(input.noteTypes, null).types;
   if (add && value !== "human_right" && value !== "ai_right") throw new HttpError(400, "reference_needs_a_winner", undefined, { field: "addToReference" });
   const row = await db.prepare(`SELECT a.id, a.submission_id, a.verdict, a.reasons, s.card_id, s.reject_reasons, ${HUMAN_NOW} AS human, ${DIRECTION} AS direction,
-      ${LAST("reasons")} AS last_reasons ${base} WHERE a.id=?1 AND NOT EXISTS(SELECT 1 FROM hosting_versions ov WHERE ov.submission_id=s.id AND ov.member_id=?2)`)
+      ${LAST("reasons")} AS last_reasons ${base} WHERE a.id=?1 AND NOT EXISTS(SELECT 1 FROM hosting_versions ov WHERE ov.card_id=s.card_id AND ov.member_id=?2)`)
     .bind(input.suggestionId, input.memberId).first<{ id: string; submission_id: string; verdict: string; reasons: string; card_id: number; reject_reasons: string | null; human: string; direction: string | null; last_reasons: string | null }>();
   if (!row || !row.direction) throw new HttpError(404, "disagreement_not_found");
   // 池＝仲裁後的正確結論：人對取人工結論（通過→pass、駁回／不受理→reject），AI 對取 AI 結論
@@ -206,25 +210,33 @@ export const PERSUASION_MIN = 10;
 /** 評一筆分歧：能打開這筆分歧的審核員都能評（自己的卡、已不是分歧的 404）。同一個選擇重送只更新時間。 */
 export async function persuade(db: D1Database, input: { suggestionId: string; memberId: string; value: unknown; now: number }) {
   if (typeof input.value !== "string" || !(PERSUASION_VALUES as readonly string[]).includes(input.value)) throw new HttpError(400, "invalid_arguments", undefined, { field: "value" });
-  const row = await db.prepare(`SELECT a.id, a.submission_id, ${DIRECTION} AS direction ${base}
-      WHERE a.id=?1 AND NOT EXISTS(SELECT 1 FROM hosting_versions ov WHERE ov.submission_id=s.id AND ov.member_id=?2)`)
-    .bind(input.suggestionId, input.memberId).first<{ id: string; submission_id: string; direction: string | null }>();
+  const row = await db.prepare(`SELECT a.id, a.submission_id, a.updated_at, ${DIRECTION} AS direction ${base}
+      WHERE a.id=?1 AND NOT EXISTS(SELECT 1 FROM hosting_versions ov WHERE ov.card_id=s.card_id AND ov.member_id=?2)`)
+    .bind(input.suggestionId, input.memberId).first<{ id: string; submission_id: string; updated_at: number; direction: string | null }>();
   if (!row || !row.direction) throw new HttpError(404, "disagreement_not_found");
-  await db.prepare(`INSERT INTO review_ai_persuasion (suggestion_id,member_id,submission_id,value,created_at,updated_at) VALUES (?,?,?,?,?,?)
-      ON CONFLICT(suggestion_id,member_id) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at`)
-    .bind(row.id, input.memberId, row.submission_id, input.value, input.now, input.now).run();
+  // 記下評的是 AI 哪一次的判斷（建議的 updated_at）：AI 重判後舊的評價不再算
+  await db.prepare(`INSERT INTO review_ai_persuasion (suggestion_id,member_id,submission_id,value,created_at,updated_at,suggestion_at) VALUES (?,?,?,?,?,?,?)
+      ON CONFLICT(suggestion_id,member_id) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at, suggestion_at=excluded.suggestion_at`)
+    .bind(row.id, input.memberId, row.submission_id, input.value, input.now, input.now, row.updated_at).run();
   return { value: input.value as PersuasionValue, updatedAt: input.now };
 }
 
-/** 這位審核員對這筆分歧最後一次的選擇（只回自己的，別人的不回） */
+/** 評價還算數：評的是 AI 現在這一次的判斷（AI 重判後舊的評價不算） */
+const CURRENT = "p.suggestion_at>=a.updated_at";
+
+/** 這位審核員對這筆分歧最後一次的選擇（只回自己的，別人的不回）；AI 重判後回到未評 */
 export async function myPersuasion(db: D1Database, suggestionId: string, memberId: string): Promise<PersuasionValue | null> {
-  const row = await db.prepare("SELECT value FROM review_ai_persuasion WHERE suggestion_id=? AND member_id=?").bind(suggestionId, memberId).first<{ value: PersuasionValue }>();
+  const row = await db.prepare(`SELECT p.value FROM review_ai_persuasion p JOIN review_ai_suggestions a ON a.id=p.suggestion_id
+    WHERE p.suggestion_id=? AND p.member_id=? AND ${CURRENT}`).bind(suggestionId, memberId).first<{ value: PersuasionValue }>();
   return row?.value ?? null;
 }
 
 /** 一段期間內（按選擇時間）的被說服筆數：清單頁頂的本週比例，不看判準版本與清單篩選 */
 export async function persuasionWindow(db: D1Database, from: number, to: number) {
-  const row = await db.prepare(`SELECT COUNT(*) AS rated, COALESCE(SUM(value='convinced'),0) AS convinced FROM review_ai_persuasion WHERE updated_at>=? AND updated_at<?`)
+  // 只算還是分歧、評的是 AI 現在判斷的那些（跟清單同一個分歧口徑）
+  const row = await db.prepare(`SELECT COUNT(*) AS rated, COALESCE(SUM(p.value='convinced'),0) AS convinced
+    FROM review_ai_persuasion p JOIN review_ai_suggestions a ON a.id=p.suggestion_id JOIN review_submissions s ON s.id=a.submission_id
+    WHERE p.updated_at>=? AND p.updated_at<? AND ${CURRENT} AND (${DIRECTION}) IS NOT NULL`)
     .bind(from, to).first<{ rated: number; convinced: number }>();
   const rated = row?.rated ?? 0;
   return { convinced: row?.convinced ?? 0, rated, suppressed: rated < PERSUASION_MIN };
@@ -234,7 +246,7 @@ export async function persuasionWindow(db: D1Database, from: number, to: number)
 export async function persuasionStats(db: D1Database, input: { from: number; to: number; criteria: string | null }) {
   const rows = await db.prepare(`SELECT a.criteria_version AS v, COUNT(*) AS rated, SUM(p.value='convinced') AS convinced
     FROM review_ai_persuasion p JOIN review_ai_suggestions a ON a.id=p.suggestion_id JOIN review_submissions s ON s.id=a.submission_id
-    WHERE s.submitted_at>=? AND s.submitted_at<? AND (?3 IS NULL OR a.criteria_version=?3) GROUP BY a.criteria_version`)
+    WHERE s.submitted_at>=? AND s.submitted_at<? AND (?3 IS NULL OR a.criteria_version=?3) AND ${CURRENT} AND (${DIRECTION}) IS NOT NULL GROUP BY a.criteria_version`)
     .bind(input.from, input.to, input.criteria).all<{ v: string; rated: number; convinced: number }>();
   return Object.fromEntries(rows.results.map((r) => [r.v, { convinced: r.convinced, rated: r.rated }]));
 }

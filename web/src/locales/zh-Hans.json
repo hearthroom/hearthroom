@@ -6187,7 +6187,7 @@
   "reviewAi.arb.persuade.weeklyTitle": "本周被说服比例",
   "reviewAi.arb.persuade.weeklyValue": "{pct}（说服 {yes}／已判 {total}）",
   "reviewAi.arb.persuade.weeklySmall": "样本不足（说服 {yes}／已判 {total}）",
-  "reviewAi.arb.persuade.weeklyRule": "按 UTC 周计算，只算已选“说服我了”或“没说服”的分歧（每条取最后一次选择）；已判少于 10 条时显示“样本不足”。",
+  "reviewAi.arb.persuade.weeklyRule": "按 UTC 周计算，只算选了“说服我了”或“没说服”的评分（每位审核员对同一条分歧算一次，取最后一次选择）；已判少于 10 次时显示“样本不足”。",
   "reviewAi.arb.report.col.persuaded": "被说服",
   "reviewAi.arb.report.persuadedCell": "{pct}（{yes}/{total}）",
   "reviewAi.arb.refs.title": "参考范例",

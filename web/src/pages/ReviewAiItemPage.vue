@@ -115,6 +115,8 @@ async function choose(value: Persuasion) {
   } catch (e) {
     if (!alive || seq !== persuadeSeq) return;
     if (e instanceof ApiError && e.status === 403) forbidden.value = true;
+    // 這筆已不是分歧（例如之後被改判）或看不到了：重讀，頁面照實說找不到，而不是叫人再試
+    else if (e instanceof ApiError && e.status === 404) { persuasion.value = before; data.value = null; void load(); }
     else { persuasion.value = before; persuadeFailed.value = true; }
   } finally {
     if (seq === persuadeSeq) persuading.value = false;
