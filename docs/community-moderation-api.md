@@ -252,6 +252,7 @@ The sealed version the author submitted, without claiming it. Long text is cut a
           openings: { mode: "page"|"greeting", page, welcome, alternates, prologue /* opening choices the player taps */, welcomeRendered /* plain text after display rules, when they match the opening; only on this route, only rules that look safe to run (no nested quantifiers, backreferences or lookarounds; first 20 rules, first 2,000 characters) */ },
           lorebook: { entryCount, constantCount, recallCount, index: { name, chars, constant, keywords, mentionedInCard }[], entries: { name, content }[] },
           rules: { count, enabled, list: { name, findChars, replaceChars }[], hasCardCss } },
+  originality: { available: false } | { available: true, similarity, earlierMax, sources },  // setting overlap with other authors' cards, numbers only
   update: null | { state: "no_base"|"unreadable"|"missing" } | { state: "ready", baseKind, summary, fields: { key, before, after }[], lorebook: { added, removed, modified } },
   stats: { settingChars, openingChars, openingPageChars, openingPageHtmlChars, openingPageElements, openingPageInteractive, openingPageScript, openingHtmlTags, openingOptions, openingRuleHits, lorebookConstantChars, alternateCount, lorebookEntries, lorebookChars, ellipsisPer1k, dashPer1k, openingQuestion, openingChoices },
   allowed: { verdicts, reasons, flags, handoffCauses } }

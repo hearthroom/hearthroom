@@ -4,6 +4,7 @@ import { bumpOp } from "./ops-metrics";
 import { getSubmission, type SubmissionRow } from "./review";
 import { LATEST_FEEDBACK, currentCriteria, setCurrentCriteria, revealEventStatement, AI_FEEDBACK, AI_FLAGS, AI_HANDOFF_CAUSES, AI_REASONS, AI_VERDICTS, aiCardInput, aiPhaseOf, aiReport, aiSubmissionMeta, AI_BACKFILL_WINDOW_MS, canReveal, parseSuggestion, recordFeedback, saveSuggestion, suggestionsOf } from "./review-ai";
 import { loadSnapshot } from "./review-snapshot";
+import { originalityReport } from "./originality";
 import { diffView } from "./review-diff-store";
 import { AI_NOTE_TYPES } from "./review-two-stage";
 import { aiNotes, arbitrate, arbitrationStats, disagreementSides, listDisagreements, referenceCandidates, type Direction } from "./review-ai-arbitration";
@@ -92,9 +93,26 @@ reviewAiRoutes.get("/v1/review-ai/submissions/:id", (c) => counted(c, "read", as
     author,
     ...aiCardInput(settings, meta, { applyRules: true }),
     update: await aiUpdateDiff(c.env, s),
+    originality: await aiOriginality(c.env.DB, s, settings),
     allowed: { verdicts: AI_VERDICTS, reasons: AI_REASONS, flags: AI_FLAGS, handoffCauses: AI_HANDOFF_CAUSES },
   }, 200, NO_STORE);
 }));
+
+/**
+ * 設定查重（owner 2026-11-24：AI 看不到查重，83% 重複的卡被放過）。跟審核頁同一份計算，只給數字：
+ * 整體重複率、比這張早的卡裡最高的重複率、重複來源張數。不帶其他卡的編號或名稱；作者自己的其他卡不算。
+ */
+async function aiOriginality(db: D1Database, s: SubmissionRow, settings: Record<string, unknown>) {
+  const report = await originalityReport(db, s, settings as Record<string, any>, "zh-Hant").catch(() => null);
+  if (!report || !report.available) return { available: false };
+  const earlier = report.sources.filter((x) => x.earlier);
+  return {
+    available: true,
+    similarity: Math.round(report.similarity * 100) / 100,
+    earlierMax: earlier.length ? Math.round(Math.max(...earlier.map((x) => x.similarity)) * 100) / 100 : 0,
+    sources: report.sources.length,
+  };
+}
 
 /**
  * 更新與重送：跟審核頁同一份差異（基準＝上次過審版，重送時是上次被駁回版）。給 AI 的只取欄位前後各 1,500 字。

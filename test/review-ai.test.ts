@@ -753,3 +753,12 @@ describe('已上架卡的更新', () => {
     expect((await json(await get(`/v1/review-ai/submissions/${update.id}`, 'key'))).submission.published).toBe(true);
   });
 });
+
+describe('審卡員讀得到查重數字', () => {
+  it('回整體重複率與比這張早的卡最高重複率，不帶別張卡的編號或名稱', async () => {
+    const { id } = await submitCard();
+    const body = await json(await get(`/v1/review-ai/submissions/${id}`, 'key'));
+    expect(body.originality).toBeDefined();
+    expect(Object.keys(body.originality).sort()).toEqual(body.originality.available ? ['available', 'earlierMax', 'similarity', 'sources'] : ['available']);
+  });
+});
