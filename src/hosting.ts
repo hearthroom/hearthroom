@@ -25,7 +25,7 @@ import { diffBaseStatement } from './review-diff-store';
 import { buildSearchBody, buildSearchName, buildSearchText, projectRole, upstream, type UpstreamRole } from './upstream';
 import { resolveFandom, type ResolvedFandom } from './fandom';
 import { evaluateRating, type RatingAnswers, type RatingResult } from '../shared/content-rating';
-import { applyRatingFloor, ratingFloorOf } from './rating-correction';
+import { applyRatingFloor, ratingFloorOf, RATING_RANK_SQL } from './rating-correction';
 import { hasPresetTag, PRESET_TAG_CATALOG } from '../shared/tag-catalog';
 
 interface Receipt { workId: string; versionId: string; hostedRevisionId: string }
@@ -134,6 +134,8 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
   return saved;
  };
  let consent=checkVersion(version);
+ // 中斷後續跑的送審：版本列在設下限之前就建好了，分級提到下限，與這次送審單一致
+ if(version)await db.prepare(`UPDATE hosting_versions SET rating=?1 WHERE version_id=?2 AND ${RATING_RANK_SQL('rating')}<${RATING_RANK_SQL('?1')}`).bind(input.rating.rating,version.version_id).run();
  if(version&&version.rating_answers===null&&!version.submission_id){
   await db.prepare('UPDATE hosting_versions SET rating_answers=?,rating=? WHERE version_id=? AND rating_answers IS NULL').bind(answers,input.rating.rating,version.version_id).run();
  }

@@ -39,14 +39,18 @@ export async function correctRating(db: D1Database, input: { cardId: number; rat
   if (done) {
     const after = JSON.parse(done.after_json) as { rating?: string };
     if (done.subject_id !== String(card.id) || after.rating !== input.rating) throw new HttpError(409, "moderation_conflict");
-    return { cardId: done.subject_id, before: JSON.parse(done.before_json), rating: input.rating, floor: input.rating };
+    const stored = JSON.parse(done.after_json) as { lockOnly?: boolean };
+    return { cardId: done.subject_id, before: JSON.parse(done.before_json), rating: input.rating, floor: input.rating, lockOnly: !!stored.lockOnly };
   }
-  if (card.rating === input.rating) {
+  const floor = await floorForCard(db, card.id);
+  // 分級和下限都已經是這一級才算沒變；分級一樣但下限不同（含沒有下限）＝只鎖定下限，卡片分級不動
+  if (card.rating === input.rating && floor === input.rating) {
     await bumpOp(db, "rating_correction", "correct", "unchanged");
     throw new HttpError(409, "rating_unchanged");
   }
-  const before = { rating: card.rating, versionRating: card.version_rating };
-  const after = { rating: input.rating, versionRating: card.approved_version_id ? input.rating : null, floor: input.rating };
+  const lockOnly = card.rating === input.rating;
+  const before = { rating: card.rating, versionRating: card.version_rating, floor };
+  const after = { rating: input.rating, versionRating: card.approved_version_id ? input.rating : null, floor: input.rating, lockOnly };
   const auditId = crypto.randomUUID();
   // 後面每一句都以「這次的稽核列真的寫進去了」為條件：同一個 operation 併發重送時，只有寫進稽核的那一次會改資料
   const mine = "EXISTS (SELECT 1 FROM audit_log WHERE id = ?)";
@@ -57,18 +61,20 @@ export async function correctRating(db: D1Database, input: { cardId: number; rat
       .bind(auditId, String(card.id), input.memberId, reason, JSON.stringify(before), JSON.stringify(after), input.operationId, input.now),
     // 作品管理的卡片歷程看得到這次更正
     db.prepare(`INSERT INTO moderation_events(id,provider,source_role_id,actor,action,reason,before_value,after_value,created_at,operation_id)
-      SELECT ?,provider,source_role_id,?,'rating',?,?,?,?,? FROM cards WHERE id=? AND ${mine} ON CONFLICT(actor,operation_id) DO NOTHING`)
-      .bind(crypto.randomUUID(), input.memberId, reason, card.rating ?? "", input.rating, input.now, input.operationId, card.id, auditId),
+      SELECT ?,provider,source_role_id,?,?,?,?,?,?,? FROM cards WHERE id=? AND ${mine} ON CONFLICT(actor,operation_id) DO NOTHING`)
+      .bind(crypto.randomUUID(), input.memberId, lockOnly ? "rating_floor" : "rating", reason, (lockOnly ? floor : card.rating) ?? "", input.rating, input.now, input.operationId, card.id, auditId),
     // 先設下限：卡片與待審單的 trigger 都看這張表
     db.prepare(`INSERT INTO review_rating_floors (card_id, rating, reason, set_by, set_at) SELECT ?,?,?,?,? WHERE ${mine}
       ON CONFLICT(card_id) DO UPDATE SET rating=excluded.rating, reason=excluded.reason, set_by=excluded.set_by, set_at=excluded.set_at`)
       .bind(card.id, input.rating, reason, input.memberId, input.now, auditId),
     db.prepare(`UPDATE cards SET rating=? WHERE id=? AND ${mine}`).bind(input.rating, card.id, auditId),
     db.prepare(`UPDATE hosting_versions SET rating=? WHERE version_id=? AND ${mine}`).bind(input.rating, card.approved_version_id, auditId),
+    // 這張卡其他版本（舊的上架版本、還沒送審完的版本）低於下限的也提上來，退回舊版時才不會帶回低分級
+    db.prepare(`UPDATE hosting_versions SET rating=? WHERE card_id=? AND ${sqlRank("rating")} < ${sqlRank("?")} AND ${mine}`).bind(input.rating, String(card.id), input.rating, auditId),
     // 還在待審的單只往上提到下限（作者自己填得更高就不動），審核員看到的分級與年齡門檻才對
     db.prepare(`UPDATE review_submissions SET rating=? WHERE card_id=? AND status='pending' AND ${sqlRank("rating")} < ${sqlRank("?")} AND ${mine}`)
       .bind(input.rating, card.id, input.rating, auditId),
   ]);
   await bumpOp(db, "rating_correction", "correct", "applied");
-  return { cardId: String(card.id), before, rating: input.rating, floor: input.rating };
+  return { cardId: String(card.id), before, rating: input.rating, floor: input.rating, lockOnly };
 }

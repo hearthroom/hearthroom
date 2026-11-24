@@ -220,3 +220,15 @@ it('manager rating correction applies directly, audits, records history and sets
  expect((await request(`/cards/${card}/rating`,'manager',{...b,rating:'P',operationId:crypto.randomUUID()})).status).toBe(200);
  expect((await env.DB.prepare('SELECT rating FROM review_rating_floors WHERE card_id=?').bind(card).first<any>()).rating).toBe('P');
 });
+it('a manager can lock the current rating as a floor without changing the card', async () => {
+ await env.DB.prepare("UPDATE reviewers SET role='manager' WHERE member_id='member-4'").run();
+ await env.DB.prepare("UPDATE cards SET rating='PG15' WHERE id=?").bind(card).run();
+ const b={rating:'PG15',reason:'鎖定下限',operationId:crypto.randomUUID()};
+ const res=await request(`/cards/${card}/rating`,'manager',b);
+ expect(res.status).toBe(200);
+ expect(await res.json()).toMatchObject({rating:'PG15',floor:'PG15',lockOnly:true,before:{rating:'PG15',floor:null}});
+ expect((await env.DB.prepare('SELECT rating FROM review_rating_floors WHERE card_id=?').bind(card).first<any>()).rating).toBe('PG15');
+ expect(await env.DB.prepare("SELECT action,before_value,after_value FROM moderation_events WHERE action LIKE 'rating%'").first<any>()).toEqual({action:'rating_floor',before_value:'',after_value:'PG15'});
+ // 分級和下限都一樣了：沒有改變
+ expect((await request(`/cards/${card}/rating`,'manager',{...b,operationId:crypto.randomUUID()})).status).toBe(409);
+});
