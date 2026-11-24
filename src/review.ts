@@ -187,7 +187,8 @@ export interface QueueDiff { state: "pending" | "done" | "no_base" | "unreadable
 export interface QueueAuthor { tier: AuthorTier; manualTier: boolean; batchSuspected: boolean; deviceAccounts: number | null }
 export type QueueTab = "new" | "updates";
 /** 新卡＝這張卡從沒被審過；其餘（更新、駁回後重送、重新審核）在「更新」 */
-const NEW_CARD = (s: string) => `(${s}.reopen_of IS NULL AND ${s}.kind='first' AND NOT EXISTS(SELECT 1 FROM review_submissions p WHERE ${EARLIER_DECIDED("p", s)}))`;
+const NEW_CARD = (s: string, seekByCard = false) =>
+  `(${s}.reopen_of IS NULL AND ${s}.kind='first' AND NOT EXISTS(SELECT 1 FROM review_submissions p${seekByCard ? " INDEXED BY idx_submissions_card" : ""} WHERE ${EARLIER_DECIDED("p", s)}))`;
 
 /** 冷凍給審核員看的樣子。holder 是冷凍人的顯示名（審核員之間本來就看得到彼此，作者看不到） */
 export interface HoldView { holder: string; at: number; byMe: boolean; canRelease: boolean }
@@ -200,7 +201,7 @@ const HOLD_JOIN = "LEFT JOIN review_holds h ON h.card_id = s.card_id LEFT JOIN m
 const HOLD_COLUMNS = "h.member_id AS hold_by, h.created_at AS hold_at, COALESCE(NULLIF(hm.display_name, ''), hm.handle) AS hold_name";
 
 /** 各分頁的待審數（獨立計數，不受清單 200 筆上限影響） */
-// 2026-11-24 D1 過載止血：各分頁待審數每次要掃十幾萬列，審核頁定時重整會一直打。同一個 Worker 實例 60 秒內共用一份結果
+// 審核頁定時重整。同一個 Worker 實例 60 秒內共用一份結果。
 let queueCountsMemo: { at: number; value: Promise<{ new: number; updates: number; dropped: number }> } | null = null;
 export const QUEUE_COUNTS_TTL_MS = 60_000;
 export function resetQueueCountsMemo() { queueCountsMemo = null; }
@@ -212,12 +213,15 @@ export async function queueCounts(db: D1Database, now = Date.now()): Promise<{ n
   return value;
 }
 async function queueCountsFresh(db: D1Database): Promise<{ new: number; updates: number; dropped: number }> {
+  // D1 可能用 (status, submitted_at) 跨卡掃歷史；逐張待審單只查同卡，並以總數扣掉另外兩類求更新數。
   const row = await db.prepare(`SELECT
-      SUM(CASE WHEN ${NOT_DROPPED("s")} AND ${NEW_CARD("s")} THEN 1 ELSE 0 END) AS new_cards,
-      SUM(CASE WHEN ${NOT_DROPPED("s")} AND NOT ${NEW_CARD("s")} THEN 1 ELSE 0 END) AS updates,
+      COUNT(*) AS total,
+      SUM(CASE WHEN ${NOT_DROPPED("s")} AND ${NEW_CARD("s", true)} THEN 1 ELSE 0 END) AS new_cards,
       SUM(CASE WHEN NOT ${NOT_DROPPED("s")} THEN 1 ELSE 0 END) AS dropped
-    FROM review_submissions s JOIN cards c ON c.id = s.card_id WHERE s.status = 'pending'`).first<{ new_cards: number | null; updates: number | null; dropped: number | null }>();
-  return { new: row?.new_cards ?? 0, updates: row?.updates ?? 0, dropped: row?.dropped ?? 0 };
+    FROM review_submissions s JOIN cards c ON c.id = s.card_id WHERE s.status = 'pending'`).first<{ total: number; new_cards: number | null; dropped: number | null }>();
+  const newCards = row?.new_cards ?? 0;
+  const dropped = row?.dropped ?? 0;
+  return { new: newCards, updates: (row?.total ?? 0) - newCards - dropped, dropped };
 }
 
 /**
