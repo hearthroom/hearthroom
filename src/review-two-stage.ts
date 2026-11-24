@@ -111,7 +111,8 @@ export async function finalize(db: D1Database, env: Env, input: {
   const note = parseAiNote(types, input.aiNote);
   let decision: Omit<DecisionInput, "submissionId" | "memberId" | "now" | "generation">;
   if (source === "blind" && !blind) throw new HttpError(409, "blind_required");
-  if (source === "human_no_ai" && !blind) {
+  // 這次有送決定內容就以這次為準：改版前送過盲審的審核員，畫面上的新選擇不能被舊的盲審蓋掉
+  if (source === "human_no_ai" && (input.decision || !blind)) {
     // AI 還沒審：照一般流程送出的決定；AI 其實已經好了就記成「改了 AI」
     if (!input.decision) throw new HttpError(400, "invalid_arguments", undefined, { field: "verdict" });
     if (ai.state === "ready") source = "modified";

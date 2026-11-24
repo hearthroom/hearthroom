@@ -950,10 +950,14 @@ describe('AI 為主、人為輔（owner 2026-11-24）', () => {
     expect(await json(mod)).toMatchObject({ finalSource: 'modified' });
     expect(await status(b.id)).toBe('rejected');
 
+    // AI 還沒審；這位審核員改版前送過盲審（通過），這次在畫面上選了駁回：照這次的，不被舊盲審蓋掉
     const c = await submitCard('draft-c');
     await claim(env.DB, c.id, humanId, Date.now());
-    const none = await final(c.id, { finalSource: 'human_no_ai', verdict: 'approve', note: '' });
+    const gc = (await env.DB.prepare('SELECT claim_generation FROM review_submissions WHERE id=?').bind(c.id).first<{ claim_generation: string }>())!.claim_generation;
+    expect((await send('POST', `/v1/review/${c.id}/blind`, 'human', { generation: gc, verdict: 'approve' })).status).toBe(200);
+    const none = await final(c.id, { finalSource: 'human_no_ai', verdict: 'reject', reasons: ['decline.not_ready'], note: '' });
     expect(none.status).toBe(200);
     expect(await json(none)).toMatchObject({ finalSource: 'human_no_ai' });
+    expect(await status(c.id)).toBe('rejected');
   });
 });
