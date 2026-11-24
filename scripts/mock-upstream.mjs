@@ -68,7 +68,7 @@ http.createServer(async (req, res) => {
   if ((path.startsWith("/__workshop") || path.startsWith("/v1/") || path.startsWith("/open/v1/workshop") || path === "/open/v1/player/role-settings/save") && await handleWorkshop({ m, path, url, body, req, json, res })) return;
   // 徽章統計（成就頁即時刷新走查）：Worker 用機密應用換 token 再讀；/__badges?explored=<數字> 調整探索數，看「進度已更新」
   if (path === "/__badges") { if (url.searchParams.has("explored")) badgeExplored = Number(url.searchParams.get("explored")) || 0; return json(res, 200, { explored: badgeExplored }); }
-  if (m === "POST" && path === "/oauth/token") return json(res, 200, { access_token: "mock-badges", token_type: "Bearer", expires_in: 3600 });
+  if (m === "POST" && path === "/oauth/token" && raw.toString().includes("grant_type=client_credentials")) return json(res, 200, { access_token: "mock-badges", token_type: "Bearer", expires_in: 3600 });
   if (m === "POST" && path === "/open/v1/community/badges/metrics") return json(res, 200, { items: (body.accountNos ?? []).map((accountNo) => ({ accountNo, effectiveInvites: 0, netTopupUsdMicros: 0, consumedCredits: 0, complete: true, paidInvites: 0, paidInvites100At: null, starlightAt: null, exploredRoles: badgeExplored, exploredRoles500At: null })) });
   const auth = req.headers.authorization || "";
   if (!auth.startsWith("Bearer ")) return json(res, 401, { error: "unauthorized", message: "A valid bearer token is required." });
