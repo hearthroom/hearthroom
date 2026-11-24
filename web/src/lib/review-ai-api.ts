@@ -14,8 +14,8 @@ const headers = (token: string) => ({ "X-From": currentSurface(), "X-Provider": 
 const post = (token: string, body: unknown) => ({ method: "POST", headers: { ...headers(token), "Content-Type": "application/json" }, body: JSON.stringify(body) });
 
 export type AiVerdict = "pass" | "reject" | "handoff";
+/** 雙盲時代的揭曉覆核（已不再寫入）：仲裁頁照列歷史紀錄 */
 export type AiFeedback = "ai_right" | "ai_wrong" | "both_ok";
-export const AI_FEEDBACK_VALUES: readonly AiFeedback[] = ["ai_right", "ai_wrong", "both_ok"];
 export type Arbitration = "human_right" | "ai_right" | "both_ok" | "both_wrong";
 export const ARBITRATION_VALUES: readonly Arbitration[] = ["human_right", "ai_right", "both_ok", "both_wrong"];
 export type Direction = "ai_stricter" | "human_stricter";
@@ -24,13 +24,15 @@ export type HumanDecision = "approved" | "rejected" | "dropped";
 export const AI_FLAGS = ["ai_unedited", "copied_text", "mass_produced"] as const;
 
 export type AiSuggestion = ReviewAiSuggestion;
-export interface AiReveal { suggestions: AiSuggestion[]; current?: string | null; myFeedback: { suggestionId: string; value: AiFeedback }[] }
+/** inaccurate：這張單定案時記下的「AI 判斷不準確」（待審單一律 false） */
+export interface AiReveal { suggestions: AiSuggestion[]; current?: string | null; inaccurate?: boolean }
 
 export async function fetchReviewAi(id: string, token: string): Promise<AiReveal> {
   return json(await fetch(`${COMMUNITY_API}/review/${encodeURIComponent(id)}/ai`, { headers: headers(token) }));
 }
-export async function sendAiFeedback(id: string, token: string, body: { suggestionId: string; value: AiFeedback; operationId: string }): Promise<{ value: AiFeedback }> {
-  return json(await fetch(`${COMMUNITY_API}/review/${encodeURIComponent(id)}/ai-feedback`, post(token, body)));
+/** 定案後標或取消「AI 判斷不準確」（定過這張單的審核員或管理員）；同一個值重送不多寫 */
+export async function setAiInaccurate(id: string, token: string, inaccurate: boolean): Promise<{ inaccurate: boolean }> {
+  return json(await fetch(`${COMMUNITY_API}/review/${encodeURIComponent(id)}/ai-inaccurate`, { method: "PUT", headers: { ...headers(token), "Content-Type": "application/json" }, body: JSON.stringify({ inaccurate }) }));
 }
 
 export interface DisagreementItem {
@@ -111,8 +113,6 @@ export async function fetchReferenceCandidates(token: string): Promise<{ items: 
 export const AI_NOTE_TYPES = ["card_content", "author_relation", "author_history", "criteria_issue", "other"] as const;
 export type AiNoteType = (typeof AI_NOTE_TYPES)[number];
 export const AI_NOTE_MAX = 500;
-/** 「用 AI 的」定案時給作者的說明上限（與伺服器 AI 草稿的上限同一個數） */
-export const AUTHOR_NOTE_MAX = 1500;
 export const FINAL_SOURCES: readonly ReviewFinalSource[] = ["blind", "ai", "modified", "human_no_ai"];
 
 /** kind=final：定案時寫的（finalSource 是定案來源）；kind=arbitration：仲裁時寫的（arbitration 是仲裁結果） */

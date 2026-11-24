@@ -11,7 +11,7 @@ import { confirmState, settleConfirm } from "../src/lib/confirm";
 
 const api = vi.hoisted(() => ({
   claimReview: vi.fn(async () => ({})), fetchReviewDetail: vi.fn(), fetchReviewQueue: vi.fn(async () => ({ items: [], claimTtlMs: 1 })), fetchReviewOriginality: vi.fn(), fetchReviewDiff: vi.fn(),
-  releaseReview: vi.fn(), stampReview: vi.fn(), blindReview: vi.fn(), holdReview: vi.fn(), unholdReview: vi.fn(), withdrawReopen: vi.fn(), correctReviewDecision: vi.fn(), updateReviewTags: vi.fn(),
+  releaseReview: vi.fn(), stampReview: vi.fn(), holdReview: vi.fn(), unholdReview: vi.fn(), withdrawReopen: vi.fn(), correctReviewDecision: vi.fn(), updateReviewTags: vi.fn(),
   fetchReviewAuthorCards: vi.fn(), fetchReviewAuthorActivity: vi.fn(), dropReview: vi.fn(), restoreReview: vi.fn(), markReviewAuthor: vi.fn(), fetchReviewGroup: vi.fn(), dropReviewBatch: vi.fn(), restoreReviewBatch: vi.fn(),
   startReviewFlip: vi.fn(async () => ({ id: "f1", flipOf: "s1", replayed: false })), withdrawReviewFlip: vi.fn(async () => ({ status: "rejected" })),
   fetchReviewDecisions: vi.fn(), fetchReviewMe: vi.fn(async () => ({ reviewer: true })),
@@ -158,14 +158,15 @@ it("發起人已不是管理員：現任管理員看到可接手，有領取與�
   expect(button(t("review.action.claim"))).toBeTruthy();
 });
 
-it("通過時的補充說明只有審核員看得到（作者收到的是勾選的改進建議），不標成作者會看到", async () => {
+// 附建議時補充說明會給作者（結果頁的「審核員補充」）：標成作者會看到（原本標只有審核員看得到，伺服器現在會把它寫給作者）
+it("通過附建議的補充說明標成作者會看到", async () => {
   api.fetchReviewDetail.mockResolvedValue(detail({ status: "pending", claimedByMe: true, stampedByMe: false, stamps: [] }));
   await mount(DetailPage, "/review/s1", [{ path: "/review/:id", component: DetailPage }]);
   await vi.waitFor(() => expect(el.querySelector("[data-decide-choices]")).toBeTruthy());
   el.querySelector<HTMLInputElement>('[data-decide-choices] input[value="approve"]')!.click(); await nextTick();
   el.querySelector<HTMLButtonElement>("[data-suggest-toggle]")!.click(); await nextTick();
   const marker = el.querySelector("[data-suggest] [data-visibility]")!;
-  expect(marker.getAttribute("data-visibility")).toBe("reviewers");
+  expect(marker.getAttribute("data-visibility")).toBe("author");
   expect(el.querySelector("[data-suggest]")!.textContent).not.toContain(t("reviewAi.two.authorNote.editHint"));
 });
 

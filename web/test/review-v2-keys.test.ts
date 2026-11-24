@@ -11,8 +11,8 @@ const files = [
   "components/MyCardTile.vue", "components/ReviewReasonPicker.vue", "components/ReviewReasonOptions.vue", "components/ReviewAuthorProfile.vue", "components/ReviewAuthorActivity.vue",
   "components/ReviewBatchSheet.vue", "components/ReviewRowMenu.vue", "components/ReviewListTabs.vue", "components/ReviewTimeline.vue",
   "components/ReviewDiffView.vue", "components/ReviewDiffLines.vue", "lib/notifications.ts",
-  // AI 審卡影子模式：揭曉區與 AI 分歧仲裁
-  "components/ReviewAiReveal.vue", "components/ReviewAiNav.vue", "pages/ReviewAiListPage.vue", "pages/ReviewAiItemPage.vue", "pages/ReviewAiReportPage.vue",
+  // AI 審卡影子模式：AI 分歧仲裁
+  "components/ReviewAiNav.vue", "pages/ReviewAiListPage.vue", "pages/ReviewAiItemPage.vue", "pages/ReviewAiReportPage.vue",
 ];
 const locales = readdirSync(join(root, "locales")).filter((f) => f.endsWith(".json"));
 
@@ -48,8 +48,6 @@ it("keys built from enumerations (events, flags, labels, reasons) exist in all f
     ...["new", "updates", "dropped"].flatMap((x) => [`reviewV2.tabs.${x}`, `reviewV2.tabs.${x}NoCount`]),
     ...REVIEW_REASONS.flatMap((c) => ["name", "summary", "fix"].map((f) => `review.reasons.${c}.${f}`)),
     // AI 審卡影子模式：照列舉組出來的鍵
-    ...["pass", "reject"].map((v) => `reviewAi.reveal.verdict.${v}`),
-    ...["both", "mine", "ai"].map((v) => `reviewAi.reveal.compare.${v}`),
     ...["ai_right", "ai_wrong", "both_ok"].map((v) => `reviewAi.reveal.feedback.${v}`),
     ...["ai_unedited", "copied_text", "mass_produced"].map((f) => `reviewAi.flag.${f}`),
     ...["human_right", "ai_right", "both_ok", "both_wrong"].flatMap((v) => [`reviewAi.arb.value.${v}`, `reviewAi.arb.valueHint.${v}`]),

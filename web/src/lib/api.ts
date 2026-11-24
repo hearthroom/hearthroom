@@ -719,7 +719,7 @@ export interface ReviewDetail {
     /** 重新審核：已發布的卡回到待審；reopenReason 是發起理由（只給審核員） */
     reopen?: boolean; reopenReason?: string;
     /** mine＝我蓋的那一章；舊版伺服器不帶 */
-    /** finalSource：兩段式定案實際記下的來源（只在我蓋的那一章；沒等 AI 但 AI 剛好判完會記成 blind） */
+    /** finalSource：兩段式定案實際記下的來源（只在我蓋的那一章；無 AI 對照但 AI 剛好判完會記成 modified；舊的定案可能是 blind） */
     stamps: { verdict: "approve" | "reject"; note: string; at: number; mine?: boolean; finalSource?: ReviewFinalSource | null }[];
     canCorrect?:boolean;manager?:boolean;deadline?:number|null;
     correction?:{note:string;at:number;state:'pending'|'complete'|'conflict';operationId:string;publicState:string|null;canResume:boolean}|null;
@@ -743,8 +743,6 @@ export interface ReviewDetail {
   rejectCoaching?: boolean;
   /** 定案後內容與查重保留到什麼時候（毫秒）；過期是 null（只剩公開資料）；待審單與舊版伺服器不帶 */
   retainUntil?: number | null;
-  /** 兩段式決定：我自己送過的盲審判斷（只有本人看得到，不含 AI 的任何資訊）；沒送過是 null */
-  myBlind?: ReviewBlind | null;
   /** tags：榜上會用的那一份（審核人可能改過）；舊版伺服器不帶就退回作者勾的。fandom：作者宣告或審核人改過的原作。 */
   card: { id: string; roleId: string; tags?: string[]; fandom?: string; fandomId?: string };
   detail: {
@@ -867,13 +865,11 @@ export const holdReview = (id: string, token: string, generation?: string) => re
 export const unholdReview = (id: string, token: string, reason?: string) => reviewAction<{ hold: null }>(id, "unhold", token, { reason });
 /** 撤銷重新審核（限管理員，要寫理由） */
 export const withdrawReopen = (id: string, token: string, reason: string) => reviewAction<{ status: string }>(id, "withdraw", token, { reason });
-/** 審核決定的內容（盲審判斷、蓋章、修改後定案共用同一組欄位） */
+/** 審核決定的內容（蓋章與改了 AI 的定案共用同一組欄位） */
 export interface ReviewDecisionBody { verdict: "approve" | "reject"; note?: string; reasons?: string[]; coaching?: boolean; marks?: string[]; suggestions?: string[] }
-/** 兩段式定案的來源：用我的盲審、用 AI 的、修改後、沒等 AI（AI 還沒判或沒給判斷） */
+/** 定案的來源：照 AI、改了 AI、無 AI 對照；blind（舊雙盲「用我的」）只會出現在舊的定案上 */
 export type ReviewFinalSource = "blind" | "ai" | "modified" | "human_no_ai";
-/** 盲審判斷：伺服器正規化後的那一份（例如字數不足時自動補上的理由） */
-export interface ReviewBlind { id: string; verdict: "approve" | "reject"; payload: { verdict: "approve" | "reject"; note: string; reasons: string[]; coaching: boolean; marks: string[]; suggestions: string[] }; at: number }
-/** 盲審送出時一起回的 AI 判斷：已判、交人，或還沒判 */
+/** 這張單目前判準版本的 AI 判斷：已判、交人，或還沒判 */
 export type ReviewAiState = { state: "ready" | "handoff"; suggestion: ReviewAiSuggestion } | { state: "pending"; suggestion: null };
 export interface ReviewAiSuggestion {
   id: string; criteriaVersion: string; model: string; verdict: "pass" | "reject" | "handoff" | null; reasons: string[]; flags: string[];
@@ -885,13 +881,10 @@ export interface ReviewAiSuggestion {
  * 蓋章。一般待審單（AI 為主，ui-ai-first.md）帶 finalSource：ai＝照 AI 定案（不必帶決定內容；要帶審核標記時連結論一起帶）、
  * modified＝改了 AI 的建議、human_no_ai＝沒有 AI 建議，後兩種帶這次的決定。有 AI 建議時帶畫面上那一筆的 id 與時間：
  * AI 在這之間重判過，伺服器回 409 ai_changed，不會蓋成沒看過的結論。aiInaccurate＝審核員標「AI 判斷不準確」。
- * blind（用我的盲審）只剩舊流程送過盲審的單。回應的 finalSource 是實際記下的來源。重新審核照舊只帶決定。
+ * 回應的 finalSource 是實際記下的來源。重新審核照舊只帶決定。
  */
 export const stampReview = (id: string, token: string, body: Partial<ReviewDecisionBody> & { generation?: string; finalSource?: ReviewFinalSource; aiNoteTypes?: string[]; aiNote?: string; aiSuggestionId?: string; aiSuggestionAt?: number; authorNote?: string; aiInaccurate?: boolean }) =>
   reviewAction<{ id: string; status: string; cardStatus: CardStatus; stamps: { approve: number; required: number }; finalSource?: ReviewFinalSource }>(id, "stamp", token, body);
-/** 兩段式第一步：盲審判斷（只記錄，送審狀態不變）。每人每單一筆；第二次是 409 blind_already_recorded */
-export const blindReview = (id: string, token: string, body: ReviewDecisionBody & { generation?: string }) =>
-  reviewAction<{ blind: ReviewBlind; ai: ReviewAiState }>(id, "blind", token, body);
 
 export interface ReviewDecision {id:string;status:string;kind:string;verdict:'approve'|'reject';note:string;at:number;submittedAt:number;decidedAt:number|null;versionId:string|null;card:{id:string;name:string};canCorrect:boolean;corrected?:boolean;flip?:ReviewFlipState}
 /** q：純數字＝卡號精確比對，其他＝卡名包含；伺服器搜全部紀錄 */

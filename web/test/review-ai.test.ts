@@ -2,7 +2,7 @@
  * AI 審卡影子模式的審核端畫面（任務 2026-11-23-ai-card-review）：
  *   - 審核詳情的 AI 為主、人為輔（ui-ai-first.md）：作者區下方的「AI 審卡」區塊；決定區預設 AI 的建議，沒改照 AI 定案、
  *     改了記為改了 AI、沒有 AI 照一般流程；只有會讓卡上架的覆寫才確認；AI 沒審完每 10 秒重讀、晚到不覆蓋；婉拒理由；保留期。
- *   - 「AI 的判斷」揭曉區元件（ReviewAiReveal）：一致／不同的畫法；覆核每次送新的 operationId、可改選。
+ *   - 定案後的結果卡：照 AI／改了 AI 的單可以再標或取消「AI 判斷不準確」，按下就寫入。
  *   - 管理員的「AI 分歧」分頁：只有管理員看得到；單筆仲裁的參考範例勾選與池的說明、AI 對且原為通過時的重新審核入口。
  * 網路走真的 lib/review-ai-api（全域 fetch 換成假的），只把詳情頁自己的讀取換掉。
  */
@@ -29,7 +29,6 @@ vi.mock('../src/lib/api', async (original) => ({
   dropReview: mocks.dropReview,
 }));
 import { router as siteRouter } from '../src/router';
-import Reveal from '../src/components/ReviewAiReveal.vue';
 
 type Call = { url: string; method: string; body: any };
 let calls: Call[] = [];
@@ -59,14 +58,6 @@ const aiCalls = () => calls.filter((c) => /\/review\/[^/]+\/ai/.test(c.url));
 
 const suggestion = (over: Record<string, unknown> = {}) => ({ id: 'g1', criteriaVersion: 'v2', model: 'm', verdict: 'reject', reasons: ['opening.no_reply_hook'], flags: [], confidence: 0.82, handoffCause: null, note: '', phase: 'shadow', at: 5, ...over });
 
-async function mountReveal(props: { mine: 'approve' | 'reject' | 'drop'; myReasons?: string[] }) {
-  host = document.body.appendChild(document.createElement('div'));
-  app = createApp(Reveal, { submissionId: 's1', myReasons: [], ...props }).use(createPinia()).use(i18n);
-  app.mount(host);
-}
-
-// ---------- 揭曉區 ----------
-
 const empty = { personaChars: 0, worldbookEntryCount: 0, worldbookEnabledCount: 0, worldbookConstantCount: 0, worldbookChars: 0, worldbookConstantChars: 0, estimatedConstantTokens: 0, estimatedMaxTokens: 0 };
 const detail = (submission: Record<string, unknown>, extra: Record<string, unknown> = {}) => ({
   submission: { id: 's1', kind: 'first', status: 'pending', contentHash: 'v', submittedAt: 1, rating: null, claimedByMe: true, stampedByMe: false, claimGeneration: 'g', required: 1, stamps: [], ...submission },
@@ -93,7 +84,7 @@ const chooseDecision = async (v: 'approve' | 'reject') => { host.querySelector<H
 const pickReason = async (code: string) => { host.querySelector<HTMLInputElement>(`[data-reason="${code}"]`)!.click(); await nextTick(); };
 const checked = () => host.querySelector<HTMLInputElement>('[data-decide-choices] input:checked')?.value ?? null;
 const typeInto = async (el: HTMLTextAreaElement, value: string) => { el.value = value; el.dispatchEvent(new Event('input')); await nextTick(); };
-const aiWith = (...list: unknown[]) => (): [number, unknown] => [200, { suggestions: list, current: 'v2', myFeedback: [] }];
+const aiWith = (...list: unknown[]) => (): [number, unknown] => [200, { suggestions: list, current: 'v2', inaccurate: false }];
 /** 每次讀都是新的一份：定案後頁面會先在畫面上記下我的章 */
 const pending = () => mocks.fetchReviewDetail.mockImplementation(async () => detail({}));
 /** 第一次讀是待審，之後是我已經定案的那一份 */
@@ -122,7 +113,6 @@ it('the AI review block sits below the author area and above the tabs: suggestio
   expect(block.querySelector('[data-ai-inaccurate-hint]')!.textContent).toBe(t('reviewAi.first.inaccurateHint'));
   // 沒有盲審步驟
   expect($('[data-steps]')).toBeNull();
-  expect($('[data-two-stage-compare]')).toBeNull();
   expect(posts('blind')).toEqual([]);
   expect(aiCalls().map((c) => c.url)).toEqual(['/v1/review/s1/ai']);
 });
@@ -140,6 +130,9 @@ it('the decision defaults to the AI rejection; unchanged it finalizes as the AI 
   expect(option.closest('label')!.querySelector('input')!.value).toBe('reject');
   expect(host.querySelector<HTMLInputElement>('[data-reason="opening.no_reply_hook"]')!.checked).toBe(true);
   expect(host.querySelector<HTMLTextAreaElement>('#review-note')!.value).toBe('Give the player something to answer.');
+  // 說明欄是 AI 草稿帶進來的：說明句先講可以直接改
+  expect($('#review-note-hint')!.textContent).toBe(t('reviewAi.two.authorNote.prefilledHint'));
+  expect($('#review-note-hint')!.hasAttribute('data-note-prefilled')).toBe(true);
   expect($('[data-ai-modified]')).toBeNull();
   const submit = $('[data-submit-reject]') as HTMLButtonElement;
   expect(submit.classList.contains('btn--danger')).toBe(true);
@@ -254,6 +247,9 @@ it('without an AI suggestion (handoff) the block says so in one line and the dec
   expect(checked()).toBeNull();
   expect($('[data-ai-default]')).toBeNull();
   await chooseDecision('reject');
+  // 沒有 AI 草稿：說明欄照一般的說明句
+  expect($('#review-note-hint')!.textContent).toBe(t('reviewAi.two.authorNote.editHint'));
+  expect($('#review-note-hint')!.hasAttribute('data-note-prefilled')).toBe(false);
   await pickReason('opening.too_short');
   $('[data-submit-reject]')!.click();
   await vi.waitFor(() => expect(posts('stamp').length).toBe(1));
@@ -263,7 +259,7 @@ it('without an AI suggestion (handoff) the block says so in one line and the dec
 it('while the AI is still reviewing it rereads every 10 seconds; arriving late it keeps what the reviewer filled and offers to apply', async () => {
   pending();
   let aiDone = false;
-  routes['/v1/review/s1/ai'] = () => [200, { suggestions: aiDone ? [suggestion({ authorNote: 'AI draft' })] : [], current: 'v2', myFeedback: [] }];
+  routes['/v1/review/s1/ai'] = () => [200, { suggestions: aiDone ? [suggestion({ authorNote: 'AI draft' })] : [], current: 'v2', inaccurate: false }];
   vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
   try {
     await mountPage('/en/review/s1');
@@ -424,107 +420,53 @@ it('retention: a decided card past its retention says only public data is left; 
   expect(aiCalls()).toEqual([]);
 });
 
-// 兩段式之後（ui-two-stage.md）：通過與駁回在定案前已經並排比過，結果卡下不再掛揭曉區；只剩不受理用
-it('revisiting a card I stamped shows the result card without the old reveal panel and asks nothing', async () => {
+// 回頭看我定的單：結果卡寫來源與保留期；照 AI／改了 AI 的單可以再標或取消「AI 判斷不準確」（ui-ai-first.md：可在定案前後標）
+it('revisiting a card I finalized as the AI suggested shows the result card and lets me change the inaccurate mark right there', async () => {
   mocks.fetchReviewDetail.mockResolvedValue(detail({ status: 'rejected', claimedByMe: false, stampedByMe: true, stamps: [{ verdict: 'reject', note: '', at: 2, mine: true, finalSource: 'ai' }] }, { rejectReasons: ['opening.no_reply_hook'], retainUntil: Date.UTC(2026, 11, 1) }));
-  routes['/v1/review/s1/ai'] = () => [200, { suggestions: [suggestion()], myFeedback: [] }];
+  routes['/v1/review/s1/ai-inaccurate'] = (c) => [200, { inaccurate: c.body.inaccurate }];
+  routes['/v1/review/s1/ai'] = () => [200, { suggestions: [suggestion()], current: 'v2', inaccurate: true }];
   await mountPage('/en/review/s1');
-  await vi.waitFor(() => expect($('[data-result-card]')).not.toBeNull());
-  await new Promise((r) => setTimeout(r, 0));
-  expect($('[data-ai-reveal]')).toBeNull();
-  expect($('[data-two-stage-compare]')).toBeNull();
-  expect(aiCalls()).toEqual([]);
-  // 定案來源與保留期：來源讀我那一章，保留期寫到期日
+  await vi.waitFor(() => expect($('[data-result-ai-flag]')).not.toBeNull());
+  expect($('[data-ai-first]')).toBeNull();
   expect($('[data-final-source]')!.textContent).toBe(t('reviewAi.two.sourceChip', { source: t('reviewAi.two.source.ai') }));
   expect($('[data-retain-until]')).not.toBeNull();
   expect($('[data-retain-expired]')).toBeNull();
+  // 照伺服器記下的標：已標
+  const btn = () => $('[data-result-ai-flag] [data-ai-inaccurate]') as HTMLButtonElement;
+  expect(btn().getAttribute('aria-pressed')).toBe('true');
+  expect($('[data-result-ai-flag] [data-ai-inaccurate-hint]')!.textContent).toBe(t('reviewAi.first.inaccurateOn'));
+  btn().click();
+  await vi.waitFor(() => expect(calls.filter((c) => c.method === 'PUT')).toHaveLength(1));
+  expect(calls.find((c) => c.method === 'PUT')).toMatchObject({ url: '/v1/review/s1/ai-inaccurate', body: { inaccurate: false } });
+  await vi.waitFor(() => expect(btn().getAttribute('aria-pressed')).toBe('false'));
+  expect($('[data-result-ai-flag] [data-ai-inaccurate-hint]')!.textContent).toBe(t('reviewAi.first.inaccurateHint'));
+  // 沒寫進去：回到原本的狀態，說一句再試
+  routes['/v1/review/s1/ai-inaccurate'] = () => [500, { error: 'boom' }];
+  btn().click();
+  await vi.waitFor(() => expect($('[data-ai-inaccurate-error]')).not.toBeNull());
+  expect($('[data-ai-inaccurate-error]')!.textContent).toBe(t('reviewV2.toast.failed'));
+  expect(btn().getAttribute('aria-pressed')).toBe('false');
+  expect(btn().disabled).toBe(false);
+});
+
+it('a card I finalized with no AI to compare has no inaccurate mark and does not read the AI', async () => {
+  mocks.fetchReviewDetail.mockResolvedValue(detail({ status: 'approved', claimedByMe: false, stampedByMe: true, stamps: [{ verdict: 'approve', note: '', at: 2, mine: true, finalSource: 'human_no_ai' }] }));
+  routes['/v1/review/s1/ai'] = () => [200, { suggestions: [], current: 'v2', inaccurate: false }];
+  await mountPage('/en/review/s1');
+  await vi.waitFor(() => expect($('[data-result-card]')).not.toBeNull());
+  await new Promise((r) => setTimeout(r, 0));
+  expect($('[data-result-ai-flag]')).toBeNull();
+  expect(aiCalls()).toEqual([]);
 });
 
 it('a decided card whose stamp is not mine (a manager reading it) gets no panel and no request', async () => {
   mocks.fetchReviewDetail.mockResolvedValue(detail({ status: 'approved', claimedByMe: false, stampedByMe: false, manager: true, stamps: [{ verdict: 'approve', note: '', at: 2 }] }));
-  routes['/v1/review/s1/ai'] = () => [200, { suggestions: [suggestion()], myFeedback: [] }];
+  routes['/v1/review/s1/ai'] = () => [200, { suggestions: [suggestion()], inaccurate: false }];
   await mountPage('/en/review/s1');
   await vi.waitFor(() => expect($('[data-result-card]')).not.toBeNull());
   await new Promise((r) => setTimeout(r, 0));
-  expect($('[data-ai-reveal]')).toBeNull();
+  expect($('[data-result-ai-flag]')).toBeNull();
   expect(aiCalls()).toEqual([]);
-});
-
-it('disagreement: three unselected options, each submit sends a fresh operationId, and the answer can be changed', async () => {
-  let fb: unknown[] = [];
-  routes['/v1/review/s1/ai-feedback'] = (c) => [200, { value: c.body.value }];
-  routes['/v1/review/s1/ai'] = () => [200, { suggestions: [suggestion()], myFeedback: fb }];
-  await mountReveal({ mine: 'approve' });
-  await vi.waitFor(() => expect($('[data-ai-feedback]')).not.toBeNull());
-  expect($('[data-ai-agree]')!.dataset.aiAgree).toBe('differ');
-  const radios = () => [...host.querySelectorAll<HTMLInputElement>('[data-ai-option]')];
-  expect(radios().map((r) => r.value)).toEqual(['ai_right', 'ai_wrong', 'both_ok']);
-  expect(radios().some((r) => r.checked)).toBe(false);
-  expect(host.querySelector('[role=radiogroup]')).not.toBeNull();
-  expect(($('[data-ai-submit]') as HTMLButtonElement).disabled).toBe(true);
-
-  radios()[1]!.click(); await nextTick();
-  $('[data-ai-submit]')!.click();
-  await vi.waitFor(() => expect($('[data-ai-recorded]')).not.toBeNull());
-  expect($('[data-ai-recorded]')!.textContent).toContain(t('reviewAi.reveal.feedback.recorded', { value: t('reviewAi.reveal.feedback.ai_wrong') }));
-
-  $('[data-ai-change]')!.click(); await nextTick();
-  expect(radios().find((r) => r.checked)?.value).toBe('ai_wrong');
-  radios()[2]!.click(); await nextTick();
-  $('[data-ai-submit]')!.click();
-  await vi.waitFor(() => expect($('[data-ai-recorded]')!.textContent).toContain(t('reviewAi.reveal.feedback.both_ok')));
-
-  const posts = calls.filter((c) => c.method === 'POST');
-  expect(posts.map((c) => c.body)).toEqual([
-    { suggestionId: 'g1', value: 'ai_wrong', operationId: 'op-1' },
-    { suggestionId: 'g1', value: 'both_ok', operationId: 'op-2' },
-  ]);
-});
-
-it('a failed feedback keeps the choice; a recorded answer from earlier shows as recorded', async () => {
-  routes['/v1/review/s1/ai-feedback'] = () => [500, { error: 'boom' }];
-  routes['/v1/review/s1/ai'] = () => [200, { suggestions: [suggestion()], myFeedback: [] }];
-  await mountReveal({ mine: 'approve' });
-  await vi.waitFor(() => expect($('[data-ai-feedback]')).not.toBeNull());
-  host.querySelector<HTMLInputElement>('[data-ai-option=ai_right]')!.click(); await nextTick();
-  $('[data-ai-submit]')!.click();
-  await vi.waitFor(() => expect($('[data-ai-send-error]')).not.toBeNull());
-  expect(host.querySelector<HTMLInputElement>('[data-ai-option=ai_right]')!.checked).toBe(true);
-  app!.unmount(); document.body.innerHTML = '';
-
-  routes['/v1/review/s1/ai'] = () => [200, { suggestions: [suggestion()], myFeedback: [{ suggestionId: 'g1', value: 'ai_right' }] }];
-  await mountReveal({ mine: 'approve' });
-  await vi.waitFor(() => expect($('[data-ai-recorded]')).not.toBeNull());
-  expect($('[data-ai-feedback]')).toBeNull();
-});
-
-it('403 renders nothing; handoff and no suggestion say so without feedback; a load error offers a retry', async () => {
-  routes['/v1/review/s1/ai'] = () => [403, { error: 'ai_hidden_until_decided' }];
-  await mountReveal({ mine: 'approve' });
-  await vi.waitFor(() => expect(aiCalls().length).toBe(1));
-  await new Promise((r) => setTimeout(r, 0));
-  expect($('[data-ai-reveal]')).toBeNull();
-  app!.unmount(); document.body.innerHTML = '';
-
-  routes['/v1/review/s1/ai'] = () => [200, { suggestions: [suggestion({ verdict: 'handoff', reasons: [], confidence: null, handoffCause: 'unsure' })], myFeedback: [] }];
-  await mountReveal({ mine: 'reject' });
-  await vi.waitFor(() => expect($('[data-ai-handoff]')).not.toBeNull());
-  expect(host.textContent).toContain(t('reviewAi.reveal.handoffBody'));
-  expect($('[data-ai-feedback]')).toBeNull();
-  app!.unmount(); document.body.innerHTML = '';
-
-  routes['/v1/review/s1/ai'] = () => [200, { suggestions: [suggestion({ verdict: null })], myFeedback: [] }];
-  await mountReveal({ mine: 'reject' });
-  await vi.waitFor(() => expect($('[data-ai-none]')).not.toBeNull());
-  app!.unmount(); document.body.innerHTML = '';
-
-  let fail = true;
-  routes['/v1/review/s1/ai'] = () => (fail ? [500, { error: 'x' }] : [200, { suggestions: [], myFeedback: [] }]);
-  await mountReveal({ mine: 'reject' });
-  await vi.waitFor(() => expect($('[data-ai-error]')).not.toBeNull());
-  fail = false;
-  $('[data-ai-retry]')!.click();
-  await vi.waitFor(() => expect($('[data-ai-none]')).not.toBeNull());
 });
 
 // ---------- AI 分歧（管理員） ----------

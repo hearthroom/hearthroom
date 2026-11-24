@@ -4,7 +4,7 @@ import {createRouter,createMemoryHistory} from 'vue-router';
 import {applyLocale,i18n,LOCALE_CODES} from '../src/lib/i18n';
 import {confirmState,settleConfirm} from '../src/lib/confirm';
 import {OPENING_SANDBOX,openingSrcdoc,OPENING_MESSAGE_TYPE} from 'stage-common/opening-page';
-const api=vi.hoisted(()=>({claimReview:vi.fn(async()=>({})),fetchReviewDetail:vi.fn(),fetchReviewQueue:vi.fn(async()=>({items:[],claimTtlMs:1})),fetchReviewOriginality:vi.fn(),fetchReviewDiff:vi.fn(),releaseReview:vi.fn(),stampReview:vi.fn(),blindReview:vi.fn(),holdReview:vi.fn(),unholdReview:vi.fn(),withdrawReopen:vi.fn(),correctReviewDecision:vi.fn(),updateReviewTags:vi.fn(),fetchReviewAuthorCards:vi.fn(),fetchReviewAuthorActivity:vi.fn(),dropReview:vi.fn(async()=>({caseId:'k1'})),restoreReview:vi.fn(async()=>({restored:true})),markReviewAuthor:vi.fn(),fetchReviewGroup:vi.fn(),dropReviewBatch:vi.fn(),restoreReviewBatch:vi.fn(),ApiError:class extends Error{constructor(readonly status:number,message:string,readonly code='',readonly reviewLength?:unknown){super(message);}}}));
+const api=vi.hoisted(()=>({claimReview:vi.fn(async()=>({})),fetchReviewDetail:vi.fn(),fetchReviewQueue:vi.fn(async()=>({items:[],claimTtlMs:1})),fetchReviewOriginality:vi.fn(),fetchReviewDiff:vi.fn(),releaseReview:vi.fn(),stampReview:vi.fn(),holdReview:vi.fn(),unholdReview:vi.fn(),withdrawReopen:vi.fn(),correctReviewDecision:vi.fn(),updateReviewTags:vi.fn(),fetchReviewAuthorCards:vi.fn(),fetchReviewAuthorActivity:vi.fn(),dropReview:vi.fn(async()=>({caseId:'k1'})),restoreReview:vi.fn(async()=>({restored:true})),markReviewAuthor:vi.fn(),fetchReviewGroup:vi.fn(),dropReviewBatch:vi.fn(),restoreReviewBatch:vi.fn(),ApiError:class extends Error{constructor(readonly status:number,message:string,readonly code='',readonly reviewLength?:unknown){super(message);}}}));
 vi.mock('../src/lib/api',()=>api);
 // AI 的建議自己讀網路：這裡 AI 一律還沒審完，決定區照一般流程（無 AI 對照）。AI 那一側由 review-ai.test.ts 管
 vi.mock('../src/lib/review-ai-api',async(original)=>({...await original<object>(),fetchReviewAi:async()=>({suggestions:[],myFeedback:[]})}));
@@ -162,7 +162,6 @@ it('with the AI still reviewing, the AI block is one line and the decision is th
  approve().click();
  await vi.waitFor(()=>expect(api.stampReview).toHaveBeenCalledWith('s1','local-reviewer',{generation:'g1',finalSource:'human_no_ai',verdict:'approve',note:''}));
  expect(confirmState.current).toBeNull();
- expect(api.blindReview).not.toHaveBeenCalled();
 });
 
 it('clears the old actionable submission immediately while the next route detail is still loading',async()=>{
@@ -1002,7 +1001,6 @@ it('a manager rejecting a re-review writes a note and sends no reason codes',asy
  await vi.waitFor(()=>expect(confirmState.current).toBeTruthy());
  // 重新審核仍是一步、有確認層；列的「標籤：值」用語系的分隔
  expect(confirmState.current!.message).toContain(i18n.global.t('review.confirm.row',{label:i18n.global.t('review.confirm.card'),value:'Night Detective'}));
- expect(api.blindReview).not.toHaveBeenCalled();
  settleConfirm(true);
  await vi.waitFor(()=>expect(api.stampReview).toHaveBeenCalledWith('s1','local-reviewer',{verdict:'reject',note:'確認是盜用',generation:'g1'}));
 });

@@ -39,7 +39,7 @@ import ReviewAiNoteField from '@/components/ReviewAiNoteField.vue';
 import ReviewAuthorNoteGuard from '@/components/ReviewAuthorNoteGuard.vue';
 import ReviewVisibility from '@/components/ReviewVisibility.vue';
 import { guardHits, type GuardHit } from '@/lib/author-note-guard';
-import { fetchReviewAi, type AiNoteType } from '@/lib/review-ai-api';
+import { fetchReviewAi, setAiInaccurate, type AiNoteType } from '@/lib/review-ai-api';
 import { aiAsHuman, aiReasonCodes, aiStateOf, type AiView } from '@/lib/review-ai';
 import { REVIEW_REASONS, reasonKey } from '@/lib/review-reasons';
 import { REVIEW_DECISION_MARKS } from '../../../shared/review-reasons';
@@ -352,8 +352,10 @@ const sameAi = (r: { id: string; at: number } | null, s: { id: string; at: numbe
 /** 決定區目前套用的那一筆 AI 建議；先不套用的那一筆 */
 const aiApplied = ref<{ id: string; at: number } | null>(null);
 const aiDismissed = ref<{ id: string; at: number } | null>(null);
-/** 「AI 判斷不準確」：選填，跟著定案送出；不影響這張卡的結果 */
+/** 「AI 判斷不準確」：選填，定案前跟著定案送出、定案後在結果卡上按下就寫入；不影響這張卡的結果 */
 const aiInaccurate = ref(false);
+const aiMarkBusy = ref(false);
+const aiMarkError = ref('');
 /** 給 AI 的說明（選填，跟著定案送出，不給作者看） */
 const aiNoteTypes = ref<AiNoteType[]>([]);
 const aiNote = ref('');
@@ -367,7 +369,7 @@ const noteGuard = ref<{ at: GuardAt; hits: GuardHit[]; final: boolean } | null>(
 const finalSourceDone = ref<ReviewFinalSource | null>(null);
 function resetAi() {
   aiState.value = null; aiLoadFailed.value = false; aiBusy.value = false; aiApplied.value = null; aiDismissed.value = null;
-  aiInaccurate.value = false; aiNoteTypes.value = []; aiNote.value = ''; noteGuard.value = null;
+  aiInaccurate.value = false; aiMarkBusy.value = false; aiMarkError.value = ''; aiNoteTypes.value = []; aiNote.value = ''; noteGuard.value = null;
 }
 /** 審核員動過決定區（選了結論、勾了理由、寫了字）：AI 晚到時不覆蓋 */
 const formTouched = computed(() => choice.value !== null || reasonPicks.value.length > 0 || !!note.value.trim() || suggestPicks.value.length > 0);
@@ -412,6 +414,29 @@ const aiChanges = computed<string[] | null>(() => {
 const decideSource = computed<ReviewFinalSource>(() => (aiBase.value ? (aiChanges.value?.length === 0 ? 'ai' : 'modified') : 'human_no_ai'));
 /** 結果卡的來源 chip：詳情裡我那一章記下的來源；剛定案、還沒重讀時用蓋章回應的 */
 const resultSource = computed<ReviewFinalSource | null>(() => myStamp.value?.finalSource ?? (myStamp.value ? finalSourceDone.value : null));
+/** 給作者的說明欄現在是 AI 的草稿帶進來的（照 AI 駁回時預填）：說明句先講可以直接改 */
+const noteFromAi = computed(() => aiFirst.value && !!aiApplied.value && aiBase.value?.verdict === 'reject' && !!aiBase.value.note && !!note.value.trim());
+/**
+ * 定案後仍可標「AI 判斷不準確」（ui-ai-first.md：可在定案前後標）：我定的、而且當時有 AI 的建議可對照（照 AI／改了 AI）。
+ * 管理員看別人定的單不在這裡標（伺服器允許，畫面先只給定案的人）。
+ */
+const aiMarkable = computed(() => decided.value && !!myStamp.value && (resultSource.value === 'ai' || resultSource.value === 'modified'));
+async function toggleInaccurate() {
+  if (aiMarkBusy.value) return;
+  const target = id.value, next = !aiInaccurate.value;
+  aiMarkBusy.value = true; aiMarkError.value = ''; aiInaccurate.value = next;
+  try {
+    const res = await setAiInaccurate(target, await token(), next);
+    if (!active || target !== id.value) return;
+    aiInaccurate.value = res.inaccurate;
+  } catch {
+    if (!active || target !== id.value) return;
+    // 沒寫進去：切換鈕回到原本的狀態，說一句再按一次
+    aiInaccurate.value = !next; aiMarkError.value = t('reviewV2.toast.failed');
+  } finally {
+    if (target === id.value) aiMarkBusy.value = false;
+  }
+}
 /** 已定案、而保留期已過（伺服器回 null）：內容只剩公開資料。舊版伺服器不帶這個欄位，照舊顯示 */
 const retentionExpired = computed(() => decided.value && data.value?.retainUntil === null);
 
@@ -423,6 +448,8 @@ async function refreshAi(manual = false) {
     const res = await fetchReviewAi(target, await token());
     if (!active || target !== id.value) return;
     aiState.value = aiStateOf(res.suggestions, res.current);
+    // 已定案：切換鈕照伺服器記下的標；待審時是本頁還沒送出的選擇，不覆蓋
+    if (aiMarkable.value) aiInaccurate.value = res.inaccurate === true;
     aiLoadFailed.value = false;
   } catch {
     if (!active || target !== id.value) return;
@@ -532,8 +559,9 @@ async function load() {
     const result=await fetchReviewDetail(target, await token());
     if(!active||seq!==loadSequence||target!==id.value)return;
     data.value=result;
-    // AI 為主：待審的一般單進來就讀 AI 的建議（讀過就不重讀，AI 還沒審完由輪詢接手）
-    if(aiFirst.value&&!aiState.value&&!aiLoadFailed.value)void refreshAi();
+    // AI 為主：待審的一般單進來就讀 AI 的建議（讀過就不重讀，AI 還沒審完由輪詢接手）；
+    // 回頭看我定的單也讀一次，結果卡上的「AI 判斷不準確」要照記下的狀態
+    if((aiFirst.value||aiMarkable.value)&&!aiState.value&&!aiLoadFailed.value)void refreshAi();
     // 新卡預設先看開場白（最大的駁回原因，也最快看完）；之後使用者自己切的分頁不動
     // 更新與駁回後重送先看「這次改了什麼」
     if(!sectionChosen){sectionChosen=true;if(hasChanges.value)section.value='changes';else if(submissionTypeOf({ ...result.submission, reopen: !!result.submission.reopen })==='first')section.value='dialogue';}
@@ -763,9 +791,6 @@ async function explainDecideError(err: unknown, target: string, guard: { at: Gua
     if (err instanceof ApiError && (err.code === "ai_changed" || err.code === "ai_choice_unavailable")) {
       decideError.value = t("reviewAi.two.final.aiChanged");
       await refreshAi(true);
-    } else if (err instanceof ApiError && (err.code === "finalize_with_source" || err.code === "blind_required" || err.code === "blind_not_applicable")) {
-      decideError.value = t("review.decide.failed");
-      await load();
     } else if (err instanceof ApiError && err.code === "review_length_insufficient") {
       const l = err.reviewLength ? formatReviewLength(err.reviewLength, String(locale.value)) : lengthParams.value;
       decideError.value = t("review.decide.errorLength", { total: l.total, required: l.required });
@@ -1375,8 +1400,14 @@ onMounted(() => { void load(); });
           <p v-if="myStamp" class="result__mine"><span class="chip" :class="{ 'chip--reject': myStamp.verdict === 'reject' }">{{ $t(myStamp.verdict === 'approve' ? 'review.result.mine.approve' : 'review.result.mine.reject') }}</span></p>
           <!-- 一張單一章就定案：送出後只會是已上榜或已駁回 -->
           <p v-if="data.submission.status === 'approved' || data.submission.status === 'rejected'" class="result__now">{{ $t(data.submission.status === 'approved' ? 'review.result.now.approved' : 'review.result.now.rejected') }}</p>
-          <!-- 兩段式定案的來源（用我的／用 AI 的／修改後／沒有 AI 對照） -->
+          <!-- 定案的來源（照 AI／改了 AI／無 AI 對照；舊的定案可能是「用我的」） -->
           <p v-if="resultSource" class="result__mine"><span class="chip result__source" :data-final-source="resultSource">{{ $t("reviewAi.two.sourceChip", { source: $t(`reviewAi.two.source.${resultSource}`) }) }}</span></p>
+          <!-- 定案後也能標「AI 判斷不準確」：按下就記下，可以取消，不影響這張卡的結果 -->
+          <div v-if="aiMarkable && aiView === 'ready'" class="ai-first__flag result__ai-flag" data-result-ai-flag>
+            <p class="subtle ai-first__flag-hint" data-ai-inaccurate-hint>{{ $t(aiInaccurate ? "reviewAi.first.inaccurateOn" : "reviewAi.first.inaccurateHint") }}</p>
+            <button type="button" class="btn btn--sm ai-first__flag-btn" :class="{ 'ai-first__flag-btn--on': aiInaccurate }" :aria-pressed="aiInaccurate" :aria-busy="aiMarkBusy ? 'true' : undefined" :disabled="aiMarkBusy" data-ai-inaccurate @click="toggleInaccurate">{{ $t("reviewAi.first.inaccurate") }}</button>
+            <p v-if="aiMarkError" class="notice notice--error result__ai-flag-error" role="alert" data-ai-inaccurate-error>{{ aiMarkError }}</p>
+          </div>
           <p v-if="data.retainUntil" class="subtle result__retain" data-retain-until>{{ $t("review.retain.until", { date: dateTime(data.retainUntil) }) }}</p>
           <ul v-if="data.rejectReasons?.length" class="result__reasons" data-result-reasons>
             <li v-for="code in data.rejectReasons" :key="code" class="chip">{{ $t(reasonKey(code, 'name')) }}</li>
@@ -1520,8 +1551,8 @@ onMounted(() => { void load(); });
               <div class="field">
                 <div class="note-head">
                   <label for="suggest-note">{{ $t(suggestions.includes('other') ? "reviewV2.decide.noteLabelRequired" : "reviewV2.decide.noteLabel") }}</label>
-                  <!-- 通過時作者收到的是勾選的改進建議與範例，這段補充說明只留在審核紀錄 -->
-                  <ReviewVisibility who="reviewers" />
+                  <!-- 附了建議就連這段補充一起給作者（結果頁的「審核員補充」），跟駁回說明一樣過內部字詞檢查 -->
+                  <ReviewVisibility who="author" />
                 </div>
                 <textarea id="suggest-note" v-model="note" autocomplete="off" class="input" rows="3" :maxlength="NOTE_MAX" :disabled="busy" :aria-invalid="noteGuard?.at === 'suggest' ? 'true' : undefined" />
               </div>
@@ -1538,7 +1569,7 @@ onMounted(() => { void load(); });
                 <label for="review-note">{{ $t(noteRequired ? "reviewV2.decide.noteLabelRequired" : "reviewV2.decide.noteLabel") }}</label>
                 <ReviewVisibility v-if="!reopen" who="author" />
               </div>
-              <p v-if="!reopen" id="review-note-hint" class="subtle note-hint">{{ $t("reviewAi.two.authorNote.editHint") }}</p>
+              <p v-if="!reopen" id="review-note-hint" class="subtle note-hint" :data-note-prefilled="noteFromAi ? '' : undefined">{{ $t(noteFromAi ? "reviewAi.two.authorNote.prefilledHint" : "reviewAi.two.authorNote.editHint") }}</p>
               <textarea ref="noteField" autocomplete="off" id="review-note" v-model="note" class="input" rows="4" :maxlength="NOTE_MAX" :placeholder="$t('review.note.placeholder')" :disabled="decided||busy||!!hold" :aria-required="noteRequired" :aria-describedby="reopen ? undefined : 'review-note-hint'" :aria-invalid="noteGuard?.at === 'note' ? 'true' : undefined" @focus="noteFocused = true" @blur="noteFocused = false" />
             </div>
           </template>
@@ -1781,6 +1812,7 @@ onMounted(() => { void load(); });
 .ai-first__late-acts { display: flex; flex-wrap: wrap; gap: var(--s-2); }
 .ai-first__flag { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--s-2); }
 .ai-first__flag-hint { margin: 0 auto 0 0; font-size: 12px; overflow-wrap: anywhere; }
+.result__ai-flag-error { flex-basis: 100%; margin: 0; }
 .ai-first__flag-btn--on, .ai-first__flag-btn--on:hover { border-color: var(--accent); background: var(--accent-tint); color: var(--accent-text); }
 .ai-first__line:lang(ko), .ai-first__flag-hint:lang(ko) { word-break: keep-all; }
 .verdict__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
