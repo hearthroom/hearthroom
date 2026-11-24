@@ -239,11 +239,12 @@ async function authorSignals(db: D1Database, memberId: string, sourceRoleId: str
         SELECT r2.device_hash FROM json_each(?4) p2 JOIN card_registrations r2 ON r2.provider=json_extract(p2.value,'$[0]')
         WHERE r2.source_role_id=?2 AND r2.device_hash IS NOT NULL AND r2.registered_at<=?3 ORDER BY r2.registered_at DESC LIMIT 1)) AS deviceAccounts`)
       .bind(memberId, sourceRoleId, at, byProvider).first<{ registrations7d: number; priorApproved: number; createdAt: number | null; deviceAccounts: number }>(),
-    // 送審前 7 天這位作者的每一次送審（含這次）：節奏與字數。看得出「一晚送六張長卡」
+    // 送審前 7 天這位作者每一次送審「還沒上架的卡」（新卡與未上架重送，含這次）：節奏與字數。看得出「一晚送六張長卡」。
+    // 已上架卡的更新不算（owner 2026-11-24：更新已上線的卡不是量產）
     db.prepare(`SELECT s2.submitted_at AS at, s2.review_length_total AS chars,
         (s2.status='pending' OR s2.decided_at>?2) AND s2.status<>'superseded' AS waiting
       FROM review_submissions s2 JOIN hosting_versions v2 ON v2.submission_id=s2.id
-      WHERE v2.member_id=?1 AND s2.submitted_at>?2-${WEEK} AND s2.submitted_at<=?2 ORDER BY s2.submitted_at DESC LIMIT 60`)
+      WHERE v2.member_id=?1 AND s2.submitted_at>?2-${WEEK} AND s2.submitted_at<=?2 AND NOT EXISTS (SELECT 1 FROM review_submissions p0 WHERE p0.card_id=s2.card_id AND p0.id<>s2.id AND p0.status='approved' AND p0.decided_at<s2.submitted_at) ORDER BY s2.submitted_at DESC LIMIT 60`)
       .bind(memberId, at).all<{ at: number; chars: number | null; waiting: number }>(),
   ]);
   const limit = await weeklyLimitAt(db, at);
@@ -269,7 +270,7 @@ async function authorSignals(db: D1Database, memberId: string, sourceRoleId: str
 }
 
 /**
- * 審核頁的「作者行為」（只給審核員，owner 2026-11-24）：本週用了多少送審額度、近 7 天與 24 小時送了幾次、
+ * 審核頁的「作者行為」（只給審核員，owner 2026-11-24）：本週用了多少送審額度、近 7 天與 24 小時送了幾張還沒上架的卡（已上架卡的更新不算）、
  * 平均多久送一張、這張距上一張多久、近期每張的字數。看得出「一個晚上送六張長卡」這種批量產卡。
  * 只回數字與狀態，不回帳號或裝置識別碼；作者標記沿用審核頁的作者側寫。
  */
@@ -288,7 +289,7 @@ export async function authorActivity(db: D1Database, submissionId: string, now: 
     weeklyLimitAt(db, now),
     db.prepare(`SELECT s2.id, s2.card_id AS card, s2.submitted_at AS at, s2.review_length_total AS chars, s2.status, s2.kind
       FROM review_submissions s2 JOIN hosting_versions v2 ON v2.submission_id=s2.id
-      WHERE v2.member_id=? AND s2.submitted_at>? ORDER BY s2.submitted_at DESC LIMIT 60`).bind(v.member_id, now - WEEK)
+      WHERE v2.member_id=? AND s2.submitted_at>? AND NOT EXISTS (SELECT 1 FROM review_submissions p0 WHERE p0.card_id=s2.card_id AND p0.id<>s2.id AND p0.status='approved' AND p0.decided_at<s2.submitted_at) ORDER BY s2.submitted_at DESC LIMIT 60`).bind(v.member_id, now - WEEK)
       .all<{ id: string; card: number; at: number; chars: number | null; status: string; kind: string }>(),
     authorSignals(db, v.member_id, v.source_role_id, now),
   ]);

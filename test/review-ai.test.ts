@@ -762,3 +762,24 @@ describe('審卡員讀得到查重數字', () => {
     expect(Object.keys(body.originality).sort()).toEqual(body.originality.available ? ['available', 'earlierMax', 'similarity', 'sources'] : ['available']);
   });
 });
+
+describe('送審節奏只算還沒上架的卡', () => {
+  it('已上架卡的更新不算進 24 小時送審數與一晚多張', async () => {
+    const a = await submitCard('draft-a');
+    await env.DB.prepare("UPDATE review_submissions SET status='approved', decided_at=?, review_length_total=2000 WHERE id=?").bind(Date.now() - 3 * 3_600_000, a.id).run();
+    // 同一張已上架的卡連送三次更新
+    const ups = [await submitCard('draft-a')];
+    await env.DB.prepare("UPDATE review_submissions SET status='superseded' WHERE id=?").bind(ups[0].id).run();
+    ups.push(await submitCard('draft-a'));
+    await env.DB.prepare("UPDATE review_submissions SET status='superseded' WHERE id=?").bind(ups[1].id).run();
+    ups.push(await submitCard('draft-a'));
+    await env.DB.prepare('UPDATE review_submissions SET review_length_total=2000 WHERE id IN (?,?,?)').bind(ups[0].id, ups[1].id, ups[2].id).run();
+    const body = await json(await get(`/v1/review-ai/submissions/${ups[2].id}`, 'key'));
+    // 只剩這張卡第一次送審（當時還沒上架）；三次更新都不算
+    expect(body.author.submissions24h).toBe(1);
+    await claim(env.DB, ups[2].id, humanId, Date.now());
+    const act = await json(await get(`/v1/review/${ups[2].id}/author-activity`, 'human'));
+    expect(act.submissions24h).toBe(1);
+    expect(act.anomalies.map((x: any) => x.code)).not.toContain('burst_long');
+  });
+});
