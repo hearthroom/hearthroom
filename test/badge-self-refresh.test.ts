@@ -39,12 +39,15 @@ it('keeps stored values when Harbor fails and skips members without a usable lin
  expect(await claimSelfRefresh(env,member,Date.now()+SELF_REFRESH_INTERVAL)).toBeNull();
 });
 
-it('flags the owner read that started a refresh and not the reread or a throttled open',async()=>{
- badgeStatsTransport.read=async()=>[stats(4)];whoAmI(11);
+it('refreshes only when the badge page asks for it, and flags only the read that started one',async()=>{
+ let calls=0;badgeStatsTransport.read=async()=>{calls++;return [stats(4)]};whoAmI(11);
  const read=async(q='')=>(await SELF.fetch('https://c.test/v1/me/community/badges'+q,{headers:bearer('valid')})).json<{refreshing?:boolean}>();
- expect((await read()).refreshing).toBe(true);
- expect((await read('?reread=1')).refreshing).toBeUndefined();
+ // 我的頁、展示徽章等其他讀取不帶 refresh，不占 10 分鐘的額度
  expect((await read()).refreshing).toBeUndefined();
+ expect((await read('?refresh=1')).refreshing).toBe(true);
+ expect((await read()).refreshing).toBeUndefined();
+ expect((await read('?refresh=1')).refreshing).toBeUndefined();
+ expect(calls).toBeLessThanOrEqual(1);
 });
 
 it('shows the wanderer progress from the explored count without awarding it from the wall or the sweep',async()=>{
