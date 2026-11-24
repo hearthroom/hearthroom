@@ -1127,3 +1127,27 @@ it('shows the author profile to the reviewer when the detail carries one',async(
  await vi.waitFor(()=>expect(el.querySelector('[data-decide-choices]')).toBeTruthy());
  expect(el.querySelector('[data-author-profile]')).toBeNull();
 });
+
+// 作者行為（UI 小稿 ui-author-behavior.md）：掛在作者面板裡、標記之下、依據之上；沒權限時整區不顯示，頁面照常
+it('the author panel shows author activity under the marks, above the basis list',async()=>{
+ api.fetchReviewDetail.mockReset().mockResolvedValue({...withLength(3600),authorProfile:profile('stable')});
+ api.fetchReviewAuthorActivity.mockResolvedValue({anomalies:[{code:'quota_full',value:3}],weekly:{used:3,limit:3,deviceShared:false},submissions7d:3,submissions24h:2,pendingNow:1,avgGapHours:5,minutesSincePrevious:90,recent:[],deviceAccounts:1,priorApproved:2,accountAgeDays:30});
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('[data-author-profile] [data-activity-anomalies]')).toBeTruthy());
+ expect(api.fetchReviewAuthorActivity).toHaveBeenCalledWith('s1','local-reviewer');
+ const activity=el.querySelector('[data-author-profile] [data-author-activity]')!;
+ const basis=el.querySelector('[data-author-profile] .profile__basis')!;
+ expect(activity.compareDocumentPosition(basis)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+ expect(activity.textContent).toContain('本週 3 / 3，已用完');
+});
+
+it('a 403 from author activity hides only that section; the profile and decision still render',async()=>{
+ api.fetchReviewDetail.mockReset().mockResolvedValue({...withLength(3600),authorProfile:profile('stable')});
+ api.fetchReviewAuthorActivity.mockRejectedValue(new api.ApiError(403,'x'));
+ await remount();
+ await vi.waitFor(()=>expect(api.fetchReviewAuthorActivity).toHaveBeenCalled());
+ await vi.waitFor(()=>expect(el.querySelector('[data-author-profile]')).toBeTruthy());
+ await vi.waitFor(()=>expect(el.querySelector('[data-author-activity]')).toBeNull());
+ expect(el.querySelector('[data-author-profile] .profile__basis')).toBeTruthy();
+ expect(el.querySelector('[data-decide-choices]')).toBeTruthy();
+});

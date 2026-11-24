@@ -16,7 +16,7 @@ const { t, locale } = useI18n();
 const session = useSession();
 
 /** 與伺服器 ACTIVITY_THRESHOLDS 同值，只用在說明句；判定永遠以伺服器回的 anomalies 為準 */
-const THRESHOLDS = { burst: { hours: 12, chars: 1500 }, quickGap: { minutes: 30, chars: 1000 }, device: { warn: 3, heavy: 5 } } as const;
+const THRESHOLDS = { burst: { hours: 12, chars: 1500 }, device: { heavy: 5 } } as const;
 const WINDOW_DAYS = 7, DAY_HOURS = 24, RECENT_COUNT = 5;
 const KNOWN = new Set(["burst_long", "quota_full", "quick_gap", "device", "device_heavy"]);
 const HIDDEN = new Set([403, 404, 409, 410]);
@@ -75,7 +75,7 @@ const anomalies = computed(() => {
       case "quota_full":
         return { code: a.code, label: t("reviewV2.activity.anomaly.quota_full"), note: t("reviewV2.activity.anomalyNote.quota_full", { used: num(d.weekly.used), limit: num(d.weekly.limit) }) };
       case "quick_gap":
-        return { code: a.code, label: t("reviewV2.activity.anomaly.quick_gap"), note: t("reviewV2.activity.anomalyNote.quick_gap", { gap: duration(n), minutes: THRESHOLDS.quickGap.minutes }) };
+        return { code: a.code, label: t("reviewV2.activity.anomaly.quick_gap"), note: t("reviewV2.activity.anomalyNote.quick_gap", { gap: duration(n) }) };
       default: {
         const heavy = a.code === "device_heavy";
         return {
@@ -164,6 +164,8 @@ function onToggle(e: Event) { open.value = (e.target as HTMLDetailsElement).open
 .activity__toggle { min-height: var(--h-md); line-height: var(--h-md); font-size: 13px; font-weight: 600; color: var(--text-2); cursor: pointer; }
 .activity__rows { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--s-2); margin: var(--s-1) 0 0; }
 .activity__rows div { display: grid; gap: 2px; min-width: 0; }
+/* 手機 390 直排（小稿「寬度與無障礙」） */
+@media (max-width: 759px) { .activity__rows { grid-template-columns: minmax(0, 1fr); } }
 .activity__rows dt { font-size: 12px; color: var(--text-3); }
 .activity__rows dd { margin: 0; font-size: 14px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .activity__flag { margin-inline-start: var(--s-2); vertical-align: middle; }
