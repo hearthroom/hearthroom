@@ -43,6 +43,33 @@ export async function applyBadgeStats(env:Env,member:string,value:BadgeStats,now
  if(spendingComplete&&value.starlightAt!==undefined)writes.push(env.DB.prepare(`UPDATE badge_qualifications SET starlight_at=? WHERE member_id=? AND ${guard}`).bind(at(value.starlightAt),member,...guardArgs));
  const [saved]=await env.DB.batch(writes);return !!saved.meta.changes;
 }
+/**
+ * 本人打開成就頁時刷新自己一次（2026-11-24）：例行刷新每人約 60 小時才輪到一次，玩家聊完要等兩天多才看到數字變。
+ * 節流沿用例行刷新寫的同一個嘗試時間：10 分鐘內被刷過（不論是本人觸發還是例行輪到）就不再打 Harbor。
+ * 取得節流就把自己排到例行佇列最後面，這是對的（剛刷過）；失敗時要等下次打開頁面或下一輪例行刷新。
+ */
+export const SELF_REFRESH_INTERVAL=10*60000;
+export interface SelfRefresh {accountNo:number;receipt:string}
+export async function claimSelfRefresh(env:Env,member:string,now=Date.now()):Promise<SelfRefresh|null>{
+ const account=await env.DB.prepare(`SELECT CAST(i.external_id AS INTEGER) account_no FROM member_identities i
+ LEFT JOIN member_connections c ON c.provider=i.provider AND c.external_id=i.external_id JOIN members m ON m.id=COALESCE(c.owner_member_id,i.member_id)
+ WHERE i.provider='harbor' AND m.id=? AND m.account_class='normal' AND NOT EXISTS(SELECT 1 FROM legacy_account_fence f WHERE f.member_id=m.id)
+ ORDER BY i.linked_at DESC,i.external_id LIMIT 1`).bind(member).first<number>('account_no');
+ if(!account)return null;
+ const receipt=crypto.randomUUID();
+ const claimed=await env.DB.prepare(`INSERT INTO badge_qualification_refresh(member_id,receipt,attempted_at) VALUES(?,?,?)
+ ON CONFLICT(member_id) DO UPDATE SET receipt=excluded.receipt,attempted_at=excluded.attempted_at WHERE badge_qualification_refresh.attempted_at<=?`)
+ .bind(member,receipt,now,now-SELF_REFRESH_INTERVAL).run();
+ if(!claimed.meta.changes){await bumpOp(env.DB,'badge_stats','self','throttled');return null}
+ return {accountNo:account,receipt};
+}
+export async function runSelfRefresh(env:Env,member:string,claim:SelfRefresh,now=Date.now()):Promise<void>{
+ try{
+  const [value]=(await badgeStatsTransport.read(env,[claim.accountNo])).filter(v=>v.accountNo===claim.accountNo);
+  const applied=!!value&&await applyBadgeStats(env,member,value,now,claim.receipt);
+  await bumpOp(env.DB,'badge_stats','self',applied?'success':'pending');
+ }catch{await bumpOp(env.DB,'badge_stats','self','error')}
+}
 export async function badgeStatsMaintenance(env:Env,now=Date.now()):Promise<void>{
  // 全服唯一：每一拍都看一次確認期過了沒（只讀已存的越線時間，不打 Harbor）
  await awardFirstBadges(env,STAT_FIRST_BADGES,now).catch(async()=>{await bumpOp(env.DB,'badge_stats','first','error');});
