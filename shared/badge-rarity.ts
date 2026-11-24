@@ -61,12 +61,18 @@ export const badgeAp = (badge: { key: string; category: string }) => BADGE_AP[ba
 export const BADGE_REWARD: Record<BadgeRarity, number> = { common: 100, rare: 500, epic: 2000, legendary: 6000, unique: 30000 };
 const NO_REWARD_CATEGORIES = new Set(['rank', 'spend', 'event', 'contest']);
 const NO_REWARD_KEYS = new Set(['beta_veteran', 'opening_veteran']);
-/** 全服唯一徽章各自的獎勵；0＝只有徽章，不發積分。 */
+/** 個別定價的徽章獎勵（優先於稀有度預設）；0＝只有徽章，不發積分。 */
 export const REWARD_BY_KEY: Record<string, number> = {
   // 燈塔守護者：達成者至少帶來 100 筆首次儲值；超過活動點數池單筆上限（3 萬）前要先調高上限
   sole_lighthouse: 100_000,
   // 首位星輝：發積分會疊在儲值贈送上、可能超過定價憲章 6% 上限，owner 裁決前只給徽章
   sole_starlight: 0,
+  // 成就第一批新增的 15 枚（PM 2026-11-24）：成本算完、老闆定數字前只給徽章；改名的舊徽章照稀有度不變
+  player_explorer_3: 0,
+  player_turns_50: 0, player_turns_500: 0, player_turns_2500: 0, player_turns_10000: 0,
+  player_devoted_30: 0, player_devoted_150: 0, player_devoted_500: 0, player_devoted_1500: 0,
+  player_commenter_300: 0, player_liked_5: 0, player_liked_500: 0,
+  creator_followers_300: 0, creator_favorited_1000: 0, honor_same_card_crown: 0,
 };
 
 /** 開始對話類高檔位徽章：在改計 Harbor 付費回合與調整防刷門檻前受凍結規則控管（預設全部歸零，亦支援截止時間制＋排除名單）。 */

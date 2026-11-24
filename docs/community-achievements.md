@@ -112,6 +112,8 @@ Owner decision 2026-11-23, from the revised achievement table. Existing badges k
 | `favorites_received` | saves on owned listed cards from established members, never the owner | adds 1,000 |
 | `same_card_crown` | owned cards that reached band 1 on a daily, a weekly and a monthly board | 1 (`honor_same_card_crown`, rank category, no credits) |
 
+Credits: by PM decision on 2026-11-24 the fifteen new badges pay no credits (`REWARD_BY_KEY` sets each to 0) until their cost is estimated and the owner sets the amounts; they still carry achievement points by rarity. The seventeen renamed badges keep their rarity-based credits.
+
 An established member is a normal account that joined at least three days ago and has `badge_qualifications.send_turns >= 3`. Members from older providers without Harbor turn counts never qualify as likers, followers or savers. Accounts on the same device are not merged yet. The rule change applies to future awards only; the sweep never revokes.
 
 Harbor turn counts arrive through the existing badge statistics refresh (about 54 hours for a full round). Until the Provider with `sendTurns` and `maxRoleTurns` is deployed, the stored counts stay 0 and the like, follow and save filters admit nobody, so deploy Harbor first.

@@ -102,22 +102,35 @@ it('crowns one card that reached #1 on a daily, a weekly and a monthly board',as
  expect(ap).toBe(honors.reduce((n,key)=>n+badgeAp({key,category:'rank'}),0)+100);
 });
 
-it('rates the new tiers by how hard they are and keeps the board badge credit-free',()=>{
+it('rates the new tiers by how hard they are and pays no credits until the amounts are decided',()=>{
+ // PM 2026-11-24：新增 15 枚先只給徽章（成就點照稀有度），改名的舊徽章積分不變
  const r=(key:string,category='play')=>[badgeRarity({key,category}),badgeReward({key,category})];
- expect(r('player_explorer_3')).toEqual(['common',100]);
- expect(r('player_turns_50')).toEqual(['common',100]);
- expect(r('player_turns_500')).toEqual(['rare',500]);
- expect(r('player_turns_2500')).toEqual(['epic',2000]);
- expect(r('player_turns_10000')).toEqual(['legendary',6000]);
- expect(r('player_devoted_30')).toEqual(['common',100]);
- expect(r('player_devoted_150')).toEqual(['rare',500]);
- expect(r('player_devoted_500')).toEqual(['epic',2000]);
- expect(r('player_devoted_1500')).toEqual(['legendary',6000]);
- expect(r('player_liked_5','social')).toEqual(['common',100]);
- expect(r('player_liked_500','social')).toEqual(['legendary',6000]);
- expect(r('player_commenter_300','social')).toEqual(['legendary',6000]);
- expect(r('creator_followers_300','creation')).toEqual(['legendary',6000]);
- expect(r('creator_favorited_1000','creation')).toEqual(['legendary',6000]);
+ expect(r('player_explorer_3')).toEqual(['common',0]);
+ expect(r('player_turns_50')).toEqual(['common',0]);
+ expect(r('player_turns_500')).toEqual(['rare',0]);
+ expect(r('player_turns_2500')).toEqual(['epic',0]);
+ expect(r('player_turns_10000')).toEqual(['legendary',0]);
+ expect(r('player_devoted_30')).toEqual(['common',0]);
+ expect(r('player_devoted_150')).toEqual(['rare',0]);
+ expect(r('player_devoted_500')).toEqual(['epic',0]);
+ expect(r('player_devoted_1500')).toEqual(['legendary',0]);
+ expect(r('player_liked_5','social')).toEqual(['common',0]);
+ expect(r('player_liked_500','social')).toEqual(['legendary',0]);
+ expect(r('player_commenter_300','social')).toEqual(['legendary',0]);
+ expect(r('creator_followers_300','creation')).toEqual(['legendary',0]);
+ expect(r('creator_favorited_1000','creation')).toEqual(['legendary',0]);
  expect(r('honor_same_card_crown','rank')).toEqual(['legendary',0]);
  expect(badgeAp({key:'honor_same_card_crown',category:'rank'})).toBe(100);
+ expect(badgeAp({key:'player_turns_10000',category:'play'})).toBe(100);
+ // 改名的舊徽章照原本的稀有度給
+ expect(r('player_explorer_10')).toEqual(['common',100]);
+ expect(r('player_commenter_100','social')).toEqual(['epic',2000]);
+ expect(r('creator_followers_100','creation')).toEqual(['epic',2000]);
+});
+
+it('shows an earned new badge with no credits to claim',async()=>{
+ await applyBadgeStats(env,member,{accountNo:11,effectiveInvites:0,netTopupUsdMicros:0,consumedCredits:0,complete:true,sendTurns:60,maxRoleTurns:0});
+ await sweepMilestones(env);
+ const item=await find(member,'player_turns_50');
+ expect(item).toMatchObject({state:'earned'});expect(item).not.toHaveProperty('reward');   // 沒有可領的積分，不顯示領取
 });
