@@ -97,7 +97,7 @@ Discord: the projection already carries every active award key. Only a few top b
 
 Verification: Worker suite (real D1 migrations) covers catalog completeness in five locales, owner-read awarding with progress, one-way persistence, public reads without evaluation, the sweep awarding without a visit, creator ownership/copy/hidden-card rules, social/profile/tenure counters and the five-badge feature limit. Web suite covers unit-aware progress labels, the six-badge guard and category headings. Observability is unchanged: badge routes still emit `hearthroom_community_requests_total{operation="badge_read"|"badge_write"|"badge_admin"}`; the sweep runs inside the existing maintenance job and writes only `community_awards` rows with `source='metric-v1'`, which is the durable readback (`SELECT COUNT(*) FROM community_awards WHERE source='metric-v1'`).
 
-## Achievement batch 1 (migration 0145)
+## Achievement batch 1 (migration 0151)
 
 Owner decision 2026-11-23, from the revised achievement table. Existing badges keep their keys, thresholds and awards; seventeen are renamed in five locales and fifteen definitions are added.
 
