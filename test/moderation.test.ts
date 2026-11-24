@@ -193,3 +193,24 @@ it('requires PG restriction readback before suspension success and fences a late
  expect(change).toHaveBeenCalledTimes(3);expect(restriction).toBe('none');
  expect(await env.DB.prepare('SELECT restriction,sync_state FROM managed_work_access WHERE work_id=?').bind(work).first()).toEqual({restriction:'none',sync_state:'complete'});
 });
+it('manager rating correction applies directly, audits, records history and sets a floor', async () => {
+ const b={rating:'PG15',reason:'分級不符',operationId:crypto.randomUUID()};
+ await env.DB.prepare("UPDATE cards SET rating='PG12' WHERE id=?").bind(card).run();
+ expect((await request(`/cards/${card}/rating`,'r1',b)).status).toBe(403);
+ await env.DB.prepare("UPDATE reviewers SET role='manager' WHERE member_id='member-4'").run();
+ expect((await request(`/cards/${card}/rating`,'manager',{...b,reason:' '})).status).toBe(400);
+ expect((await request(`/cards/${card}/rating`,'manager',{...b,rating:'X'})).status).toBe(400);
+ const res=await request(`/cards/${card}/rating`,'manager',b);
+ expect(res.status).toBe(200);
+ expect(await res.json()).toMatchObject({rating:'PG15',floor:'PG15',before:{rating:'PG12'}});
+ expect((await env.DB.prepare('SELECT rating FROM cards WHERE id=?').bind(card).first<any>()).rating).toBe('PG15');
+ expect((await env.DB.prepare("SELECT reason FROM audit_log WHERE action='rating_correction' AND subject_id=?").bind(card).first<any>()).reason).toBe('分級不符');
+ expect((await env.DB.prepare("SELECT before_value,after_value FROM moderation_events WHERE action='rating'").first<any>())).toEqual({before_value:'PG12',after_value:'PG15'});
+ expect(((await request(`/cards/${card}`,'manager').then(r=>r.json())) as any).card.ratingFloor).toBe('PG15');
+ // 同一個 operation 重送：分級沒變 → 409，不會多記一筆
+ expect((await request(`/cards/${card}/rating`,'manager',b)).status).toBe(409);
+ expect((await env.DB.prepare("SELECT count(*) n FROM audit_log WHERE action='rating_correction'").first<any>()).n).toBe(1);
+ // 可降級，下限跟著降
+ expect((await request(`/cards/${card}/rating`,'manager',{...b,rating:'P',operationId:crypto.randomUUID()})).status).toBe(200);
+ expect((await env.DB.prepare('SELECT rating FROM review_rating_floors WHERE card_id=?').bind(card).first<any>()).rating).toBe('P');
+});

@@ -2,7 +2,8 @@ import {managedWork} from './work-policy';
 import {syncManagedRestriction} from './work-fence';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
-import { requireReviewer, requireMember, isReviewer, memberNsfw, memberByHandle, memberProfile } from './members';
+import { requireReviewer, requireMember, isReviewer, memberNsfw, memberByHandle, memberProfile, reviewerRole } from './members';
+import { correctRating, floorForCard } from './rating-correction';
 import { badgeCollection } from './community/badges';
 import { quotaForMember, PACK_MAX } from './quota';
 import { auditStmt } from './audit';
@@ -109,7 +110,19 @@ moderationRoutes.get('/v1/moderation/cards/:id',async c=>{
  const events=await db.prepare('SELECT action,reason,before_value AS beforeValue,after_value AS afterValue,created_at AS at FROM moderation_events WHERE provider=? AND source_role_id=? ORDER BY created_at DESC LIMIT 100').bind(card.provider,card.source_role_id).all();
  const reviews=await db.prepare("SELECT id,kind,status,submitted_at AS submittedAt,decided_at AS decidedAt,COALESCE(NULLIF(note,''),reopen_reason) AS note,content_hash AS version,reopen_of IS NOT NULL AS reopen FROM review_submissions WHERE card_id=? ORDER BY submitted_at DESC LIMIT 100").bind(card.id).all();
  const author=card.author_member_id?await db.prepare('SELECT handle FROM members WHERE id=?').bind(card.author_member_id).first<{handle:string}>():null;
- return c.json({card:{...projection(card,c.req.query('lang')||'zh-Hant'),authorHandle:author?.handle??null},cases:cases.results.map(r=>publicCase(r,member.id)),events:events.results,reviews:reviews.results});
+ return c.json({card:{...projection(card,c.req.query('lang')||'zh-Hant'),authorHandle:author?.handle??null,ratingFloor:await floorForCard(db,card.id)},cases:cases.results.map(r=>publicCase(r,member.id)),events:events.results,reviews:reviews.results});
+});
+/**
+ * 更正分級（owner 2026-11-24）：管理員直接生效、不走提案投票。改卡片、上架版本與待審單的分級，
+ * 寫稽核與卡片歷程，並設成分級下限（作者之後送審不會低於它）。可升可降；不通知作者。
+ */
+moderationRoutes.post('/v1/moderation/cards/:id/rating',async c=>{
+ const member=await requireReviewer(c);const db=c.env.DB;
+ const role=await reviewerRole(db,member.id);if(role!=='manager'&&role!=='owner')throw new HttpError(403,'review_manager_required');
+ const card=await cardOf(db,c.req.param('id'));await guardCard(db,card,member.id);
+ const body=await c.req.json<Record<string,unknown>>().catch(()=>({} as Record<string,unknown>));
+ if(body.rating==='R'&&(await memberNsfw(db,member.id)).ageVerifiedAt===null)throw new HttpError(403,'age_verification_required');
+ return c.json(await correctRating(db,{cardId:Number(card.id),rating:body.rating,reason:body.reason,memberId:member.id,operationId:typeof body.operationId==='string'?body.operationId:'',now:Date.now()}),200,{'Cache-Control':'private, no-store'});
 });
 moderationRoutes.get('/v1/moderation/cases/:id/evidence',async c=>{
  const member=await requireReviewer(c);const row=await caseOf(c.env.DB,c.req.param('id'));

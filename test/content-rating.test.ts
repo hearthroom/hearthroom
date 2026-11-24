@@ -222,3 +222,13 @@ it("舊的 nsfw 欄位已經刪除", async () => {
     expect(cols.results.map((c) => c.name), table).toContain("rating");
   }
 });
+
+import { applyRatingFloor } from '../src/rating-correction';
+describe('分級下限', () => {
+  it('問卷分級低於下限時提到下限，高於或相同不動', () => {
+    expect(applyRatingFloor('PG15', 'R')).toBe('R');
+    expect(applyRatingFloor('R', 'PG15')).toBe('R');
+    expect(applyRatingFloor('G', null)).toBe('G');
+    expect(applyRatingFloor('G', 'bogus')).toBe('G');
+  });
+});

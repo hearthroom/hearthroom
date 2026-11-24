@@ -25,6 +25,7 @@ import { diffBaseStatement } from './review-diff-store';
 import { buildSearchBody, buildSearchName, buildSearchText, projectRole, upstream, type UpstreamRole } from './upstream';
 import { resolveFandom, type ResolvedFandom } from './fandom';
 import { evaluateRating, type RatingAnswers, type RatingResult } from '../shared/content-rating';
+import { applyRatingFloor, ratingFloorOf } from './rating-correction';
 import { hasPresetTag, PRESET_TAG_CATALOG } from '../shared/tag-catalog';
 
 interface Receipt { workId: string; versionId: string; hostedRevisionId: string }
@@ -82,7 +83,7 @@ const receiptOf=(r:VersionRow):Receipt=>({workId:r.work_id,versionId:r.version_i
 // Called before the editor writes any part of a draft. Retire the old review
 // first so a reviewer holding its snapshot cannot publish it during the save.
 // Keep the obligation durable across partial saves and browser/network failures.
-export async function beginHostedEdit(db:D1Database,memberId:string,roleId:string,now:number,provider:ProviderId='harbor',env?:Env):Promise<{resubmit:boolean;ratingAnswers?:RatingAnswers;fandom?:string;fandomId?:string}> {
+export async function beginHostedEdit(db:D1Database,memberId:string,roleId:string,now:number,provider:ProviderId='harbor',env?:Env):Promise<{resubmit:boolean;ratingAnswers?:RatingAnswers;fandom?:string;fandomId?:string;ratingFloor?:string}> {
  await adoptRetiredWork(db,provider,roleId);
  const work=await db.prepare("SELECT id,member_id FROM works WHERE source_provider=? AND source_role_id=?").bind(provider,roleId).first<{id:string;member_id:string}>();
  if(!work)return {resubmit:false};
@@ -99,7 +100,9 @@ export async function beginHostedEdit(db:D1Database,memberId:string,roleId:strin
  ]);
  const latest=await db.prepare("SELECT state,rating_answers,COALESCE(json_extract(public_role,'$.fandom'),'') AS fandom,json_extract(public_role,'$.fandomQid') AS fandom_qid FROM hosting_versions WHERE work_id=? AND submission_id IS NOT NULL ORDER BY created_at DESC,rowid DESC LIMIT 1").bind(work.id).first<{state:string;rating_answers:string|null;fandom:string;fandom_qid:string|null}>();
  // 原作與分級問卷跟著上一版走：作者改卡重送時不必再填一次。問卷改版了或上一版沒填（問卷上線前送的），就不帶，作者得重填
- return latest?.state==='superseded'?{resubmit:true,...currentAnswers(latest.rating_answers),...(latest.fandom?{fandom:latest.fandom}:{}),...(latest.fandom_qid?{fandomId:latest.fandom_qid}:{})}:{resubmit:false};
+ // 管理員更正過分級的卡：問卷分級低於下限時送審會自動提到下限，編輯器據此停用較低的分級
+ const floor=await ratingFloorOf(db,provider,roleId);const extra=floor?{ratingFloor:floor}:{};
+ return latest?.state==='superseded'?{resubmit:true,...currentAnswers(latest.rating_answers),...(latest.fandom?{fandom:latest.fandom}:{}),...(latest.fandom_qid?{fandomId:latest.fandom_qid}:{}),...extra}:{resubmit:false,...extra};
 }
 
 function currentAnswers(stored:string|null):{ratingAnswers?:RatingAnswers}{
@@ -110,6 +113,8 @@ function currentAnswers(stored:string|null):{ratingAnswers?:RatingAnswers}{
 // Persist the issuer's operation before contacting the host: a lost HTTP reply can
 // resume the same seal without reading a later draft or creating another version.
 export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:string;account:number;role:UpstreamRole;token:string;/** 作者問卷計分後的結果（限制級＝成人內容） */rating:RatingResult;/** 原作（已解析）；沒給＝沒有。同一個 operation 重試時以第一次送的為準。 */fandom?:ResolvedFandom;operationId:string;now:number;updateKind?:unknown;updateNote?:unknown;packId?:string|null;deviceHash?:string|null;expectedVisibility?:{policyRevision:string;approvalRevision:string}}):Promise<Receipt>{
+ // 管理員更正過分級的卡：作者問卷算出的分級比這張卡的分級下限低，就提到下限（rating-correction.ts）
+ {const floor=await ratingFloorOf(env.DB,input.provider??'harbor',input.role.roleId);const raised=applyRatingFloor(input.rating.rating,floor);if(raised!==input.rating.rating){input={...input,rating:{...input.rating,rating:raised}};await bumpOp(env.DB,'rating_correction','floor','raised');}}
  const db=env.DB;
  const intent=updateIntent(input);
  const fandom:ResolvedFandom=input.fandom??{fandom:'',qid:null,key:'',search:''};

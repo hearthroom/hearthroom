@@ -129,3 +129,18 @@ it('revalidates a concurrent completed operation before returning its pending re
  await expect(submitHosted({...env,DB:staleOnce()},{...input,updateKind:'major',updateNote:'新增第二章劇情和兩條支線'})).rejects.toThrow('hosting_operation_conflict');
  expect(await submitHosted({...env,DB:staleOnce()},input)).toEqual(receipt);
 });
+it('an author update cannot go below the rating floor a manager set',async()=>{
+ const memberId=await makeMember(10001);
+ const me=role({roleId:'draft',authorNumId:10001});
+ vi.spyOn(hostGateway,'seal').mockImplementation(async(_env,_token,roleId,workId,versionId)=>({workId,versionId,hostedRevisionId:'sealed-'+versionId}));
+ vi.spyOn(hostGateway,'read').mockImplementation(async(_env,_token,id)=>({...me,roleId:id}));
+ vi.spyOn(upstream,'readForReview').mockResolvedValue({document:{roleName:"Fixture",roleTag:["Roleplay"],roleDetailDesc:'PRIVATE'.repeat(600)},greetings:{welcome:"Welcome",alternates:[],prologue:[]},hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
+ const input={memberId,account:10001,role:me,token:'author',rating:GENERAL_RATING,operationId:crypto.randomUUID(),now:Date.now()};
+ await submitHosted(env,input);
+ const card=await env.DB.prepare("SELECT card_id FROM review_submissions").first<{card_id:number}>();
+ await env.DB.prepare("INSERT INTO review_rating_floors(card_id,rating,reason,set_by,set_at) VALUES(?, 'R', 'test', 'm', 0)").bind(card!.card_id).run();
+ await env.DB.prepare("UPDATE review_submissions SET status='superseded'").run();
+ const again=await submitHosted(env,{...input,operationId:crypto.randomUUID()});
+ expect((await env.DB.prepare("SELECT rating FROM review_submissions WHERE status='pending'").first<any>()).rating).toBe('R');
+ expect((await env.DB.prepare("SELECT rating FROM hosting_versions WHERE version_id=?").bind(again.versionId).first<any>()).rating).toBe('R');
+});
