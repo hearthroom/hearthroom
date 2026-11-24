@@ -176,10 +176,13 @@ export function aiCardInput(settings: Record<string, unknown>, meta: { tags: str
 
 /** AI 讀卡時看得到的送審資訊：跟審核頁同一層，但不帶這張單的人工決定、審核章、不受理與說明。 */
 export async function aiSubmissionMeta(db: D1Database, s: SubmissionRow, now: number) {
-  const [history, version] = await Promise.all([
+  const [history, version, live] = await Promise.all([
     submissionHistory(db, s.id),
     db.prepare("SELECT member_id, source_role_id, json_extract(public_role,'$.tags') AS tags, json_extract(public_role,'$.fandom') AS fandom FROM hosting_versions WHERE submission_id=?")
       .bind(s.id).first<{ member_id: string; source_role_id: string; tags: string | null; fandom: string | null }>(),
+    // 送審當下這張卡已經上架了嗎（之前有通過、送審前已定案的版本）：已上架卡的更新照「沒有往壞了改就放行」判（owner 2026-11-24）
+    db.prepare("SELECT 1 AS yes FROM review_submissions p WHERE p.card_id=? AND p.id<>? AND p.status='approved' AND p.decided_at<? LIMIT 1")
+      .bind(s.card_id, s.id, s.submitted_at).first<{ yes: number }>(),
   ]);
   // 作者標記（新人／穩定／頭部、疑似批量）只給待審單：它是「現在」算的，已定案的單會把這張單自己的結果算進去。
   // 作者行為訊號一律算到送審那一刻為止（送審頻率、額度用滿、過去通過數、帳號年齡、同裝置帳號數），已定案的單也不洩漏結果。
@@ -205,6 +208,7 @@ export async function aiSubmissionMeta(db: D1Database, s: SubmissionRow, now: nu
     submission: {
       id: s.id, cardId: String(s.card_id), kind: s.kind, reopen: !!s.reopen_of, submittedAt: s.submitted_at,
       rating: s.rating, attempt: history.attempt, previous: history.previous ? { status: history.previous.status } : null,
+      published: !!live,
     },
     author,
     meta: { tags, fandom: version?.fandom ?? "" },

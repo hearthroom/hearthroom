@@ -244,7 +244,7 @@ Double-blind: what the AI reads carries no human decision, stamp, note or drop s
 The sealed version the author submitted, without claiming it. Long text is cut and marked; `stats` are counted on the full text.
 
 ```ts
-{ submission: { id, cardId, kind, reopen, submittedAt, rating, attempt, previous: { status } | null, phase: "shadow"|"backfill" },
+{ submission: { id, cardId, kind, published, reopen, submittedAt, rating, attempt, previous: { status } | null, phase: "shadow"|"backfill" },
   author: { tier, batchSuspected,            // tier and batchSuspected only while pending (null once decided)
             submissions7d, submissions24h, pendingAtSubmit, registrations7d, weeklyLimit, quotaFull,
             medianGapHours, minutesSincePrevious, recentChars, priorApproved, accountAgeDays, deviceAccounts } | null,  // counted up to submission time

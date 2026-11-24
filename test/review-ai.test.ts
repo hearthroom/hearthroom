@@ -743,3 +743,13 @@ describe('給作者的說明（AI 草稿）', () => {
     expect(await json(res)).toMatchObject({ error: 'author_note_internal', terms: ['裝置', '帳號'] });
   });
 });
+
+describe('已上架卡的更新', () => {
+  it('審卡員讀卡時看得到這張卡送審當下是否已上架', async () => {
+    const first = await submitCard('draft-a');
+    expect((await json(await get(`/v1/review-ai/submissions/${first.id}`, 'key'))).submission.published).toBe(false);
+    await env.DB.prepare("UPDATE review_submissions SET status='approved', decided_at=? WHERE id=?").bind(Date.now() - 60_000, first.id).run();
+    const update = await submitCard('draft-a');
+    expect((await json(await get(`/v1/review-ai/submissions/${update.id}`, 'key'))).submission.published).toBe(true);
+  });
+});
