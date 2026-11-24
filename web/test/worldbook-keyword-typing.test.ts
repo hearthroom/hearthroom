@@ -74,6 +74,10 @@ it('組字中按 Esc 是在取消選字，不關掉條目視窗', async () => {
   el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, isComposing: true }));
   await nextTick();
   expect(onClose).not.toHaveBeenCalled();
+  // Safari 先送 compositionend 再送 Esc 的 keydown：isComposing 已經是 false，只剩 keyCode 229 看得出來
+  el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, keyCode: 229 }));
+  await nextTick();
+  expect(onClose).not.toHaveBeenCalled();
   el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   await nextTick();
   expect(onClose).toHaveBeenCalledOnce();

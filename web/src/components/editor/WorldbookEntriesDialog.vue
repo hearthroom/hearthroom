@@ -340,8 +340,8 @@ watch(
 );
 
 function onKeydown(event: KeyboardEvent) {
-  // 組字中的 Esc 是輸入法在取消選字，不是要關視窗
-  if (event.key === "Escape" && !event.isComposing) {
+  // 組字中的 Esc 是輸入法在取消選字，不是要關視窗（Safari 先結束組字才送 keydown，只剩 keyCode 229 看得出來）
+  if (event.key === "Escape" && !event.isComposing && event.keyCode !== 229) {
     if (batch.value) cancelBatch();
     else emit("close");
   }
