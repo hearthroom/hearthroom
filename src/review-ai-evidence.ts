@@ -25,6 +25,8 @@ const DAY = 86_400_000;
 /** 查重回應裡重疊原文的總字數上限：各來源平分 */
 export const OVERLAP_BUDGET = 4_000;
 export const AUTHOR_NOTE_MAX = 2_000;
+/** 作者的其他卡裡，跟這張單比設定重複率的張數（最近登記的） */
+export const SAME_AUTHOR_COMPARE = 30;
 
 /** 這張單的作者（本站成員）。舊流程沒有託管版本的單沒有作者可查。 */
 async function authorOf(db: D1Database, submissionId: string) {
@@ -124,7 +126,8 @@ export async function agentAuthorProfile(db: D1Database, s: SubmissionRow, now: 
 export async function agentAuthorCardList(db: D1Database, s: SubmissionRow, detail: Record<string, any> | null) {
   const list = await agentAuthorCards(db, s.card_id);
   if (!list) throw new HttpError(404, "card not found");
-  const sim = await similarityToCards(db, s.id, detail, list.items.map((i) => i.cardId));
+  // 只比最近登記的 30 張（清單已經新的在前）：模板重用看最近幾張就夠，也讓命中列數有上限
+  const sim = await similarityToCards(db, s.id, detail, list.items.slice(0, SAME_AUTHOR_COMPARE).map((i) => i.cardId));
   return {
     total: list.total,
     similarityAvailable: sim !== null,
