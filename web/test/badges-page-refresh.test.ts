@@ -30,7 +30,8 @@ async function open(path='/me/badges'){
  router=createRouter({history:createMemoryHistory(),routes:[{path:'/me/badges',component:BadgesPage},{path:'/authors/:handle/badges',component:BadgesPage},{path:'/:p(.*)*',component:{template:'<div/>'}}]});
  await router.push(path);app=createApp(defineComponent({render:()=>h(RouterView)})).use(router).use(i18n);app.mount(el);await flush();
 }
-const status=()=>el.querySelector('.badges-refresh')?.textContent??'';
+const status=()=>[...el.querySelectorAll('.badges-refresh__item.is-on')].map(e=>e.textContent).join('');
+const slots=()=>[...el.querySelectorAll('.badges-refresh__item')].map(e=>e.textContent);
 const progressOf=(key:string)=>[...el.querySelectorAll('.badge-tile')].find(t=>t.textContent?.includes(key))?.querySelector('progress')?.getAttribute('value');
 beforeEach(async()=>{vi.useFakeTimers();mock.request.mockReset();await applyLocale('en');el=document.createElement('div');document.body.append(el);});
 afterEach(()=>{app?.unmount();app=undefined;el.remove();vi.useRealTimers();});
@@ -46,6 +47,26 @@ it('asks for the refresh only after the old badge address moves to the own autho
  expect(mock.request).toHaveBeenLastCalledWith('/me/community/badges','fixture','GET',undefined);
  expect(progressOf('player_explorer_50')).toBe('5');expect(el.querySelector('[aria-live=polite]')?.textContent).toBe('Progress updated');
  await vi.advanceTimersByTimeAsync(3000);await flush();expect(status()).toBe('');
+});
+
+it('treats a fractional timed progress that shows the same number as unchanged',async()=>{
+ const withDays=(days:number,extra:Record<string,unknown>={})=>{const c=collection(3,extra);c.items.push(badge('member_anniversary',{progress:{value:days,target:365}}));return c;};
+ let claimed=false;
+ mock.request.mockImplementation(async(path:string)=>{if(path==='/me/community/badges?refresh=1'&&!claimed){claimed=true;return withDays(12.3401,{refreshing:true});}return withDays(12.3409);});
+ await open();expect(status()).toContain('Updating progress');
+ for(let t=0;t<9000;t+=500){await vi.advanceTimersByTimeAsync(500);await flush();expect(el.querySelector('[aria-live=polite]')?.textContent).toBe('');}
+ expect(status()).toBe('');
+});
+
+it('keeps the same status slot in every state so nothing below moves',async()=>{
+ server(3,()=>collection(5));
+ await open();
+ const shape=()=>JSON.stringify(slots());
+ const updating=shape();expect(status()).toContain('Updating progress');
+ await vi.advanceTimersByTimeAsync(4000);await flush();expect(status()).toBe('Progress updated');
+ const updated=shape();await vi.advanceTimersByTimeAsync(3000);await flush();expect(status()).toBe('');
+ // 每個狀態都有同樣三格（更新中、宣告區、隱形尺寸字），只換哪一格看得見
+ expect(slots()).toHaveLength(3);expect(updating.replace('Progress updated','')).toBe(shape().replace('Progress updated',''));expect(updated).toContain('Progress updated');
 });
 
 it('clears quietly when nothing changed or the reread fails',async()=>{
