@@ -728,10 +728,18 @@ describe('給作者的說明（AI 草稿）', () => {
     // 審核員改過的說明帶了內部字詞：擋下，告訴他是哪個詞
     const bad = await final(id, { finalSource: 'ai', aiSuggestionId: shown.id, aiSuggestionAt: shown.at, authorNote: draft + '另外你的送審次數太多。' });
     expect(bad.status).toBe(400);
-    expect(await json(bad)).toMatchObject({ error: 'author_note_internal', terms: ['送審次數'] });
+    expect(await json(bad)).toMatchObject({ error: 'author_note_internal', terms: ['送審次數'], matches: [{ term: '送審次數', snippet: '請求或遇到狀況。另外你的送審次數太多。', start: 12, length: 4 }] });
     expect(await status(id)).toBe('pending');
     expect((await final(id, { finalSource: 'ai', aiSuggestionId: shown.id, aiSuggestionAt: shown.at })).status).toBe(200);
     const row = await env.DB.prepare('SELECT note FROM review_submissions WHERE id=?').bind(id).first<{ note: string }>();
     expect(row!.note).toBe(draft);
+  });
+
+  it('第一步的補充說明一樣不能帶內部資訊', async () => {
+    const { id } = await submitCard();
+    await claim(env.DB, id, humanId, Date.now());
+    const res = await blind(id, { verdict: 'reject', reasons: ['other'], note: '同一裝置上有好幾個帳號，不受理。' });
+    expect(res.status).toBe(400);
+    expect(await json(res)).toMatchObject({ error: 'author_note_internal', terms: ['裝置', '帳號'] });
   });
 });

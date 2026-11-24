@@ -1,4 +1,5 @@
 import { RATING_RANK_SQL } from "./rating-correction";
+import { guardAuthorNote } from "./author-note-guard";
 import { auditStmtIfChanged } from './audit';
 import { reviewerRole } from './members';
 import { serviceRewardOnApproval } from './card-reward-service';
@@ -406,6 +407,8 @@ export async function normalizeDecision(db: D1Database, row: SubmissionRow, inpu
   if (input.verdict === "approve") await assertApprovableLength(db, row);
   const note = input.note.trim();
   if (note.length > REVIEW_NOTE_MAX) throw new HttpError(400, "note_too_long");
+  // 給作者看的說明（駁回說明、通過時的建議補充）不能帶內部資訊：額度、送審節奏、裝置、帳號、分數、作者等級
+  guardAuthorNote(note);
   const rejection = input.verdict === "reject" ? normalizeRejectReasons({ reasons: input.reasons, note, lengthInsufficient: await lengthInsufficient(db, row) }) : null;
   let marks: string[];
   try { marks = normalizeDecisionMarks(input.marks); } catch { throw new HttpError(400, "review_mark_invalid"); }

@@ -17,8 +17,18 @@ export function internalTermsIn(text: string): string[] {
   return INTERNAL_TERMS.filter((t) => t.pattern.test(text)).map((t) => t.term);
 }
 
-/** 審核員送出的作者說明命中內部字詞：擋下並告訴他是哪幾個詞，請他改寫 */
+/** 每個命中的類別附原句片段（前後各 12 字）與命中的字在片段裡的位置，畫面據此標底色 */
+export function internalMatches(text: string): { term: string; snippet: string; start: number; length: number }[] {
+  return INTERNAL_TERMS.flatMap((t) => {
+    const m = t.pattern.exec(text);
+    if (!m) return [];
+    const from = Math.max(0, m.index - 12);
+    return [{ term: t.term, snippet: text.slice(from, m.index + m[0].length + 12), start: m.index - from, length: m[0].length }];
+  });
+}
+
+/** 審核員送出的作者說明命中內部字詞：擋下並告訴他是哪幾個詞、在哪一句，請他改寫 */
 export function guardAuthorNote(text: string): void {
-  const hits = internalTermsIn(text);
-  if (hits.length) throw new HttpError(400, "author_note_internal", undefined, { field: "note", terms: hits });
+  const matches = internalMatches(text);
+  if (matches.length) throw new HttpError(400, "author_note_internal", undefined, { field: "note", terms: matches.map((m) => m.term), matches });
 }
