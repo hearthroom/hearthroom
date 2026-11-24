@@ -166,6 +166,35 @@ describe('通過並附改進建議（owner 2026-11-23）', () => {
     expect(notice!.path).toBe('/mine');
     expect(JSON.parse(notice!.extra).suggestions).toBeUndefined();
   });
+
+  it('附建議時的補充說明會給作者：寫在單上（結果頁讀得到），過內部字詞檢查；「其他」一定要寫；沒附建議的補充只留在審核章', async () => {
+    const f = await setup();
+    await f.submit();
+    const s = await f.pending();
+    const a = await reviewer(20001);
+    await claim(env.DB, s.id, a, Date.now());
+    const base = { submissionId: s.id, memberId: a, verdict: 'approve' as const, now: Date.now() };
+    await expect(stamp(env.DB, { ...base, note: '', suggestions: ['other'] })).rejects.toThrow('review_other_needs_note');
+    await expect(stamp(env.DB, { ...base, note: '同裝置有 3 個帳號，下次注意', suggestions: ['other'] })).rejects.toThrow('author_note_internal');
+    await stamp(env.DB, { ...base, note: '  開場可以再多一個要玩家回應的問題。 ', suggestions: ['other'] });
+    const row = await env.DB.prepare('SELECT status, note, approve_suggestions FROM review_submissions WHERE id=?').bind(s.id).first();
+    expect(row).toEqual({ status: 'approved', note: '開場可以再多一個要玩家回應的問題。', approve_suggestions: '["other"]' });
+    // 通知連到結果頁（結果頁的「審核員補充」讀單上的說明）
+    const notice = await env.DB.prepare("SELECT path, extra FROM community_notifications WHERE kind='review_result'").first<{ path: string; extra: string }>();
+    expect(notice!.path).toBe('/mine/reviews/' + s.id);
+    expect(JSON.parse(notice!.extra)).toEqual({ status: 'approved', kind: 'first', suggestions: ['other'] });
+
+    // 沒附建議：補充說明只在審核章上，作者看不到，也不擋內部字詞
+    const g = await setup({ account: 10002, roleId: 'draft-2' });
+    await g.submit();
+    const t = await g.pending();
+    await claim(env.DB, t.id, a, Date.now());
+    await stamp(env.DB, { submissionId: t.id, memberId: a, verdict: 'approve', now: Date.now(), note: '同裝置有 3 個帳號，先放行觀察' });
+    expect(await env.DB.prepare('SELECT note FROM review_submissions WHERE id=?').bind(t.id).first()).toEqual({ note: '' });
+    expect(await env.DB.prepare('SELECT note FROM review_stamps WHERE submission_id=?').bind(t.id).first()).toEqual({ note: '同裝置有 3 個帳號，先放行觀察' });
+    const plain = await env.DB.prepare("SELECT extra FROM community_notifications WHERE kind='review_result' AND card_id=?").bind(t.card_id).first<{ extra: string }>();
+    expect(JSON.parse(plain!.extra).note ?? null).toBeNull();
+  });
 });
 
 describe('不受理', () => {

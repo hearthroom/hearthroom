@@ -2,11 +2,11 @@ import { Hono, type Context } from "hono";
 import { requireReviewer, reviewerRole } from "./members";
 import { bumpOp } from "./ops-metrics";
 import { getSubmission, type SubmissionRow } from "./review";
-import { LATEST_FEEDBACK, currentCriteria, setCurrentCriteria, revealEventStatement, AI_FEEDBACK, AI_FLAGS, AI_HANDOFF_CAUSES, AI_REASONS, AI_VERDICTS, aiCardInput, aiPhaseOf, aiReadPhase, aiReport, aiSubmissionMeta, AI_BACKFILL_WINDOW_MS, canReveal, parseSuggestion, recordFeedback, saveSuggestion, suggestionsOf } from "./review-ai";
+import { currentCriteria, setCurrentCriteria, AI_FLAGS, AI_HANDOFF_CAUSES, AI_REASONS, AI_VERDICTS, aiCardInput, aiPhaseOf, aiReadPhase, aiReport, aiSubmissionMeta, AI_BACKFILL_WINDOW_MS, canReveal, parseSuggestion, saveSuggestion, suggestionsOf } from "./review-ai";
 import { loadSnapshot } from "./review-snapshot";
 import { originalityReport } from "./originality";
 import { diffView } from "./review-diff-store";
-import { AI_NOTE_TYPES } from "./review-two-stage";
+import { AI_NOTE_TYPES, aiInaccurateOf, setAiInaccurate } from "./review-two-stage";
 import { aiNotes, arbitrate, arbitrationStats, disagreementSides, listDisagreements, myPersuasion, persuade, persuasionStats, persuasionWindow, referenceCandidates, type Direction } from "./review-ai-arbitration";
 import { weekStart } from "./review-stats";
 import { reviewAgentByKey } from "./review-agent-key";
@@ -40,7 +40,7 @@ async function requireHuman(c: Ctx) {
   return { member, role: await reviewerRole(c.env.DB, member.id) };
 }
 
-type Op = "queue" | "read" | "suggest" | "tag" | "reveal" | "feedback" | "report" | "arbitration_list" | "arbitration_read" | "arbitrate" | "references" | "notes"
+type Op = "queue" | "read" | "suggest" | "tag" | "reveal" | "inaccurate" | "report" | "arbitration_list" | "arbitration_read" | "arbitrate" | "references" | "notes"
   | "originality" | "author" | "author_cards" | "card" | "author_note_read" | "author_note_write" | "persuade";
 async function counted<T>(c: Ctx, op: Op, run: () => Promise<T>): Promise<T> {
   try {
@@ -225,31 +225,24 @@ async function write(c: Ctx, tagsOnly: boolean) {
   return c.json({ id: row.id, verdict: row.verdict, phase: row.phase, criteriaVersion: input.criteriaVersion }, 200, NO_STORE);
 }
 
-/** 揭曉：審核員自己做完決定後才看得到 AI 的建議（雙盲）。 */
+/**
+ * AI 的建議（AI 為主）：待審單任何審核員都看得到；已定案的單給蓋過章的人、自己不受理中的人與管理員。
+ * inaccurate：這張單定案時記下的「AI 判斷不準確」（定案後可以用下面的 PUT 改）。
+ */
 reviewAiRoutes.get("/v1/review/:id/ai", (c) => counted(c, "reveal", async () => {
   const { member, role } = await requireHuman(c);
   const s = await getSubmission(c.env.DB, c.req.param("id"));
   if (!(await canReveal(c.env.DB, s, member.id, role))) throw new HttpError(403, "ai_hidden_until_decided");
-  const suggestions = await suggestionsOf(c.env.DB, s.id);
-  if (suggestions.some((x) => x.verdict !== null)) await revealEventStatement(c.env.DB, { submissionId: s.id, cardId: Number(s.card_id), memberId: member.id, now: Date.now() }).run();
-  const mine = await c.env.DB.prepare(`SELECT e.ai_suggestion_id AS suggestionId, e.source AS value, e.at FROM review_events e WHERE ${LATEST_FEEDBACK} AND e.submission_id=? AND e.actor_member_id=?`)
-    .bind(s.id, member.id).all<{ suggestionId: string; value: string }>();
-  // current：目前判準版本；畫面只拿這一版的建議跟審核員比（沒有就是 AI 尚未用目前判準審完）
-  return c.json({ suggestions, current: await currentCriteria(c.env.DB), myFeedback: mine.results }, 200, NO_STORE);
+  const [suggestions, current, inaccurate] = await Promise.all([suggestionsOf(c.env.DB, s.id), currentCriteria(c.env.DB), aiInaccurateOf(c.env.DB, s.id)]);
+  // current：目前判準版本；畫面只拿這一版的建議（沒有就是 AI 尚未用目前判準審完）
+  return c.json({ suggestions, current, inaccurate }, 200, NO_STORE);
 }));
 
-/** 覆核：揭曉後對某筆建議表態，寫成審核事件（每人每筆一次，第一次為準）。 */
-reviewAiRoutes.post("/v1/review/:id/ai-feedback", (c) => counted(c, "feedback", async () => {
+/** 定案後標或取消「AI 判斷不準確」：{ inaccurate: boolean }。定過這張單的審核員或管理員；同一個值重送不多寫。 */
+reviewAiRoutes.put("/v1/review/:id/ai-inaccurate", (c) => counted(c, "inaccurate", async () => {
   const { member, role } = await requireHuman(c);
-  const s = await getSubmission(c.env.DB, c.req.param("id"));
   const body = ((await c.req.json().catch(() => ({}))) ?? {}) as Record<string, unknown>;
-  const operationId = operationOf(body.operationId);
-  if (typeof body.value !== "string" || !(AI_FEEDBACK as readonly string[]).includes(body.value)) throw new HttpError(400, "invalid_arguments", undefined, { field: "value" });
-  if (!(await canReveal(c.env.DB, s, member.id, role))) throw new HttpError(403, "ai_hidden_until_decided");
-  const suggestion = await c.env.DB.prepare("SELECT id FROM review_ai_suggestions WHERE id=? AND submission_id=? AND verdict IS NOT NULL").bind(body.suggestionId ?? "", s.id).first<{ id: string }>();
-  if (!suggestion) throw new HttpError(404, "suggestion_not_found");
-  const out = await recordFeedback(c.env.DB, { submissionId: s.id, cardId: Number(s.card_id), suggestionId: suggestion.id, memberId: member.id, value: body.value, operationId, now: Date.now() });
-  return c.json(out, 200, NO_STORE);
+  return c.json(await setAiInaccurate(c.env.DB, { submissionId: c.req.param("id"), memberId: member.id, role, value: body.inaccurate }), 200, NO_STORE);
 }));
 
 /** 人工 vs AI 對照報表（管理員）：預設近 7 天送審的單，依判準版本分組。 */

@@ -1,6 +1,6 @@
 import { parseReviewReasons } from "../shared/review-reasons";
 import { HttpError } from "./types";
-import { LATEST_FEEDBACK, TAINTED } from "./review-ai";
+import { LATEST_FEEDBACK } from "./review-ai";
 import { parseAiNote } from "./review-two-stage";
 import { RETAIN_MS } from "./review";
 
@@ -19,8 +19,8 @@ export const NOTE_MAX = 500;
  * 否則管理員會在別人審之前從這裡看到 AI 的判斷。
  */
 const HUMAN = `CASE WHEN s.status IN ('approved','rejected') THEN s.status END`;
-/** 現在的分歧：人過 AI 不過（AI 較嚴），或人不過 AI 過（人較嚴）。交人、沒結論、看過 AI 才決定的不算。 */
-const LIVE = `CASE WHEN ${TAINTED} THEN NULL WHEN (${HUMAN})='approved' AND a.verdict='reject' THEN 'ai_stricter'
+/** 現在的分歧：人過 AI 不過（AI 較嚴），或人不過 AI 過（人較嚴）。交人、沒結論的不算。 */
+const LIVE = `CASE WHEN (${HUMAN})='approved' AND a.verdict='reject' THEN 'ai_stricter'
   WHEN (${HUMAN})='rejected' AND a.verdict='pass' THEN 'human_stricter' END`;
 const LAST = (col: string) => `(SELECT x.${col} FROM review_ai_arbitrations x WHERE x.suggestion_id=a.id ORDER BY x.created_at DESC, x.rowid DESC LIMIT 1)`;
 const LATEST = LAST("value");
@@ -28,7 +28,6 @@ const LATEST = LAST("value");
 const DIRECTION = `COALESCE((${LIVE}), ${LAST("direction")})`;
 const HUMAN_NOW = `COALESCE(CASE WHEN (${LIVE}) IS NOT NULL THEN (${HUMAN}) END, ${LAST("human_decision")})`;
 
-// 看過 AI 判斷才蓋章的單不算分歧（人工那邊不是獨立判斷）
 const base = `FROM review_ai_suggestions a JOIN review_submissions s ON s.id=a.submission_id`;
 // 自己寫的卡不列：以卡為準（作者在這張卡任何一版的版本列上）。駁回後改判為通過時，原本那張單的版本列已轉給改判單，
 // 以單為準就會漏掉作者自己（各處的 NOT EXISTS(... ov.card_id=s.card_id ...)）

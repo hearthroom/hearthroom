@@ -71,11 +71,8 @@ const metric = async (operation: string, outcome: string) =>
   (await env.DB.prepare("SELECT value FROM ops_metrics WHERE metric='review_flip' AND operation=? AND outcome=?").bind(operation, outcome).first<{ value: number }>())?.value ?? 0;
 const versionOf = async (original: string) => (await env.DB.prepare("SELECT submission_id, state FROM hosting_versions v WHERE v.submission_id IN (?, (SELECT id FROM review_submissions WHERE flip_of=?))").bind(original, original).all()).results;
 const mine = (id: string) => SELF.fetch(`https://c.test/v1/mine/reviews/${id}`, { headers: bearer("author") });
-/** 兩段式核准：先送盲審判斷，再定案（AI 不判改判單，所以是「沒等 AI」） */
-const approveTwoStage = async (id: string, token = "mgr") => {
-  expect((await act(id, "blind", token, { verdict: "approve" })).status).toBe(200);
-  return act(id, "stamp", token, { finalSource: "human_no_ai" });
-};
+/** 審核頁核准改判單：AI 不判改判單，定案來源是「無 AI 對照」，帶這次的決定 */
+const approveTwoStage = async (id: string, token = "mgr") => act(id, "stamp", token, { finalSource: "human_no_ai", verdict: "approve" });
 
 describe("改判為通過：發起", () => {
   it("限管理員；理由與 operationId 要合法；同一個 operation 重送回同一張單，拿去改別張是衝突", async () => {
@@ -214,7 +211,7 @@ describe("改判為通過：處理", () => {
     generations.set(id + "mgr", generation);
     await env.DB.prepare("UPDATE review_submissions SET claimed_at=? WHERE id=?").bind(Date.now() - 2 * 3_600_000, id).run();
     expect(await code(await act(id, "stamp", "mgr", { verdict: "reject", reasons: ["other"], note: "x" }))).toBe("review_flip_use_withdraw");
-    expect(await code(await act(id, "blind", "mgr", { verdict: "reject", reasons: ["other"], note: "x" }))).toBe("review_flip_use_withdraw");
+    expect(await code(await act(id, "stamp", "mgr", { finalSource: "human_no_ai", verdict: "reject", reasons: ["other"], note: "x" }))).toBe("review_flip_use_withdraw");
 
     const res = await approveTwoStage(id);
     expect(res.status).toBe(200);
@@ -459,7 +456,7 @@ describe("改判為通過：發起人不再是管理員", () => {
     const id = await started(original);
     generations.set(id + "mgr", (await env.DB.prepare("SELECT claim_generation FROM review_submissions WHERE id=?").bind(id).first<{ claim_generation: string }>())!.claim_generation);
     await env.DB.prepare("UPDATE reviewers SET role='reviewer' WHERE member_id=?").bind(manager).run();
-    expect(await code(await act(id, "blind", "mgr", { verdict: "approve" }))).toBe("review_flip_manager_required");
+    expect(await code(await act(id, "stamp", "mgr", { finalSource: "human_no_ai", verdict: "approve" }))).toBe("review_flip_manager_required");
     expect(await code(await act(id, "stamp", "mgr", { verdict: "approve" }))).toBe("review_flip_manager_required");
     expect(await env.DB.prepare("SELECT status FROM review_submissions WHERE id=?").bind(id).first()).toEqual({ status: "pending" });
   });

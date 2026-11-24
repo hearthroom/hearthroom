@@ -10,7 +10,7 @@ import { HttpError } from "./types";
  * 審卡員是一個 AI 審核帳號（reviewers＋review_agents），由 Agent 員工透過 CLI 操作：讀卡、寫建議、打審核標記。
  * 建議只記錄，絕不改送審狀態；它不能蓋章、不受理、冷凍（那些路由對 AI 帳號一律 403）。
  *
- * 雙盲：AI 讀卡時拿不到這張單的人工決定、審核章、不受理狀態與說明；審核員要自己做完決定才看得到 AI 的建議。
+ * AI 讀卡時拿不到這張單的人工決定、審核章、不受理狀態與說明。審核員這邊是 AI 為主（owner 2026-11-24）：待審單一進審核頁就看得到 AI 的建議。
  * 試跑：近 7 天已定案的單也能讀（phase=backfill），同樣不帶人工決定，報表才能拿它和人工比。
  */
 
@@ -449,46 +449,18 @@ export async function suggestionsOf(db: D1Database, submissionId: string): Promi
 }
 
 /**
- * 審核員看得到 AI 建議嗎：自己送過盲審判斷、蓋過章、自己不受理而且還在不受理中，或已定案時是管理員。其他一律等自己決定完。
- * 不受理被復原之後就不再揭曉；萬一先看了再復原、再蓋章，那一章由 TAINTED 排除在對照報表之外。
+ * 審核員看得到 AI 建議嗎（AI 為主，owner 2026-11-24）：待審單任何審核員一進審核頁就看得到；
+ * 已定案的單只給蓋過章的人、自己不受理而且還在不受理中的人，以及管理員。
  */
 export async function canReveal(db: D1Database, s: Pick<SubmissionRow, "id" | "status">, memberId: string, role: string | null): Promise<boolean> {
-  // AI 為主（owner 2026-11-24）：結束雙盲，待審單的 AI 建議一進審核頁就看得到
   if (s.status === "pending") return true;
   const mine = await db.prepare(`SELECT EXISTS(SELECT 1 FROM review_stamps WHERE submission_id=?1 AND member_id=?2)
-    OR EXISTS(SELECT 1 FROM review_drops WHERE submission_id=?1 AND actor_member_id=?2 AND restored_at IS NULL)
-    OR EXISTS(SELECT 1 FROM review_blind_judgments WHERE submission_id=?1 AND member_id=?2) AS ok`).bind(s.id, memberId).first<{ ok: number }>();
+    OR EXISTS(SELECT 1 FROM review_drops WHERE submission_id=?1 AND actor_member_id=?2 AND restored_at IS NULL) AS ok`).bind(s.id, memberId).first<{ ok: number }>();
   if (mine?.ok) return true;
   return role === "manager" || role === "owner";
 }
 
-/** 揭曉留一筆事件（每人每單一次）：用來找出「看過 AI 判斷之後才蓋章」的決定 */
-export function revealEventStatement(db: D1Database, input: { submissionId: string; cardId: number; memberId: string; now: number }) {
-  return db.prepare(`INSERT OR IGNORE INTO review_events(event_key,spec_version,submission_id,card_id,at,action,actor_kind,actor_member_id)
-    VALUES (?,1,?,?,?,'ai_reveal','reviewer',?)`).bind(`aireveal:${input.submissionId}:${input.memberId}`, input.submissionId, input.cardId, input.now, input.memberId);
-}
-
-/**
- * 這張單的人工決定是不是在看過 AI 判斷之後才做的（不受理→看→復原→蓋章，或再不受理一次）：這種單不進人機對照。
- * 兩段式決定不算：只要盲審判斷是在第一次看到 AI 之前送的，那位審核員的獨立判斷記在盲審裡，對照用它。
- * 先看過 AI 才送的「盲審」（不受理→看→復原→盲審）照樣算污染。
- */
-// AI 為主（owner 2026-11-24）之後定案都會帶來源（ai／modified／human_no_ai），看過 AI 再定案是正常流程，不算污染
-export const TAINTED = `EXISTS(SELECT 1 FROM review_events rv WHERE rv.action='ai_reveal' AND rv.submission_id=s.id
-  AND NOT EXISTS(SELECT 1 FROM review_events fe WHERE fe.submission_id=rv.submission_id AND fe.final_source IN ('ai','modified','human_no_ai')) AND (
-  (EXISTS(SELECT 1 FROM review_stamps st WHERE st.submission_id=rv.submission_id AND st.member_id=rv.actor_member_id AND st.created_at>rv.at)
-    AND NOT EXISTS(SELECT 1 FROM review_blind_judgments bj WHERE bj.submission_id=rv.submission_id AND bj.member_id=rv.actor_member_id AND bj.created_at<=rv.at))
-  OR EXISTS(SELECT 1 FROM review_drops dr WHERE dr.submission_id=rv.submission_id AND dr.actor_member_id=rv.actor_member_id AND dr.created_at>rv.at AND dr.restored_at IS NULL)))`;
-
-/** 揭曉後的覆核：可以改選，每次一筆審核事件（同一個 operationId 重送不多記），統計取每位審核員對每筆建議最後一次。 */
-export async function recordFeedback(db: D1Database, input: { submissionId: string; cardId: number; suggestionId: string; memberId: string; value: string; operationId: string; now: number }) {
-  await db.prepare(`INSERT OR IGNORE INTO review_events(event_key,spec_version,submission_id,card_id,at,action,actor_kind,actor_member_id,source,ai_suggestion_id)
-    VALUES (?,1,?,?,?,'ai_feedback','reviewer',?,?,?)`)
-    .bind(`aifb:${input.suggestionId}:${input.memberId}:${input.operationId}`, input.submissionId, input.cardId, input.now, input.memberId, input.value, input.suggestionId).run();
-  return { value: input.value };
-}
-
-/** 每位審核員對每筆建議最後一次覆核（揭曉與報表共用） */
+/** 每位審核員對每筆建議最後一次覆核（雙盲時代的揭曉覆核，已不再寫入；報表與仲裁頁照列歷史資料） */
 export const LATEST_FEEDBACK = `e.action='ai_feedback' AND e.id=(SELECT f.id FROM review_events f WHERE f.action='ai_feedback'
   AND f.ai_suggestion_id=e.ai_suggestion_id AND f.actor_member_id=e.actor_member_id ORDER BY f.at DESC, f.id DESC LIMIT 1)`;
 
@@ -497,14 +469,11 @@ export async function aiReport(db: D1Database, input: { from: number; to: number
   const rows = await db.prepare(`SELECT a.criteria_version AS v, a.phase, a.verdict, a.reasons AS ai_reasons, a.flags, a.handoff_cause, a.latency_ms, a.cost_usd,
       s.status, s.reject_reasons,
       EXISTS(SELECT 1 FROM review_drops d WHERE d.submission_id=s.id AND d.restored_at IS NULL) AS dropped,
-      (SELECT b.verdict FROM review_blind_judgments b JOIN review_stamps st ON st.submission_id=b.submission_id AND st.member_id=b.member_id WHERE b.submission_id=s.id LIMIT 1) AS blind_verdict,
-      (SELECT b.payload FROM review_blind_judgments b JOIN review_stamps st ON st.submission_id=b.submission_id AND st.member_id=b.member_id WHERE b.submission_id=s.id LIMIT 1) AS blind_payload,
       (SELECT e.final_source FROM review_events e WHERE e.submission_id=s.id AND e.final_source IS NOT NULL ORDER BY e.at DESC LIMIT 1) AS final_source,
       (SELECT e.ai_note_types FROM review_events e WHERE e.submission_id=s.id AND e.final_source IS NOT NULL ORDER BY e.at DESC LIMIT 1) AS final_note_types
     FROM review_ai_suggestions a JOIN review_submissions s ON s.id=a.submission_id
     WHERE a.verdict IS NOT NULL AND s.submitted_at>=? AND s.submitted_at<? AND (?3 IS NULL OR a.criteria_version=?3)
-      AND (s.status IN ('approved','rejected') OR EXISTS(SELECT 1 FROM review_drops d WHERE d.submission_id=s.id AND d.restored_at IS NULL))
-      AND NOT ${TAINTED}`)
+      AND (s.status IN ('approved','rejected') OR EXISTS(SELECT 1 FROM review_drops d WHERE d.submission_id=s.id AND d.restored_at IS NULL))`)
     .bind(input.from, input.to, input.criteria ?? null).all<Record<string, any>>();
   const feedback = await db.prepare(`SELECT a.criteria_version AS v, e.source AS value, COUNT(*) AS n FROM review_events e JOIN review_ai_suggestions a ON a.id=e.ai_suggestion_id
     JOIN review_submissions s ON s.id=a.submission_id
@@ -520,18 +489,18 @@ export async function aiReport(db: D1Database, input: { from: number; to: number
     if (typeof r.cost_usd === "number") g.costUsd += r.cost_usd;
     for (const f of JSON.parse(r.flags) as string[]) g.flags[f] = (g.flags[f] ?? 0) + 1;
     // 只算人已經做完決定的單：還在待審的不進報表，否則管理員能把時間窗縮到一張待審卡，提前看到 AI 的判斷
-    // 兩段式：人那邊用盲審判斷（沒看過 AI 的獨立判斷）；舊流程用定案
-    const human = r.blind_verdict ? (r.blind_verdict === "approve" ? "approved" : "rejected") : r.dropped ? "dropped" : r.status;
+    // 人那邊＝最後的定案（AI 為主：審核員看過 AI 再定案是正常流程）
+    const human = r.dropped ? "dropped" : r.status;
     if (r.final_source) {
       g.finalSource[r.final_source] = (g.finalSource[r.final_source] ?? 0) + 1;
-      // AI 校正：盲審跟 AI 不同，最後改用 AI 的
+      // 照 AI 定案的筆數（雙盲時代是「盲審跟 AI 不同、最後改用 AI 的」；AI 為主之後就等於 finalSource.ai）
       if (r.final_source === "ai") g.corrected++;
       // AI 為主（owner 2026-11-24）的主指標：改了 AI 的比例＝modified／(ai＋modified)；審核員標「AI 判斷不準確」的筆數
       if (r.final_note_types && (JSON.parse(r.final_note_types) as string[]).includes("ai_inaccurate")) g.inaccurate++;
     }
     g.matrix[human as keyof typeof g.matrix][r.verdict as AiVerdict]++;
     if (human === "rejected") {
-      const humanReasons = new Set<string>(r.blind_payload ? (JSON.parse(r.blind_payload).reasons ?? []) : JSON.parse(r.reject_reasons ?? "[]"));
+      const humanReasons = new Set<string>(JSON.parse(r.reject_reasons ?? "[]"));
       const aiReasons = new Set<string>(JSON.parse(r.ai_reasons));
       for (const code of AI_REASONS) {
         const h = humanReasons.has(code), a = aiReasons.has(code);
@@ -569,7 +538,7 @@ export async function aiReport(db: D1Database, input: { from: number; to: number
       flags: g.flags,
       feedback: g.feedback,
       avgLatencyMs: g.latencyN ? Math.round(g.latencySum / g.latencyN) : null,
-      // 兩段式定案來源（blind 用我的／ai 用 AI 的／modified 修改後／human_no_ai 沒等 AI）與 AI 校正次數
+      // 定案來源（ai 照 AI／modified 改了 AI／human_no_ai 無 AI 對照；歷史資料另有 blind＝舊雙盲「用我的」）
       finalSource: g.finalSource,
       inaccurate: g.inaccurate,
       corrected: g.corrected,

@@ -445,8 +445,8 @@ const retainStatement = (db: D1Database, submissionId: string, now: number, reta
   db.prepare("INSERT OR REPLACE INTO review_snapshot_retention (submission_id, decided_at, expires_at) SELECT ?, ?, ? WHERE EXISTS (SELECT 1 FROM review_snapshots WHERE submission_id=?)")
     .bind(submissionId, now, now + retainMs, submissionId);
 
-/** 定案前的守門（盲審判斷也用同一套）：待審、沒冷凍、沒不受理、自己領著、還沒蓋過章。 */
-export async function guardDecision(db: D1Database, row: SubmissionRow, input: DecisionInput): Promise<void> {
+/** 定案前的守門：待審、沒冷凍、沒不受理、自己領著、還沒蓋過章。 */
+async function guardDecision(db: D1Database, row: SubmissionRow, input: DecisionInput): Promise<void> {
   if (row.status !== "pending") throw new HttpError(409, "submission already decided");
   // 冷凍中誰都不能定案（資料庫的 trigger 也會擋）。放在領取檢查前：冷凍的單不該被說成「請先領取」
   if (await db.prepare("SELECT 1 FROM review_holds WHERE card_id = ?").bind(row.card_id).first()) throw new HttpError(409, "review_held");
@@ -459,14 +459,11 @@ export async function guardDecision(db: D1Database, row: SubmissionRow, input: D
   if (row.flip_of && !isManager(await reviewerRole(db, input.memberId))) throw new HttpError(403, "review_flip_manager_required");
 }
 
-/** 決定內容的規則（盲審判斷也用同一套）：字數、說明長度、駁回理由、標記、改進建議。 */
-export async function normalizeDecision(db: D1Database, row: SubmissionRow, input: DecisionInput) {
+/** 決定內容的規則：字數、說明長度、駁回理由、標記、改進建議。 */
+async function normalizeDecision(db: D1Database, row: SubmissionRow, input: DecisionInput) {
   if (input.verdict === "approve") await assertApprovableLength(db, row);
   const note = input.note.trim();
   if (note.length > REVIEW_NOTE_MAX) throw new HttpError(400, "note_too_long");
-  // 駁回說明會原文給作者，不能帶內部資訊：額度、送審節奏、裝置、帳號、分數、作者等級。
-  // 通過時的補充說明只留在審核章上（作者收到的是改進建議的代碼），不擋
-  if (input.verdict === "reject") guardAuthorNote(note);
   const rejection = input.verdict === "reject" ? normalizeRejectReasons({ reasons: input.reasons, note, lengthInsufficient: await lengthInsufficient(db, row) }) : null;
   let marks: string[];
   try { marks = normalizeDecisionMarks(input.marks); } catch { throw new HttpError(400, "review_mark_invalid"); }
@@ -478,6 +475,11 @@ export async function normalizeDecision(db: D1Database, row: SubmissionRow, inpu
     const set = new Set(input.suggestions as string[]);
     suggestions = REVIEW_REASONS.filter((c) => set.has(c));
   }
+  // 駁回說明與附建議時的補充說明會原文給作者（結果頁的「審核員補充」），不能帶內部資訊：額度、送審節奏、裝置、帳號、分數、作者等級。
+  // 沒附建議的通過，補充說明只留在審核章上，不擋
+  if (input.verdict === "reject" || suggestions.length) guardAuthorNote(note);
+  // 建議選了「其他」：作者要從補充說明知道是什麼（跟駁回的「其他」同一條規則）
+  if (suggestions.includes("other") && !note) throw new HttpError(400, "review_other_needs_note");
   const coaching = rejection ? input.coaching === true : false;
 
   return { note, rejection, marks, suggestions, coaching };
@@ -519,8 +521,9 @@ export async function stamp(
       finalSource: input.final?.source ?? null, aiSuggestionId: input.final?.aiSuggestionId ?? null, aiNoteTypes: input.final?.aiNoteTypes ?? null, aiNote: input.final?.aiNote ?? null,
       ...(suggestions.length ? { reasons: suggestions, reasonVersion: REVIEW_REASON_VERSION, source: "suggestions" } : {}),
     }),
-    // 改進建議要在狀態變成通過之前寫好：通知的 trigger 在那一刻讀它（託管作品要等同步完成才變）
-    ...(suggestions.length ? [db.prepare("UPDATE review_submissions SET approve_suggestions = ? WHERE id = ? AND status = 'pending'").bind(JSON.stringify(suggestions), row.id)] : []),
+    // 改進建議與給作者的補充說明要在狀態變成通過之前寫好：通知的 trigger 在那一刻讀它（託管作品要等同步完成才變），
+    // 作者結果頁讀單上的說明。沒附建議的通過不寫單上的說明（通知的 trigger 會把它帶給作者）
+    ...(suggestions.length ? [db.prepare("UPDATE review_submissions SET approve_suggestions = ?, note = ? WHERE id = ? AND status = 'pending'").bind(JSON.stringify(suggestions), note, row.id)] : []),
   ];
 
   const prior = await db

@@ -133,8 +133,8 @@ import { livePost, publicPostById } from "./blog";
 import { reportComment } from "./comment-moderation";
 import { commentModerationRoutes } from "./comment-moderation-routes";
 import { reviewAiRoutes } from "./review-ai-routes";
-import { aiStateOf, blindOf, finalize as finalizeTwoStage, recordBlind } from "./review-two-stage";
-import { authorActivity, revealEventStatement } from "./review-ai";
+import { finalize as finalizeTwoStage } from "./review-two-stage";
+import { authorActivity } from "./review-ai";
 import { ratingFloorOf } from "./rating-correction";
 import { blogRoutes } from "./blog-routes";
 import { sitemapXml } from "./sitemap";
@@ -2023,12 +2023,11 @@ app.post("/v1/review/:id/stamp", async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as { verdict?: unknown; note?: unknown; generation?:unknown; reasons?: unknown; coaching?: unknown; marks?: unknown; suggestions?: unknown; finalSource?: unknown; aiNoteTypes?: unknown; aiNote?: unknown; aiSuggestionId?: unknown; aiSuggestionAt?: unknown; authorNote?: unknown; aiInaccurate?: unknown };
   if(typeof body.generation!=='string'||!body.generation)throw new HttpError(409,'claim changed');
   const submissionId = c.req.param("id");
-  // 兩段式決定（owner 2026-11-24）：送過盲審的人要說明定案從哪來（用我的／用 AI 的／修改後／沒等 AI）；
-  // 沒送盲審的舊頁面照舊直接蓋章
-  const twoStage = body.finalSource !== undefined || !!(await blindOf(c.env.DB, submissionId, member.id));
-  if (twoStage && body.finalSource === undefined) throw new HttpError(409, "finalize_with_source");
+  // AI 為主（owner 2026-11-24）：審核頁定案時帶 finalSource（照 AI／改了 AI／無 AI 對照）；沒帶的舊頁面照舊直接蓋章。
+  // 照 AI 定案不必帶結論（伺服器蓋 AI 那一筆），其他都要
+  const twoStage = body.finalSource !== undefined;
   const verdict = body.verdict === "approve" || body.verdict === "reject" ? body.verdict : null;
-  if (!verdict && !(twoStage && body.finalSource !== "modified")) throw new HttpError(400, "verdict must be approve or reject");
+  if (!verdict && !(twoStage && body.finalSource === "ai")) throw new HttpError(400, "verdict must be approve or reject");
   const noteText = typeof body.note === "string" ? body.note : "";
   // 駁回要理由代碼（至少一個，「其他」要補充）；只送說明的舊頁面記成「其他」。規則見 normalizeRejectReasons
   // 說明是寫給作者的：超過上限整個拒絕，不默默截掉尾巴讓審核員以為作者收到了全文
@@ -2051,33 +2050,10 @@ app.post("/v1/review/:id/stamp", async (c) => {
     status: result.submission.status,
     cardStatus: result.cardStatus,
     stamps: { approve: result.approvals, required: result.required },
-    // 兩段式定案實際記下的來源（沒等 AI 但 AI 剛好判完會記成 blind）
+    // 定案實際記下的來源（無 AI 對照但 AI 剛好判完會記成 modified）
     ...("finalSource" in result ? { finalSource: result.finalSource } : {}),
     ...paid,
   });
-});
-
-/**
- * 兩段式決定第一步：盲審判斷（owner 2026-11-24）。檢查跟蓋章一樣，但只記錄、不改送審狀態；
- * 回應直接帶 AI 的判斷（已判／交人／還沒判）。之後用 /stamp 帶 finalSource 定案。
- */
-app.post("/v1/review/:id/blind", async (c) => {
-  const member = await requireReviewer(c);
-  const body = (await c.req.json().catch(() => ({}))) as { verdict?: unknown; note?: unknown; generation?: unknown; reasons?: unknown; coaching?: unknown; marks?: unknown; suggestions?: unknown };
-  const verdict = body.verdict === "approve" || body.verdict === "reject" ? body.verdict : null;
-  if (!verdict) throw new HttpError(400, "verdict must be approve or reject");
-  if (typeof body.generation !== "string" || !body.generation) throw new HttpError(409, "claim changed");
-  const submissionId = c.req.param("id");
-  try {
-    const blind = await recordBlind(c.env.DB, { submissionId, memberId: member.id, verdict, note: typeof body.note === "string" ? body.note : "", now: Date.now(), generation: body.generation, reasons: body.reasons, coaching: body.coaching === true, marks: body.marks, suggestions: body.suggestions });
-    await bumpOp(c.env.DB, "review_two_stage", "blind", "success");
-    const ai = await aiStateOf(c.env.DB, submissionId);
-    if (ai.state !== "pending") await revealEventStatement(c.env.DB, { submissionId, cardId: Number((await getSubmission(c.env.DB, submissionId)).card_id), memberId: member.id, now: Date.now() }).run();
-    return c.json({ blind, ai }, 200, { "Cache-Control": "private, no-store" });
-  } catch (error) {
-    if (error instanceof HttpError) await bumpOp(c.env.DB, "review_two_stage", "blind", error.status === 409 ? "conflict" : "denied");
-    throw error;
-  }
 });
 
 /**
@@ -2363,7 +2339,7 @@ app.get("/v1/review/:id/detail", async (c) => {
   // 作者另外從卡片登記列給（reviewAuthor），審核單種類都一樣；快照裡的不用
   delete detail.authorNumId;
   const history = await submissionHistory(c.env.DB, s.id);
-  // 我這一章是怎麼定案的（兩段式：用我的／用 AI 的／修改後／沒等 AI）；只回給本人
+  // 我這一章是怎麼定案的（照 AI／改了 AI／無 AI 對照；舊資料可能是 blind）；只回給本人
   const myFinalSource = (await c.env.DB.prepare("SELECT final_source FROM review_events WHERE event_key=?").bind(`stamp:${s.id}:${member.id}`).first<{ final_source: string | null }>())?.final_source ?? null;
   const stamps = await c.env.DB
     .prepare("SELECT verdict, note, created_at, member_id FROM review_stamps WHERE submission_id = ? ORDER BY created_at ASC")
@@ -2404,8 +2380,6 @@ app.get("/v1/review/:id/detail", async (c) => {
       rejectReasons: s.status === "rejected" ? parseReviewReasons(s.reject_reasons) : [],
       // 定案後的保留期（到期時間）；過期或讀不到時 null，頁面顯示「內容已過保留期」
       retainUntil,
-      // 兩段式決定：我自己送過的盲審判斷（只有本人看得到；不含 AI 的任何資訊）。有就直接進揭曉步驟
-      myBlind: await blindOf(c.env.DB, s.id, member.id),
       rejectCoaching: s.status === "rejected" ? !!s.reject_coaching : false,
       detail,
     },
@@ -2424,10 +2398,17 @@ app.get("/v1/review/:id/detail", async (c) => {
  * 同裝置帳號數，以及超過門檻的異常提示。跟審核頁同一道門；只回數字，不回帳號或裝置識別碼。
  */
 app.get("/v1/review/:id/author-activity", async (c) => {
-  const { s } = await claimedSubmission(c);
-  const activity = await authorActivity(c.env.DB, s.id, Date.now());
-  if (!activity) throw new HttpError(404, "author_unknown");
-  return c.json(activity, 200, { "Cache-Control": "private, no-store" });
+  // 使用量（owner 要看審核員有沒有在用這一區）：讀成功、被擋（沒領取、不是審核員、找不到作者等 4xx）、出錯
+  try {
+    const { s } = await claimedSubmission(c);
+    const activity = await authorActivity(c.env.DB, s.id, Date.now());
+    if (!activity) throw new HttpError(404, "author_unknown");
+    await bumpOp(c.env.DB, "review_author_activity", "read", "success");
+    return c.json(activity, 200, { "Cache-Control": "private, no-store" });
+  } catch (error) {
+    await bumpOp(c.env.DB, "review_author_activity", "read", error instanceof HttpError && error.status < 500 ? "denied" : "error");
+    throw error;
+  }
 });
 
 app.get("/v1/review/:id/author-cards", async (c) => {
