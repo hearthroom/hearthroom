@@ -2,7 +2,7 @@
 /**
  * 審核頁的作者側寫（審卡 V2，ui.md §3）：自動標記（新人／穩定／優質／資料不足）、獨立的疑似量產旗標、
  * 依據（樣本不足寫「量不到」不寫 0）、人工改標記。只給審核員看；不自動通過、駁回或不受理。
- * 管理員從這裡開同作者／同裝置的批次不受理。
+ * 管理員從這裡開同作者／同裝置的批次不受理。標記之下放作者行為（ReviewAuthorActivity）。
  */
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
@@ -10,6 +10,7 @@ import { markReviewAuthor, revokeReviewAuthorMark, type ReviewAuthorProfile } fr
 import { dateTime } from "@/lib/format";
 import { useSession } from "@/lib/session";
 import ReviewBatchSheet from "@/components/ReviewBatchSheet.vue";
+import ReviewAuthorActivity from "@/components/ReviewAuthorActivity.vue";
 
 const props = defineProps<{ submissionId: string; profile: ReviewAuthorProfile; manager: boolean; canMark: boolean }>();
 const emit = defineEmits<{ changed: [profile: ReviewAuthorProfile]; batched: [] }>();
@@ -77,6 +78,8 @@ function batchClosed(changed: boolean) { batch.value = null; if (changed) emit("
     <p v-if="profile.batchSuspected" class="profile__use">{{ $t("reviewV2.mark.use.batch") }}</p>
     <p v-else-if="tierKey" class="profile__use">{{ $t(`reviewV2.mark.use.${tierKey}`) }}</p>
     <p v-if="profile.tier === 'top' && !profile.batchSuspected" class="profile__use" data-fast-note>{{ $t("reviewV2.fast.note") }}</p>
+    <!-- 作者行為（UI 小稿 ui-author-behavior.md）：標記之下先是異常摘要，再是可收合的近 7 天數字；自己讀，失敗或沒權限不擋這個面板 -->
+    <ReviewAuthorActivity :submission-id="submissionId" />
     <dl class="profile__basis">
       <div v-for="b in basis" :key="b.key"><dt>{{ $t(`reviewV2.mark.basis.${b.key}`) }}</dt><dd>{{ b.value }}</dd></div>
     </dl>

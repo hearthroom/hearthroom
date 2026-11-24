@@ -8,7 +8,7 @@ import { expect, it } from "vitest";
 const root = join(__dirname, "..", "src");
 const files = [
   "pages/AuthorReviewResultPage.vue", "pages/ReviewDetailPage.vue", "pages/ReviewQueuePage.vue", "pages/ReviewDroppedPage.vue", "pages/ReviewStatsPage.vue",
-  "components/MyCardTile.vue", "components/ReviewReasonPicker.vue", "components/ReviewReasonOptions.vue", "components/ReviewAuthorProfile.vue",
+  "components/MyCardTile.vue", "components/ReviewReasonPicker.vue", "components/ReviewReasonOptions.vue", "components/ReviewAuthorProfile.vue", "components/ReviewAuthorActivity.vue",
   "components/ReviewBatchSheet.vue", "components/ReviewRowMenu.vue", "components/ReviewListTabs.vue", "components/ReviewTimeline.vue",
   "components/ReviewDiffView.vue", "components/ReviewDiffLines.vue", "lib/notifications.ts",
   // AI 審卡影子模式：揭曉區與 AI 分歧仲裁

@@ -649,6 +649,30 @@ export async function fetchReviewAuthorCards(id: string, token: string, lang?: s
   return json(await fetch(`${COMMUNITY_API}/review/${encodeURIComponent(id)}/author-cards${q}`, { headers: { ...from(), ...authHeaders(token) } }));
 }
 
+/** 作者行為的異常代碼（伺服器 src/review-ai.ts authorActivity 判定；畫面只顯示結果與數字） */
+export type ReviewActivityAnomalyCode = "burst_long" | "quota_full" | "quick_gap" | "device" | "device_heavy";
+
+/** 審核頁的作者行為（只給審核員）：只有數字與狀態，沒有帳號或裝置識別碼。null＝量不到 */
+export interface ReviewAuthorActivity {
+  anomalies: { code: ReviewActivityAnomalyCode | string; value: number | null }[];
+  weekly: { used: number; limit: number; deviceShared: boolean };
+  submissions7d: number;
+  submissions24h: number;
+  pendingNow: number;
+  avgGapHours: number | null;
+  minutesSincePrevious: number | null;
+  /** 近 7 天的送審，新的在前 */
+  recent: { at: number; chars: number | null; status: string; kind: string; current: boolean }[];
+  deviceAccounts: number | null;
+  priorApproved: number | null;
+  accountAgeDays: number | null;
+}
+
+/** 作者行為：跟審核頁同一道門（403／404／409 時畫面直接不顯示這一區） */
+export async function fetchReviewAuthorActivity(id: string, token: string): Promise<ReviewAuthorActivity> {
+  return json(await fetch(`${COMMUNITY_API}/review/${encodeURIComponent(id)}/author-activity`, { headers: { ...from(), ...authHeaders(token) } }));
+}
+
 /** 冷凍：holder 是冷凍人的顯示名；canRelease＝我能解凍（冷凍人自己，或管理員） */
 export interface ReviewHold { holder: string; at: number; byMe: boolean; canRelease: boolean }
 
