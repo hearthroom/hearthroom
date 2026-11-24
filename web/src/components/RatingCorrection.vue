@@ -164,6 +164,9 @@ function again() {
 .rc__submit { justify-self: start; }
 .rc__done { display: grid; gap: var(--s-2); padding: var(--s-4); justify-items: start; }
 .rc__done p { margin: 0; }
+/* 跟作品管理頁的其他動作一致：表單欄位撐滿，手機上控件都是 44 高（頁面的 scoped 樣式進不到這個元件） */
+.rc > .input { width: 100%; }
+@media (max-width: 760px) { .rc .btn, .rc .input { min-height: var(--h-lg); } }
 :lang(ko) .rc { word-break: keep-all; }
 :lang(ja) .rc { word-break: auto-phrase; }
 </style>
