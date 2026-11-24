@@ -134,6 +134,7 @@ import { commentModerationRoutes } from "./comment-moderation-routes";
 import { reviewAiRoutes } from "./review-ai-routes";
 import { aiStateOf, blindOf, finalize as finalizeTwoStage, recordBlind } from "./review-two-stage";
 import { authorActivity, revealEventStatement } from "./review-ai";
+import { ratingFloorOf } from "./rating-correction";
 import { blogRoutes } from "./blog-routes";
 import { sitemapXml } from "./sitemap";
 import { campaignRoutes } from "./campaign-routes";
@@ -1621,14 +1622,21 @@ app.post("/v1/rating/evaluate", async (c) => {
 app.get("/v1/cards/:roleId/rating-draft", async (c) => {
   const member = await requireMember(c);
   c.header("Cache-Control", "private, no-store");
-  const row = await c.env.DB.prepare("SELECT answers FROM rating_drafts WHERE member_id = ? AND provider = ? AND role_id = ?")
-    .bind(member.id, providerOf(c), c.req.param("roleId")).first<{ answers: string }>();
-  if (!row) return c.json({ answers: null });
+  const [row, owned] = await Promise.all([
+    c.env.DB.prepare("SELECT answers FROM rating_drafts WHERE member_id = ? AND provider = ? AND role_id = ?")
+      .bind(member.id, providerOf(c), c.req.param("roleId")).first<{ answers: string }>(),
+    c.env.DB.prepare("SELECT 1 FROM works WHERE source_provider = ? AND source_role_id = ? AND member_id = ?")
+      .bind(providerOf(c), c.req.param("roleId"), member.id).first(),
+  ]);
+  // 管理員更正過分級的卡：載入編輯器時就讓作者看到分級下限（只回給這張卡的作者）
+  const floor = owned ? await ratingFloorOf(c.env.DB, providerOf(c), c.req.param("roleId")) : null;
+  const extra = floor ? { ratingFloor: floor } : {};
+  if (!row) return c.json({ answers: null, ...extra });
   try {
-    return c.json(evaluateRating(JSON.parse(row.answers)));
+    return c.json({ ...evaluateRating(JSON.parse(row.answers)), ...extra });
   } catch {
     // 問卷改版後的舊草稿不能直接用：當作沒有，讓作者重填
-    return c.json({ answers: null });
+    return c.json({ answers: null, ...extra });
   }
 });
 

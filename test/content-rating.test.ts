@@ -190,6 +190,16 @@ describe("送審與上架", () => {
     const none = (await (await SELF.fetch("https://c.test/v1/cards/role-2/rating-draft", { headers: bearer() })).json()) as any;
     expect(none).toEqual({ answers: null });
   });
+
+  it("管理員設了分級下限：作者載入編輯器就讀得到，別人讀不到", async () => {
+    await post({ roleId: "role-1", ratingAnswers: GENERAL });
+    await approve("role-1");
+    await env.DB.prepare("INSERT INTO review_rating_floors(card_id,rating,reason,set_by,set_at) SELECT id,'R','t','m',0 FROM cards WHERE source_role_id='role-1'").run();
+    const mine = (await (await SELF.fetch("https://c.test/v1/cards/role-1/rating-draft", { headers: bearer() })).json()) as any;
+    expect(mine).toMatchObject({ answers: null, ratingFloor: "R" });
+    const other = (await (await SELF.fetch("https://c.test/v1/cards/role-1/rating-draft", { headers: bearer("stranger") })).json()) as any;
+    expect(other).toEqual({ answers: null });
+  });
 });
 
 describe("上線前的送審紀錄", () => {

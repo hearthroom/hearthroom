@@ -206,7 +206,7 @@ it('manager rating correction applies directly, audits, records history and sets
  expect((await env.DB.prepare('SELECT rating FROM cards WHERE id=?').bind(card).first<any>()).rating).toBe('PG15');
  expect((await env.DB.prepare("SELECT reason FROM audit_log WHERE action='rating_correction' AND subject_id=?").bind(card).first<any>()).reason).toBe('分級不符');
  expect((await env.DB.prepare("SELECT before_value,after_value FROM moderation_events WHERE action='rating'").first<any>())).toEqual({before_value:'PG12',after_value:'PG15'});
- expect(((await request(`/cards/${card}`,'manager').then(r=>r.json())) as any).card.ratingFloor).toBe('PG15');
+ expect(((await request(`/cards/${card}`,'manager').then(r=>r.json())) as any).card).toMatchObject({ratingFloor:'PG15',rating:'PG15'});
  // 同一個 operation 重送：分級沒變 → 409，不會多記一筆
  expect((await request(`/cards/${card}/rating`,'manager',b)).status).toBe(409);
  expect((await env.DB.prepare("SELECT count(*) n FROM audit_log WHERE action='rating_correction'").first<any>()).n).toBe(1);
