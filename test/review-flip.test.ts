@@ -472,5 +472,13 @@ describe("給作者的說明的內部字詞檢查只管作者看得到的字", (
     expect(res.status).toBe(400);
     expect(await res.json()).toMatchObject({ error: "author_note_internal", terms: ["裝置", "帳號"] });
   });
+
+  it("通過附建議時的補充說明會給作者：作者結果頁讀得到；沒附建議的不會", async () => {
+    await submit();
+    const id = await latestAuthorSubmission();
+    expect((await act(id, "claim", "rev-a")).status).toBe(200);
+    expect((await act(id, "stamp", "rev-a", { verdict: "approve", suggestions: ["other"], note: "開場可以多一個要玩家回應的問題。" })).status).toBe(200);
+    expect(await (await mine(id)).json()).toMatchObject({ status: "approved", suggestions: ["other"], note: "開場可以多一個要玩家回應的問題。" });
+  });
 });
 

@@ -449,6 +449,19 @@ it('revisiting a card I finalized as the AI suggested shows the result card and 
   expect(btn().disabled).toBe(false);
 });
 
+it('after the criteria version moved on, a card I finalized against an older suggestion still offers the inaccurate mark', async () => {
+  mocks.fetchReviewDetail.mockResolvedValue(detail({ status: 'approved', claimedByMe: false, stampedByMe: true, stamps: [{ verdict: 'approve', note: '', at: 2, mine: true, finalSource: 'modified' }] }));
+  routes['/v1/review/s1/ai-inaccurate'] = (c) => [200, { inaccurate: c.body.inaccurate }];
+  routes['/v1/review/s1/ai'] = () => [200, { suggestions: [suggestion({ criteriaVersion: 'v1' })], current: 'v2', inaccurate: false }];
+  await mountPage('/en/review/s1');
+  await vi.waitFor(() => expect($('[data-result-ai-flag]')).not.toBeNull());
+  const btn = $('[data-result-ai-flag] [data-ai-inaccurate]') as HTMLButtonElement;
+  expect(btn.getAttribute('aria-pressed')).toBe('false');
+  btn.click();
+  await vi.waitFor(() => expect(btn.getAttribute('aria-pressed')).toBe('true'));
+  expect(calls.find((c) => c.method === 'PUT')).toMatchObject({ url: '/v1/review/s1/ai-inaccurate', body: { inaccurate: true } });
+});
+
 it('a card I finalized with no AI to compare has no inaccurate mark and does not read the AI', async () => {
   mocks.fetchReviewDetail.mockResolvedValue(detail({ status: 'approved', claimedByMe: false, stampedByMe: true, stamps: [{ verdict: 'approve', note: '', at: 2, mine: true, finalSource: 'human_no_ai' }] }));
   routes['/v1/review/s1/ai'] = () => [200, { suggestions: [], current: 'v2', inaccurate: false }];

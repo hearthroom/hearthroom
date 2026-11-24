@@ -18,7 +18,7 @@ const api = vi.hoisted(() => ({
   ApiError: class extends Error { constructor(readonly status: number, message: string, readonly code = "") { super(message); } },
 }));
 vi.mock("../src/lib/api", () => api);
-vi.mock("../src/lib/review-ai-api", async (original) => ({ ...await original<object>(), fetchReviewAi: async () => ({ suggestions: [], myFeedback: [] }) }));
+vi.mock("../src/lib/review-ai-api", async (original) => ({ ...await original<object>(), fetchReviewAi: async () => ({ suggestions: [], inaccurate: false }) }));
 vi.mock("../src/lib/session", () => ({ useSession: () => ({ accessToken: async () => "tok", me: { accountNumId: 7 } }) }));
 vi.mock("../src/lib/track", () => ({ track: () => {}, currentSurface: () => "review", setSurface: () => {} }));
 import DetailPage from "../src/pages/ReviewDetailPage.vue";
@@ -158,15 +158,16 @@ it("發起人已不是管理員：現任管理員看到可接手，有領取與�
   expect(button(t("review.action.claim"))).toBeTruthy();
 });
 
-// 附建議時補充說明會給作者（結果頁的「審核員補充」）：標成作者會看到（原本標只有審核員看得到，伺服器現在會把它寫給作者）
-it("通過附建議的補充說明標成作者會看到", async () => {
+// 附建議時補充說明會給作者（結果頁的「審核員補充」）：勾了建議才標成作者會看到（原本一律標只有審核員看得到，伺服器現在會把它寫給作者）
+it("通過附建議的補充說明：勾了建議才標成作者會看到；沒勾時補充不會送出，不標", async () => {
   api.fetchReviewDetail.mockResolvedValue(detail({ status: "pending", claimedByMe: true, stampedByMe: false, stamps: [] }));
   await mount(DetailPage, "/review/s1", [{ path: "/review/:id", component: DetailPage }]);
   await vi.waitFor(() => expect(el.querySelector("[data-decide-choices]")).toBeTruthy());
   el.querySelector<HTMLInputElement>('[data-decide-choices] input[value="approve"]')!.click(); await nextTick();
   el.querySelector<HTMLButtonElement>("[data-suggest-toggle]")!.click(); await nextTick();
-  const marker = el.querySelector("[data-suggest] [data-visibility]")!;
-  expect(marker.getAttribute("data-visibility")).toBe("author");
+  expect(el.querySelector("[data-suggest] [data-visibility]")).toBeNull();
+  el.querySelector<HTMLInputElement>("[data-suggest] [data-reason]")!.click(); await nextTick();
+  expect(el.querySelector("[data-suggest] [data-visibility]")!.getAttribute("data-visibility")).toBe("author");
   expect(el.querySelector("[data-suggest]")!.textContent).not.toContain(t("reviewAi.two.authorNote.editHint"));
 });
 

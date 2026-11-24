@@ -1403,7 +1403,8 @@ onMounted(() => { void load(); });
           <!-- 定案的來源（照 AI／改了 AI／無 AI 對照；舊的定案可能是「用我的」） -->
           <p v-if="resultSource" class="result__mine"><span class="chip result__source" :data-final-source="resultSource">{{ $t("reviewAi.two.sourceChip", { source: $t(`reviewAi.two.source.${resultSource}`) }) }}</span></p>
           <!-- 定案後也能標「AI 判斷不準確」：按下就記下，可以取消，不影響這張卡的結果 -->
-          <div v-if="aiMarkable && aiView === 'ready'" class="ai-first__flag result__ai-flag" data-result-ai-flag>
+          <!-- 判準版本換過之後，舊版本的建議在這裡讀成「還沒審」；來源是照 AI／改了 AI 就表示當時有結論可對照，讀完就給 -->
+          <div v-if="aiMarkable && aiState" class="ai-first__flag result__ai-flag" data-result-ai-flag>
             <p class="subtle ai-first__flag-hint" data-ai-inaccurate-hint>{{ $t(aiInaccurate ? "reviewAi.first.inaccurateOn" : "reviewAi.first.inaccurateHint") }}</p>
             <button type="button" class="btn btn--sm ai-first__flag-btn" :class="{ 'ai-first__flag-btn--on': aiInaccurate }" :aria-pressed="aiInaccurate" :aria-busy="aiMarkBusy ? 'true' : undefined" :disabled="aiMarkBusy" data-ai-inaccurate @click="toggleInaccurate">{{ $t("reviewAi.first.inaccurate") }}</button>
             <p v-if="aiMarkError" class="notice notice--error result__ai-flag-error" role="alert" data-ai-inaccurate-error>{{ aiMarkError }}</p>
@@ -1551,8 +1552,8 @@ onMounted(() => { void load(); });
               <div class="field">
                 <div class="note-head">
                   <label for="suggest-note">{{ $t(suggestions.includes('other') ? "reviewV2.decide.noteLabelRequired" : "reviewV2.decide.noteLabel") }}</label>
-                  <!-- 附了建議就連這段補充一起給作者（結果頁的「審核員補充」），跟駁回說明一樣過內部字詞檢查 -->
-                  <ReviewVisibility who="author" />
+                  <!-- 勾了建議就連這段補充一起給作者（結果頁的「審核員補充」），跟駁回說明一樣過內部字詞檢查；沒勾時補充不會送出 -->
+                  <ReviewVisibility v-if="suggestions.length" who="author" />
                 </div>
                 <textarea id="suggest-note" v-model="note" autocomplete="off" class="input" rows="3" :maxlength="NOTE_MAX" :disabled="busy" :aria-invalid="noteGuard?.at === 'suggest' ? 'true' : undefined" />
               </div>

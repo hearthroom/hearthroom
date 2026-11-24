@@ -7,7 +7,7 @@ import {OPENING_SANDBOX,openingSrcdoc,OPENING_MESSAGE_TYPE} from 'stage-common/o
 const api=vi.hoisted(()=>({claimReview:vi.fn(async()=>({})),fetchReviewDetail:vi.fn(),fetchReviewQueue:vi.fn(async()=>({items:[],claimTtlMs:1})),fetchReviewOriginality:vi.fn(),fetchReviewDiff:vi.fn(),releaseReview:vi.fn(),stampReview:vi.fn(),holdReview:vi.fn(),unholdReview:vi.fn(),withdrawReopen:vi.fn(),correctReviewDecision:vi.fn(),updateReviewTags:vi.fn(),fetchReviewAuthorCards:vi.fn(),fetchReviewAuthorActivity:vi.fn(),dropReview:vi.fn(async()=>({caseId:'k1'})),restoreReview:vi.fn(async()=>({restored:true})),markReviewAuthor:vi.fn(),fetchReviewGroup:vi.fn(),dropReviewBatch:vi.fn(),restoreReviewBatch:vi.fn(),ApiError:class extends Error{constructor(readonly status:number,message:string,readonly code='',readonly reviewLength?:unknown){super(message);}}}));
 vi.mock('../src/lib/api',()=>api);
 // AI 的建議自己讀網路：這裡 AI 一律還沒審完，決定區照一般流程（無 AI 對照）。AI 那一側由 review-ai.test.ts 管
-vi.mock('../src/lib/review-ai-api',async(original)=>({...await original<object>(),fetchReviewAi:async()=>({suggestions:[],myFeedback:[]})}));
+vi.mock('../src/lib/review-ai-api',async(original)=>({...await original<object>(),fetchReviewAi:async()=>({suggestions:[],inaccurate:false})}));
 /** 定案回應：AI 還沒審，記成無 AI 對照 */
 const stampSaved=(verdict:'approve'|'reject')=>({id:'s1',status:verdict==='approve'?'approved':'rejected',cardStatus:verdict==='approve'?'approved':'rejected',stamps:{approve:verdict==='approve'?1:0,required:1},finalSource:'human_no_ai'});
 vi.mock('../src/lib/session',()=>({useSession:()=>({accessToken:async()=> 'local-reviewer'})}));
