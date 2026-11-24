@@ -5,7 +5,7 @@ import {assertPublicSource} from './test-accounts';
 import {type Env,HttpError} from './types';
 import type {ProviderId} from './providers';
 import {bumpOp} from './ops-metrics';
-import {managedWork,policyOperationId,projectWorkReceipt,supersedeOlderWorkIntents,runWorkPolicyOperation,workPolicyGateway,type WorkPolicyCommand,type WorkPolicyReceipt} from './work-policy';
+import {managedWork,policyOperationId,supersedeOlderWorkIntents,runWorkPolicyOperation,workPolicyGateway,type WorkPolicyCommand,type WorkPolicyReceipt} from './work-policy';
 
 export async function prepareManagedPublication(env:Env,provider:ProviderId,source:string,work:string,version:string,role:string,consent?:{providerEpoch:number;providerRevision:string}):Promise<void>{
  await assertPublicSource(env.DB,provider,source);
@@ -45,19 +45,34 @@ export async function finalizeManagedReview(env:Env,submission:string,path:'stam
  AND EXISTS(SELECT 1 FROM review_submissions WHERE id=? AND status='pending')`).bind(row.operation_id,row.work_id,row.operation_id,submission).run();
  if(!lock.meta.changes)throw new HttpError(409,'visibility_operation_conflict');
  let receipt:WorkPolicyReceipt;
+ let current:WorkPolicyReceipt|null=null;
  try{
   const recovered=await workPolicyGateway.operation(env,row.provider,row.source_role_id,row.work_id,row.operation_id);
   receipt=recovered?.state==='complete'?recovered:await workPolicyGateway.commit(env,row.provider,row.source_role_id,row.work_id,row.operation_id);
-  const current=await workPolicyGateway.state(env,row.provider,row.source_role_id);
-  if(!current||current.workId!==row.work_id||current.epoch!==receipt.epoch||current.restriction!==receipt.restriction||current.access!=='public'||!['none','delisted'].includes(current.restriction)
+  current=await workPolicyGateway.state(env,row.provider,row.source_role_id);
+  if(!current||current.workId!==row.work_id||current.epoch<receipt.epoch)throw new HttpError(503,'visibility_sync_pending');
+  if(current.epoch!==receipt.epoch||current.restriction!==receipt.restriction||current.access!=='public'||!['none','delisted'].includes(current.restriction)
    ||receipt.state!=='complete'||receipt.access!=='public'||!['none','delisted'].includes(receipt.restriction))throw new HttpError(409,'visibility_operation_conflict');
  }catch(error){
   if(error instanceof HttpError&&error.status===409){
-   await db.batch([
-    db.prepare("UPDATE work_publication_permits SET state='conflict' WHERE version_id=? AND state<>'published'").bind(row.version_id),
-    db.prepare("UPDATE review_submissions SET status='superseded',claimed_by=NULL,claimed_at=NULL WHERE id=? AND status='pending'").bind(submission),
-   ]);
-   await bumpOp(db,'work_access','publish','conflict');throw error;
+   current??=await workPolicyGateway.state(env,row.provider,row.source_role_id).catch(()=>null);
+   if(current?.workId===row.work_id){
+    // A refusal settles only its own fence. A stale read leaves the permit
+    // prepared so reconciliation can retry against a confirmed Harbor policy.
+    const [,permit,,latest]=await db.batch<{state:string}>([
+     db.prepare(`UPDATE managed_work_access SET epoch=?,access=?,restriction=?,sync_state='complete',sync_operation_id=NULL
+      WHERE work_id=? AND sync_state='changing' AND sync_operation_id=? AND epoch<=?`)
+      .bind(current.epoch,current.access,current.restriction,row.work_id,row.operation_id,current.epoch),
+     db.prepare(`UPDATE work_publication_permits SET state='conflict' WHERE version_id=? AND state='prepared'
+      AND NOT EXISTS(SELECT 1 FROM managed_work_access WHERE work_id=? AND sync_state='changing' AND sync_operation_id=?)`)
+      .bind(row.version_id,row.work_id,row.operation_id),
+     db.prepare(`UPDATE review_submissions SET status='superseded',claimed_by=NULL,claimed_at=NULL WHERE id=? AND status='pending'
+      AND EXISTS(SELECT 1 FROM work_publication_permits WHERE version_id=? AND state='conflict')`).bind(submission,row.version_id),
+     db.prepare('SELECT state FROM work_publication_permits WHERE version_id=?').bind(row.version_id),
+    ]);
+    if(permit.meta.changes)await bumpOp(db,'work_access','publish','conflict');
+    if(latest.results[0]?.state!=='prepared')throw error;
+   }
   }
   await bumpOp(db,'work_access','publish','pending');
   throw new HttpError(503,'visibility_sync_pending',undefined,{operationId:row.operation_id,state:'pending'});
