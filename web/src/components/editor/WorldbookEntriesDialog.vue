@@ -237,6 +237,22 @@ function patch(changes: Partial<WorldbookEntryDraft>) {
   commit(next);
 }
 
+/**
+ * 關鍵字欄：框裡顯示玩家打的原文，條目存分好的關鍵字。框的值若每打一個字就從關鍵字重組，
+ * 結尾的「、」與空格會被吃掉（新注音用 Ctrl+' 打「、」就打不出來），組字中的字也會被蓋掉、游標跳到最後。
+ * 離開欄位或換一條條目時才換回整理好的樣子。
+ */
+type KeywordField = "keywords" | "secondaryKeywords";
+const keywordDraft = ref<{ field: KeywordField; text: string } | null>(null);
+const keywordValue = (field: KeywordField) =>
+  keywordDraft.value?.field === field ? keywordDraft.value.text : (entry.value?.[field] ?? []).join("、");
+function onKeywordInput(field: KeywordField, event: Event) {
+  const text = (event.target as HTMLInputElement).value;
+  keywordDraft.value = { field, text };
+  patch({ [field]: splitKeywords(text) });
+}
+watch(selected, () => { keywordDraft.value = null; });
+
 function patchMatch(changes: Partial<WorldbookMatchOptions>) {
   const current = entry.value?.matchOptions;
   if (!current) return;
@@ -324,7 +340,8 @@ watch(
 );
 
 function onKeydown(event: KeyboardEvent) {
-  if (event.key === "Escape") {
+  // 組字中的 Esc 是輸入法在取消選字，不是要關視窗
+  if (event.key === "Escape" && !event.isComposing) {
     if (batch.value) cancelBatch();
     else emit("close");
   }
@@ -453,20 +470,20 @@ function onKeydown(event: KeyboardEvent) {
 
             <div class="field">
               <label for="wbd-kw">{{ $t("wb.entry.keywords") }}</label>
-              <input id="wbd-kw" class="input" :value="entry.keywords.join('、')" :disabled="entry.isConstant"
+              <input id="wbd-kw" class="input" :value="keywordValue('keywords')" :disabled="entry.isConstant"
                      :placeholder="$t('wb.entry.keywords.placeholder')"
                      :aria-describedby="primaryRegexHint ? 'wbd-kw-hint' : undefined"
-                     @input="patch({ keywords: splitKeywords(($event.target as HTMLInputElement).value) })" />
+                     @input="onKeywordInput('keywords', $event)" @blur="keywordDraft = null" />
               <span v-if="primaryRegexHint" id="wbd-kw-hint" class="wbd__regex-hint subtle" role="status">{{ $t("wb.entry.regexHint") }}</span>
               <span class="subtle">{{ entry.isConstant ? $t("wb.entry.keywords.constantHint") : $t("wb.entry.keywords.hint") }}</span>
             </div>
 
             <div v-if="!entry.isConstant" class="field">
               <label for="wbd-sk">{{ $t("wb.entry.secondary") }}</label>
-              <input id="wbd-sk" class="input" :value="(entry.secondaryKeywords ?? []).join('、')"
+              <input id="wbd-sk" class="input" :value="keywordValue('secondaryKeywords')"
                      :placeholder="$t('wb.entry.secondary.placeholder')"
                      :aria-describedby="secondaryRegexHint ? 'wbd-sk-hint' : undefined"
-                     @input="patch({ secondaryKeywords: splitKeywords(($event.target as HTMLInputElement).value) })" />
+                     @input="onKeywordInput('secondaryKeywords', $event)" @blur="keywordDraft = null" />
               <span v-if="secondaryRegexHint" id="wbd-sk-hint" class="wbd__regex-hint subtle" role="status">{{ $t("wb.entry.regexHint") }}</span>
               <span class="subtle">{{ $t("wb.entry.secondary.hint") }}</span>
             </div>

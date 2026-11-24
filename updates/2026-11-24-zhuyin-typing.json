@@ -1,0 +1,18 @@
+{
+  "tier": "fix",
+  "audience": "everyone",
+  "title": {
+    "zh-Hant": "世界書關鍵字欄能直接打出「、」，編輯並重送時插字也不會跳到最後。",
+    "zh-Hans": "世界书关键词栏能直接打出「、」，编辑并重发时插字也不会跳到最后。",
+    "en": "Lorebook keyword fields keep the separators you type, and text inserted while editing a message stays in place.",
+    "ja": "ワールドブックのキーワード欄で「、」を入力でき、編集して再送信の文字挿入も末尾に飛ばなくなりました。",
+    "ko": "로어북 키워드 칸에서 「、」를 입력할 수 있고, 수정 후 다시 보낼 때 넣은 글자가 끝으로 튀지 않아요."
+  },
+  "body": {
+    "zh-Hant": "用注音等輸入法還沒選字時，字也不會再消失或被打亂。",
+    "zh-Hans": "用注音等输入法还没选字时，字也不会再消失或被打乱。",
+    "en": "Text you are still composing with an input method such as Zhuyin no longer disappears or gets scrambled.",
+    "ja": "注音などの入力方式で変換を確定する前の文字も、消えたり順番が崩れたりしなくなりました。",
+    "ko": "주음 같은 입력기로 아직 확정하지 않은 글자도 더 이상 사라지거나 뒤섞이지 않아요."
+  }
+}
