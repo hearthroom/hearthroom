@@ -282,7 +282,8 @@ export const ACTIVITY_THRESHOLDS = {
 } as const;
 
 export async function authorActivity(db: D1Database, submissionId: string, now: number) {
-  const v = await db.prepare("SELECT member_id, source_role_id FROM hosting_versions WHERE submission_id=?").bind(submissionId).first<{ member_id: string; source_role_id: string }>();
+  // 改判單（0152）待審時版本列還在原本那張駁回單上；作者行為看的是原本那一次送審
+  const v = await db.prepare("SELECT member_id, source_role_id FROM hosting_versions WHERE submission_id IN (?1, (SELECT flip_of FROM review_submissions WHERE id=?1)) LIMIT 1").bind(submissionId).first<{ member_id: string; source_role_id: string }>();
   if (!v) return null;
   const [usage, limit, list, signals] = await Promise.all([
     weeklyUsageForMember(db, v.member_id, now),
@@ -293,9 +294,9 @@ export async function authorActivity(db: D1Database, submissionId: string, now: 
       .all<{ id: string; card: number; at: number; chars: number | null; status: string; kind: string }>(),
     authorSignals(db, v.member_id, v.source_role_id, now),
   ]);
-  const self = await db.prepare("SELECT submitted_at FROM review_submissions WHERE id=?").bind(submissionId).first<{ submitted_at: number }>();
-  // 同一張卡改字重送不算「另一張」：間隔看上一張「別的卡」，一晚多張數的是不同的卡
-  const selfCard = list.results.find((r) => r.id === submissionId)?.card;
+  const self = await db.prepare("SELECT s.flip_of, COALESCE((SELECT o.submitted_at FROM review_submissions o WHERE o.id=s.flip_of), s.submitted_at) AS submitted_at FROM review_submissions s WHERE s.id=?").bind(submissionId).first<{ flip_of: string | null; submitted_at: number }>();
+  // 同一張卡改字重送不算「另一張」：間隔看上一張「別的卡」，一晚多張數的是不同的卡（改判單算它改判的那一次）
+  const selfCard = list.results.find((r) => r.id === submissionId || (!!self?.flip_of && r.id === self.flip_of))?.card;
   const before = list.results.filter((r) => r.at < (self?.submitted_at ?? now) && r.card !== selfCard);
   const times = list.results.map((r) => r.at);
   const gaps = times.slice(0, -1).map((t, i) => t - times[i + 1]!);

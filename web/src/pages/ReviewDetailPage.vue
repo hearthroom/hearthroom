@@ -253,7 +253,8 @@ const approvals = computed(() => data.value?.submission.stamps.filter((s) => s.v
 /** 冷凍並討論：有人把這張卡擋下來了，解凍前誰都不能通過或駁回（伺服器也擋） */
 const hold = computed(() => (decided.value ? null : data.value?.submission.hold ?? null));
 const canDecide = computed(() => claimedByMe.value && !stampedByMe.value && !decided.value && !hold.value);
-const canHold = computed(() => claimedByMe.value && !stampedByMe.value && !decided.value && !hold.value);
+// 改判單由發起人一人處理，不冷凍討論（伺服器也擋）
+const canHold = computed(() => claimedByMe.value && !stampedByMe.value && !decided.value && !hold.value && !data.value?.submission.flip);
 const holdBusy = ref(false);
 const holdError = ref("");
 /** 管理員解別人的冷凍：先按解凍才展開理由欄 */

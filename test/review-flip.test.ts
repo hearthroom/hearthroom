@@ -1,5 +1,8 @@
-import { SELF, env } from "cloudflare:test";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { SELF, createExecutionContext, env } from "cloudflare:test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import worker from "../src/index";
+import { workPolicyGateway } from "../src/work-policy";
+import { finalizeManagedReview } from "../src/work-publication";
 import { legacyPolicyFixture } from "./work-policy-fixture";
 import { bearer, identities, makeAgent, makeMember, makeReviewer, ratingBody, resetDb, restoreUpstream, reviewOff, reviewOn, reviewUpstream, rolesOnMainSite } from "./helpers";
 import { claim, pendingSubmissionOf, stamp, statusAmong } from "../src/review";
@@ -173,6 +176,34 @@ describe("改判為通過：處理", () => {
     expect(await code(await act(id, "drop", "rev-b"))).toBe("review_drop_flip");
   });
 
+  it("發起人審改判單：試玩、作者行為、查重都跟一般領著的單一樣；作品管理的歷程帶改判狀態與入口", async () => {
+    const { original, cardId } = await rejected();
+    const before = (await (await SELF.fetch(`https://c.test/v1/moderation/cards/${cardId}`, { headers: bearer("mgr") })).json()) as any;
+    expect(before.reviews.find((r: any) => r.id === original).flip).toEqual({ pendingId: null, approvedId: null, canStart: true });
+    const asReviewer = (await (await SELF.fetch(`https://c.test/v1/moderation/cards/${cardId}`, { headers: bearer("rev-a") })).json()) as any;
+    expect(asReviewer.reviews.find((r: any) => r.id === original).flip.canStart).toBe(false);
+
+    const id = await started(original);
+    await env.DB.prepare("UPDATE review_submissions SET claimed_at=? WHERE id=?").bind(Date.now() - 2 * 3_600_000, id).run();
+    const sealed = (await env.DB.prepare("SELECT source_role_id FROM review_submissions WHERE id=?").bind(id).first<{ source_role_id: string }>())!.source_role_id;
+    const play = await worker.fetch(new Request(`https://c.test/internal/review/${id}/play-access?accountNumId=${MANAGER}&roleId=${encodeURIComponent(sealed)}`, { headers: { "X-Hosting-Key": "fixture-key" } }), { ...env, HOSTING_SERVICE_KEY: "fixture-key" }, createExecutionContext());
+    expect(play.status).toBe(200);
+    const other = await worker.fetch(new Request(`https://c.test/internal/review/${id}/play-access?accountNumId=${MANAGER_2}&roleId=${encodeURIComponent(sealed)}`, { headers: { "X-Hosting-Key": "fixture-key" } }), { ...env, HOSTING_SERVICE_KEY: "fixture-key" }, createExecutionContext());
+    expect(other.status).toBe(403);
+    for (const path of ["detail", "author-activity", "originality", "timeline"]) expect((await SELF.fetch(`https://c.test/v1/review/${id}/${path}`, { headers: bearer("mgr") })).status, path).toBe(200);
+    const detail = (await (await SELF.fetch(`https://c.test/v1/review/${id}/detail`, { headers: bearer("mgr") })).json()) as any;
+    expect(detail.authorProfile).not.toBeNull();
+    expect(detail.submission.flip).toMatchObject({ of: original, mine: true, reason: "原審核員看錯了世界書，內容其實足夠" });
+    const timeline = (await (await SELF.fetch(`https://c.test/v1/review/${id}/timeline`, { headers: bearer("mgr") })).json()) as any;
+    expect(timeline.items.find((i: any) => i.action === "flip")).toMatchObject({ round: 1, current: true });
+
+    const during = (await (await SELF.fetch(`https://c.test/v1/moderation/cards/${cardId}`, { headers: bearer("mgr") })).json()) as any;
+    expect(during.reviews.find((r: any) => r.id === original).flip).toEqual({ pendingId: id, approvedId: null, canStart: false });
+    expect(during.reviews.find((r: any) => r.id === id)).toMatchObject({ flipOf: original, note: "原審核員看錯了世界書，內容其實足夠" });
+    const duringReviewer = (await (await SELF.fetch(`https://c.test/v1/moderation/cards/${cardId}`, { headers: bearer("rev-a") })).json()) as any;
+    expect(duringReviewer.reviews.find((r: any) => r.id === id).note).toBe("");
+  });
+
   it("發起人核准（領取超過 45 分鐘也不逾時）：卡片上架、作者只收到一般的通過通知、追蹤者收到新作通知", async () => {
     const { original, cardId } = await rejected();
     const follower = await makeMember(FOLLOWER);
@@ -293,4 +324,54 @@ describe("改判為通過：託管作品", () => {
     expect((await statusAmong(env.DB, ["role-1"])).get("role-1")?.updateStatus).toBeUndefined();
     expect(await metric("approve", "success")).toBe(1);
   });
+
+  it("Harbor 結果不明：改判單留在待審、作者端照舊是駁回；重按就上架。同步衝突：改判單作廢，版本列還給原本的駁回", async () => {
+    const send = () => submitHosted(env, { memberId: author, account: AUTHOR, role: role({ roleId: "role-1", authorNumId: AUTHOR }), token: "author", rating: GENERAL_RATING, operationId: crypto.randomUUID(), now: Date.now() });
+    const sid = async (version: string) => (await env.DB.prepare("SELECT submission_id FROM hosting_versions WHERE version_id=?").bind(version).first<{ submission_id: string }>())!.submission_id;
+    const decide = async (id: string, member: string, verdict: "approve" | "reject") => {
+      const g = (await env.DB.prepare("SELECT claimed_by, claim_generation g FROM review_submissions WHERE id=?").bind(id).first<{ claimed_by: string | null; g: string }>())!;
+      if (g.claimed_by !== member) await claim(env.DB, id, member, Date.now());
+      return stamp(env.DB, { submissionId: id, memberId: member, verdict, note: verdict === "reject" ? "更新內容有問題" : "", reasons: verdict === "reject" ? ["other"] : undefined, now: Date.now() }, env);
+    };
+    const initial = await send();
+    await decide(await sid(initial.versionId), "member-20001", "approve");
+    await enrollWorkAccess(env, { memberId: author, roleId: "role-1", operationId: crypto.randomUUID(), access: "public", token: "author" });
+    const flipped = async () => {
+      const update = await send();
+      const original = await sid(update.versionId);
+      await decide(original, "member-20001", "reject");
+      const { id } = await startFlip(env, { id: original, memberId: manager, operationId: crypto.randomUUID(), reason: "更新其實沒有問題", now: Date.now() });
+      return { update, original, id };
+    };
+    const authorView = async () => ({ ...(await statusAmong(env.DB, ["role-1"])).get("role-1") });
+
+    // 1) Provider 的回覆遺失：改判單仍待審、版本列已轉給它；作者端照舊是駁回，原單的結果頁照樣打得開
+    const a = await flipped();
+    const viewBefore = await authorView();
+    const commit = vi.spyOn(workPolicyGateway, "commit").mockRejectedValueOnce(new Error("Synthetic Provider unavailable"));
+    await expect(decide(a.id, manager, "approve")).rejects.toThrow("visibility_sync_pending");
+    expect(await env.DB.prepare("SELECT status FROM review_submissions WHERE id=?").bind(a.id).first()).toEqual({ status: "pending" });
+    expect(await env.DB.prepare("SELECT submission_id FROM hosting_versions WHERE version_id=?").bind(a.update.versionId).first()).toEqual({ submission_id: a.id });
+    expect(await authorView()).toEqual(viewBefore);
+    expect(((await (await mine(a.original)).json()) as any).status).toBe("rejected");
+    commit.mockRestore();
+    // 重按同一個決定：託管核准已記下，直接接續提交（不必再領）
+    expect((await stamp(env.DB, { submissionId: a.id, memberId: manager, verdict: "approve", note: "", now: Date.now() }, env)).submission.status).toBe("approved");
+    expect(await env.DB.prepare("SELECT approved_version_id FROM cards").first()).toEqual({ approved_version_id: a.update.versionId });
+
+    // 2) 同步衝突（作品已被改成不公開）：改判單作廢，版本列回到原本的駁回單，作者端沒有任何變化
+    const b = await flipped();
+    const viewB = await authorView();
+    vi.spyOn(workPolicyGateway, "commit").mockRejectedValueOnce(new Error("Synthetic Provider unavailable"));
+    await expect(decide(b.id, manager, "approve")).rejects.toThrow("visibility_sync_pending");
+    const current = await workPolicyGateway.state(env, "harbor", "role-1");
+    vi.spyOn(workPolicyGateway, "state").mockResolvedValue({ ...current!, epoch: current!.epoch + 2, access: "private" });
+    await expect(finalizeManagedReview(env, b.id)).rejects.toThrow("visibility_operation_conflict");
+    vi.restoreAllMocks();
+    expect(await env.DB.prepare("SELECT status FROM review_submissions WHERE id=?").bind(b.id).first()).toEqual({ status: "superseded" });
+    expect(await env.DB.prepare("SELECT submission_id, state FROM hosting_versions WHERE version_id=?").bind(b.update.versionId).first()).toEqual({ submission_id: b.original, state: "rejected" });
+    expect(await authorView()).toEqual(viewB);
+    expect(((await (await mine(b.original)).json()) as any).status).toBe("rejected");
+  });
 });
+

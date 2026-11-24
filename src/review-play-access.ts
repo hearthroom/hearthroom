@@ -18,14 +18,16 @@ export function reviewPlayAccessRoutes(){
    if(!/^[1-9]\d*$/.test(account)||!role)throw new HttpError(403,'review_play_denied');
    const now=Date.now();
    const row=await c.env.DB.prepare(`SELECT s.claimed_by AS member_id,s.rating,m.age_verified_at
-    FROM review_submissions s JOIN hosting_versions v ON v.submission_id=s.id
+    -- 改判單待審時版本列還在原本那張駁回單上（0152），發起人的領取不逾時
+    FROM review_submissions s JOIN hosting_versions v ON v.submission_id IN (s.id,s.flip_of)
     JOIN members m ON m.id=s.claimed_by JOIN reviewers r ON r.member_id=m.id AND r.revoked_at IS NULL
     WHERE s.claimed_by=COALESCE(
       (SELECT owner_member_id FROM member_connections WHERE provider='harbor' AND external_id=?),
       (SELECT member_id FROM member_identities WHERE provider='harbor' AND external_id=?))
-     AND s.id=? AND s.provider='harbor' AND s.status='pending' AND v.state='pending'
+     AND s.id=? AND s.provider='harbor' AND s.status='pending'
+     AND (v.state='pending' OR (v.submission_id=s.flip_of AND v.state='rejected'))
      AND s.source_role_id=? AND v.hosted_revision_id=s.source_role_id
-     AND s.claimed_at IS NOT NULL AND s.claimed_at>? AND s.claimed_at<=?
+     AND s.claimed_at IS NOT NULL AND (s.claimed_at>? OR s.flip_by=s.claimed_by) AND s.claimed_at<=?
      AND NOT EXISTS(SELECT 1 FROM review_agents a WHERE a.member_id=m.id AND a.revoked_at IS NULL)`)
     .bind(account,account,c.req.param('id'),role,now-CLAIM_TTL_MS,now).first<{member_id:string;rating:string;age_verified_at:number|null}>();
    if(row){

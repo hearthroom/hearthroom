@@ -520,7 +520,8 @@ export async function stamp(
     // 託管作品要等同步完成才真的過審（work-publication.ts）；保留期從審核員定案這一刻起算
     writes.push(retainStatement(db, row.id, input.now, input.final?.retainMs ?? RETAIN_MS));
   } else if (approvals >= required) {
-    await reserveUpdateNotification(db,row.id,input.now);
+    try { await reserveUpdateNotification(db,row.id,input.now); }
+    catch (error) { if (flipAdopted) await releaseFlipVersion(db, row); throw error; }
     cardStatus = "approved";
     // 首次送審的改判：卡片此刻是「已駁回」；先回到待審再核准，跟一般首次上架一樣（追蹤者的新作通知看這個轉換）
     if (flipAdopted) writes.push(db.prepare("UPDATE cards SET status = 'pending' WHERE id = ? AND approved_version_id IS NULL AND status = 'rejected'").bind(row.card_id));

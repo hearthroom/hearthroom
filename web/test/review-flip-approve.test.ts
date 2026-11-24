@@ -126,6 +126,8 @@ it("改判單詳情：頂端說明改判單、原駁回與改判理由；決定�
   expect(choices.textContent).not.toContain(t("reviewV2.decide.reject"));
   expect(choices.textContent).not.toContain(t("reviewV2.decide.drop"));
   expect(el.querySelector("[data-flip-withdraw]")!.textContent).toContain(t("review.flipApprove.withdrawHint"));
+  // 改判單不冷凍討論
+  expect(el.querySelector(".hold-entry")).toBeNull();
 
   button(t("review.flipApprove.withdrawAction"))!.click();
   await vi.waitFor(() => expect(confirmState.current).toBeTruthy());

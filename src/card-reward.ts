@@ -85,7 +85,8 @@ const PRE_REVIEW_LISTING = `(SELECT MIN(r.registered_at) FROM card_registrations
 /** 第一次過審上架的時間（資格的起點，owner 2026-10-17）；從沒上架過是 NULL。 */
 const LISTED_AT = `COALESCE(MIN((SELECT MIN(s.decided_at) ${FIRST_LISTING}), ${PRE_REVIEW_LISTING}), (SELECT MIN(s.decided_at) ${FIRST_LISTING}), ${PRE_REVIEW_LISTING})`;
 /** 那一次上架是什麼時候送審的（資格的終點：活動結束前送審，之後才過審也算）。 */
-const LISTED_SUBMITTED = `(SELECT s.submitted_at ${FIRST_LISTING} ORDER BY s.decided_at LIMIT 1)`;
+// 駁回改判為通過（0152）：改判單是同一次送審，送審時間看它改判的那張
+const LISTED_SUBMITTED = `(SELECT COALESCE((SELECT o.submitted_at FROM review_submissions o WHERE o.id = s.flip_of), s.submitted_at) ${FIRST_LISTING} ORDER BY s.decided_at LIMIT 1)`;
 const LIVE = "('pending', 'blocked_insufficient', 'paid')";
 
 /**
@@ -381,7 +382,7 @@ export async function myProgress(db: D1Database, memberId: string, campaign: Rew
       (SELECT r.amount + CASE WHEN r.status='paid' THEN COALESCE((SELECT SUM(t.amount) FROM card_reward_topups t WHERE t.reward_id=r.id AND t.status='paid'),0) ELSE 0 END
        FROM card_rewards r WHERE r.work_key = x.work_key AND r.status IN ${LIVE}) AS amount
     FROM (SELECT cw.*, ${LISTED_AT} AS listed_at, ${LISTED_SUBMITTED} AS listed_submitted,
-            (SELECT MAX(s.submitted_at) FROM review_submissions s WHERE s.card_id = cw.card_id AND s.kind = 'first') AS current_submitted
+            (SELECT MAX(s.submitted_at) FROM review_submissions s WHERE s.card_id = cw.card_id AND s.kind = 'first' AND s.flip_of IS NULL) AS current_submitted
           FROM (${CARD_BASE}) cw WHERE cw.member_id = ?1) x
     JOIN cards c ON c.id = x.card_id
     WHERE (x.listed_at >= ?2 AND x.listed_submitted < ?3) OR (x.listed_at IS NULL AND x.current_submitted < ?3)
@@ -415,7 +416,7 @@ export const RULE_NOTICE_INSERT_SQL = `WITH candidates(member_id) AS (
        FROM review_submissions s
        JOIN cards c ON c.id = s.card_id
        WHERE c.provider = 'harbor'
-         AND s.kind = 'first'
+         AND s.kind = 'first' AND s.flip_of IS NULL
          AND s.submitted_at >= ?6
          AND s.submitted_at < ?7
      )

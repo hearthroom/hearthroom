@@ -1843,7 +1843,7 @@ app.get('/v1/mine/reviews/:id',async(c)=>{
   coalesce(x.state='complete' AND json_array_length(json_extract(x.command,'$.rewardPayoutEntryIds'))>0,0) AS rewardKept
   FROM review_submissions s
   -- 改判通過後版本列轉給了改判單（0152）：原本那張駁回的結果頁照樣打得開
-  JOIN hosting_versions v ON v.submission_id IN (s.id,(SELECT f.id FROM review_submissions f WHERE f.flip_of=s.id AND f.status='approved'))
+  JOIN hosting_versions v ON v.submission_id IN (s.id,(SELECT f.id FROM review_submissions f WHERE f.flip_of=s.id AND f.status IN ('pending','approved') LIMIT 1))
   JOIN works w ON w.id=v.work_id
   LEFT JOIN review_corrections x ON x.submission_id=s.id AND x.state='complete'
   WHERE s.id=? AND w.member_id=? AND NOT ${FLIP_HIDDEN('s')}`).bind(c.req.param('id'),member.id).first<{

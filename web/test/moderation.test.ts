@@ -111,3 +111,26 @@ it('opens the works tab already searching the card number from the link',async()
  await vi.waitFor(()=>expect(mock.request).toHaveBeenCalledWith(expect.stringMatching(/^\/cards\?q=100003&/),'reviewer'));
  expect(el.querySelector<HTMLInputElement>('input[type="search"], input')?.value).toBe('100003');
 });
+
+// 駁回改判為通過（ui-flip-approve.md）：作品管理的審核歷程，管理員在駁回列看到入口（到詳情結果卡填理由）；
+// 改判審核中、改判單本身照實標示
+it('card history: a rejected row offers change-to-approved when the server allows it, and flip rows are labelled',async()=>{
+ mock.request.mockImplementation(async(path:string)=>{
+  if(path.startsWith('/cards?'))return {items:[{id:'card1',name:'Card one'}]};
+  if(path.startsWith('/cards/card1'))return {card:{id:'card1',name:'Card one',tags:[],boardHidden:false,publicBlocked:false,status:'rejected'},cases:[],events:[],reviews:[
+   {id:'s2',kind:'first',status:'rejected',note:'Wrong call',submittedAt:2,version:'version:v2',reopen:0,flip:{pendingId:null,approvedId:null,canStart:true}},
+   {id:'s1',kind:'first',status:'rejected',note:'Earlier',submittedAt:1,version:'version:v1',reopen:0,flip:{pendingId:'f1',approvedId:null,canStart:false}},
+   {id:'f1',kind:'first',status:'pending',note:'',submittedAt:3,version:'version:v1',reopen:0,flipOf:'s1',flip:{pendingId:null,approvedId:null,canStart:false}},
+  ]};
+  return {items:[]};
+ });
+ await router.push('/review/cards');await vi.waitFor(()=>expect(el.textContent).toContain('Card one'));
+ el.querySelector<HTMLButtonElement>('.work-item')!.click();
+ await vi.waitFor(()=>expect(el.querySelector('[data-history-review="s2"]')).not.toBeNull());
+ const entry=el.querySelector('[data-history-review="s2"] [data-flip-entry]')!;
+ expect(entry.getAttribute('href')).toBe('/review/s2?flip=1');
+ expect(entry.textContent?.trim()).toBe(i18n.global.t('review.flipApprove.action'));
+ expect(el.querySelector('[data-history-review="s1"] [data-flip-entry]')).toBeNull();
+ expect(el.querySelector('[data-history-review="s1"]')!.textContent).toContain(i18n.global.t('review.history.flipPending'));
+ expect(el.querySelector('[data-history-review="f1"]')!.textContent).toContain(i18n.global.t('review.flipApprove.detailChip'));
+});
