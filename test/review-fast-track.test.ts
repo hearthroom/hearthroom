@@ -3,8 +3,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { legacyPolicyFixture, restoreLegacyPolicyFixture } from './work-policy-fixture';
 import { bearer, identities, makeReviewer, ratingBody, resetDb, restoreUpstream, reviewOff, reviewOn, reviewUpstream, rolesOnMainSite } from './helpers';
 import { opsMetrics } from '../src/ops-metrics';
-import { FAST_TRACK_ACTOR } from '../src/review-fast-track';
-import { STAMPS_REQUIRED } from '../src/review';
+import { FAST_TRACK_ACTOR, fastTrackSeams } from '../src/review-fast-track';
+import { CLAIM_TTL_MS, claim, STAMPS_REQUIRED } from '../src/review';
 
 // AI 審卡快速通道（任務 2026-11-25-ai-review-fast-track）：已上架卡的更新，分級不變、AI 用目前判準判通過且沒有審核標記，就自動核准。
 const KEY = 'b'.repeat(64);
@@ -27,7 +27,7 @@ beforeEach(async () => {
   await seedReviewAgentIdentity();
   (env as { REVIEW_AGENT_CONFIG?: string }).REVIEW_AGENT_CONFIG = JSON.stringify({ memberId: 'system-review-agent', keySha256: await sha(KEY) });
 });
-afterEach(() => { restoreUpstream(); reviewOff(); restoreLegacyPolicyFixture(); delete (env as { REVIEW_AGENT_CONFIG?: string }).REVIEW_AGENT_CONFIG; });
+afterEach(() => { Object.assign(fastTrackSeams ?? {}, { afterClaim: null, beforeStamp: null }); restoreUpstream(); reviewOff(); restoreLegacyPolicyFixture(); delete (env as { REVIEW_AGENT_CONFIG?: string }).REVIEW_AGENT_CONFIG; });
 
 const json = async (res: Response) => (await res.json()) as any;
 const post = (path: string, token: string, body: unknown = {}) => SELF.fetch(`https://c.test${path}`, { method: 'POST', headers: { ...bearer(token), 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -284,5 +284,91 @@ describe('撤回、紀錄與報表', () => {
     expect((await post(`/v1/review/${update}/correction`, 'mgr', { operationId: crypto.randomUUID(), note: '這次更新的開場還需要調整。' })).status).toBe(200);
     v1 = await report();
     expect(v1.fastTrack).toMatchObject({ approved: 1, revoked: 1 });
+  });
+});
+
+describe('寫入順序與競態（獨立審查 2026-11-25）', () => {
+  const checks = async (id: string) => (await env.DB.prepare("SELECT source FROM review_events WHERE submission_id=? AND action='fast_track_check' ORDER BY id").bind(id).all<{ source: string }>()).results.map((r) => r.source);
+  const claimOf = async (id: string) => (await env.DB.prepare('SELECT claimed_by FROM review_submissions WHERE id=?').bind(id).first<{ claimed_by: string | null }>())!.claimed_by;
+  const stampCount = async (id: string) => (await env.DB.prepare('SELECT COUNT(*) AS n FROM review_stamps WHERE submission_id=?').bind(id).first<{ n: number }>())!.n;
+
+  it('先打標記、再寫沒帶 flags 的通過：標記保留，不走快速通道；明寫 flags: [] 才清掉', async () => {
+    const { update } = await liveCardWithUpdate();
+    await suggest(update, { verdict: undefined, flags: ['copied_text'] }, 'tags');
+    await SELF.fetch(`https://c.test/v1/review-ai/submissions/${update}/suggestion`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-Review-Agent-Key': KEY },
+      body: JSON.stringify({ criteriaVersion: 'v1', model: 'deepseek/deepseek-v4.1-flash', verdict: 'pass' }),
+    });
+    expect(await statusOf(update)).toBe('pending');
+    expect(JSON.parse((await env.DB.prepare('SELECT flags FROM review_ai_suggestions WHERE submission_id=?').bind(update).first<{ flags: string }>())!.flags)).toEqual(['copied_text']);
+    expect(await checks(update)).toEqual(['ineligible_flags']);
+    await suggest(update, { flags: [] });
+    expect(await statusOf(update)).toBe('approved');
+  });
+
+  it('同一判準版本另一個審卡員判了不通過或打了標記：不走快速通道', async () => {
+    const { update } = await liveCardWithUpdate();
+    const other = (verdict: string, flags: string[]) => env.DB.prepare(`INSERT INTO review_ai_suggestions (id,submission_id,card_id,agent_member_id,criteria_version,model,verdict,reasons,flags,phase,created_at,updated_at)
+      SELECT ?, id, card_id, 'other-agent', 'v1', 'm', ?, '[]', ?, 'shadow', 0, 0 FROM review_submissions WHERE id=?
+      ON CONFLICT(submission_id,agent_member_id,criteria_version) DO UPDATE SET verdict=excluded.verdict, flags=excluded.flags`).bind(crypto.randomUUID(), verdict, JSON.stringify(flags), update).run();
+    await other('reject', []);
+    await suggest(update);
+    expect(await statusOf(update)).toBe('pending');
+    await other('pass', ['mass_produced']);
+    await suggest(update, { model: 'deepseek/deepseek-v4.1-flash-2' });
+    expect(await statusOf(update)).toBe('pending');
+    expect(await checks(update)).toEqual(['ineligible_verdict', 'ineligible_flags']);
+  });
+
+  it('領取之後卡片被封鎖：重新檢查擋下，放回領取', async () => {
+    const { update } = await liveCardWithUpdate();
+    fastTrackSeams.afterClaim = async () => { await env.DB.prepare('UPDATE cards SET public_blocked=1').run(); };
+    await suggest(update);
+    expect(await statusOf(update)).toBe('pending');
+    expect(await claimOf(update)).toBeNull();
+    expect(await stampCount(update)).toBe(0);
+    expect(await checks(update)).toEqual(['ineligible_status']);
+  });
+
+  it('重新檢查之後、蓋章那一批之前卡片被下架或封鎖：整批不寫，放回領取', async () => {
+    const { update } = await liveCardWithUpdate();
+    fastTrackSeams.beforeStamp = async () => { await env.DB.prepare("UPDATE cards SET board_hidden=1").run(); };
+    await suggest(update);
+    expect(await statusOf(update)).toBe('pending');
+    expect(await claimOf(update)).toBeNull();
+    expect(await stampCount(update)).toBe(0);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action='review_fast_track_approve'").first()).toEqual({ n: 0 });
+    expect(await checks(update)).toEqual(['ineligible_status']);
+    expect(await env.DB.prepare('SELECT status, board_hidden FROM cards').first()).toEqual({ status: 'approved', board_hidden: 1 });
+  });
+
+  it('核准的判定事件跟蓋章同一批；中途出錯也放回領取', async () => {
+    const { update } = await liveCardWithUpdate();
+    fastTrackSeams.beforeStamp = async () => { throw new Error('injected'); };
+    await suggest(update);
+    expect(await statusOf(update)).toBe('pending');
+    expect(await claimOf(update)).toBeNull();
+    expect(await checks(update)).toEqual(['error']);
+    fastTrackSeams.beforeStamp = null;
+    await suggest(update, { model: 'deepseek/deepseek-v4.1-flash-2' });
+    expect(await statusOf(update)).toBe('approved');
+    expect(await checks(update)).toEqual(['error', 'approved']);
+  });
+
+  it('系統領取在蓋章前中斷（Worker 掛掉）：一分鐘後審核員就能領', async () => {
+    const { update } = await liveCardWithUpdate();
+    const reviewerId = (await env.DB.prepare("SELECT member_id FROM reviewers WHERE member_id<>? AND role<>'manager' LIMIT 1").bind(managerId).first<{ member_id: string }>())!.member_id;
+    let claimedAt = 0;
+    fastTrackSeams.afterClaim = async (id) => {
+      claimedAt = (await env.DB.prepare('SELECT claimed_at FROM review_submissions WHERE id=?').bind(id).first<{ claimed_at: number }>())!.claimed_at;
+      // 這時候系統還領著：一分鐘內別人領不到，過了一分鐘就領得到
+      await expect(claim(env.DB, id, reviewerId, Date.now())).rejects.toThrow();
+      await claim(env.DB, id, reviewerId, Date.now() + 61_000);
+    };
+    await suggest(update);
+    expect(claimedAt).toBeLessThanOrEqual(Date.now() - CLAIM_TTL_MS + 61_000);
+    expect(await statusOf(update)).toBe('pending');
+    expect(await claimOf(update)).toBe(reviewerId);
+    expect(await checks(update)).toEqual(['skipped_decided']);
   });
 });

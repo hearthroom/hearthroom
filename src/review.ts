@@ -529,7 +529,8 @@ export async function stamp(
       key: `stamp:${row.id}:${input.memberId}`, submissionId: row.id, cardId: row.card_id, at: input.now, action: input.verdict,
       from: "pending", actorKind: system ? "system" : "reviewer", actorMemberId: input.memberId, source: rejection?.legacy ? "legacy_note" : null,
       reasons: rejection?.reasons ?? null, reasonVersion: rejection ? REVIEW_REASON_VERSION : null, coaching: rejection ? coaching : null,
-      claimElapsedMs: row.claimed_at === null ? null : Math.max(0, input.now - row.claimed_at), ctx: await queueContext(db, row.id), marks,
+      // 系統領取的時間是倒填的（review-fast-track.ts），不是審核員看了多久
+      claimElapsedMs: system || row.claimed_at === null ? null : Math.max(0, input.now - row.claimed_at), ctx: await queueContext(db, row.id), marks,
       finalSource: input.final?.source ?? null, aiSuggestionId: input.final?.aiSuggestionId ?? null, aiNoteTypes: input.final?.aiNoteTypes ?? null, aiNote: input.final?.aiNote ?? null,
       ...(suggestions.length ? { reasons: suggestions, reasonVersion: REVIEW_REASON_VERSION, source: "suggestions" } : {}),
     }),

@@ -77,8 +77,9 @@ const sameDescriptors = (a: string | null, b: string | null) => {
   return x !== null && y !== null && x.length === y.length && x.every((v, i) => v === y[i]);
 };
 
-function structural(r: Row, now: number): FastTrackOutcome | null {
-  const claimedLive = !!r.claimed_by && r.claimed_at !== null && now - r.claimed_at < CLAIM_TTL_MS;
+/** self：系統自己已經領著（領取後的重新檢查），自己的領取不算「人工在處理」 */
+function structural(r: Row, now: number, self = false): FastTrackOutcome | null {
+  const claimedLive = !!r.claimed_by && r.claimed_at !== null && now - r.claimed_at < CLAIM_TTL_MS && !(self && r.claimed_by === FAST_TRACK_ACTOR);
   if (r.status !== "pending" || r.stamped || r.decided || claimedLive) return "skipped_decided";
   if (r.flip_of || r.reopen_of || r.held || r.dropped || r.drop_case_open || r.after_drop) return "ineligible_status";
   if (r.previous_status !== "approved") return "ineligible_status";
@@ -96,66 +97,122 @@ export async function tryFastTrack(env: Env, submissionId: string, trigger: { su
   const db = env.DB;
   let outcome: FastTrackOutcome;
   let cardId: number | null = null;
+  // 核准時判定事件跟蓋章同一批寫（recorded）：報表的核准數不會超過分母
+  let recorded = false;
   try {
     const row = await loadRow(db, submissionId);
     if (!row) return "skipped_decided";
     cardId = row.card_id;
     outcome = structural(row, now) ?? await verdictGate(db, submissionId);
-    if (outcome === "approved") outcome = await approve(env, submissionId, now);
-  } catch {
+    if (outcome === "approved") ({ outcome, recorded } = await approve(env, submissionId, trigger, now));
+  } catch (error) {
     outcome = "error";
+    console.error("AI 快速通道判定失敗", error instanceof Error ? error.message : "unknown");
   }
-  if (cardId !== null) {
-    // 每次判定記一筆系統事件（source＝結果），報表的分母從這裡算
-    await reviewEventStatement(db, {
-      key: `fast_track:${submissionId}:${trigger.suggestionId}:${trigger.at}`, submissionId, cardId, at: now, action: "fast_track_check",
-      actorKind: "system", source: outcome, aiSuggestionId: trigger.suggestionId,
-    }).run().catch(() => undefined);
+  if (cardId !== null && !recorded) {
+    try { await checkEvent(db, submissionId, cardId, trigger, outcome, now).run(); }
+    catch (error) { console.error("AI 快速通道判定事件寫入失敗", error instanceof Error ? error.message : "unknown"); }
   }
   await bumpOp(db, "review_fast_track", "evaluate", outcome);
   return outcome;
 }
 
-/** AI 結論：目前判準版本（必須有）的「通過」，而且沒有任何審核標記 */
+/** 每次判定一筆系統事件（source＝結果），報表的分母從這裡算；同一筆 AI 結論只記一次 */
+const checkEvent = (db: D1Database, submissionId: string, cardId: number, trigger: { suggestionId: string; at: number }, outcome: FastTrackOutcome, now: number) =>
+  reviewEventStatement(db, {
+    key: `fast_track:${submissionId}:${trigger.suggestionId}:${trigger.at}`, submissionId, cardId, at: now, action: "fast_track_check",
+    actorKind: "system", source: outcome, aiSuggestionId: trigger.suggestionId,
+  });
+
+/**
+ * AI 結論：目前判準版本（必須有）最新的一筆是「通過」、沒有審核標記；而且同一判準版本裡，任何審卡員對這張單
+ * 都沒有判過不通過或交人、沒有打過標記（之後多一個審卡員時，任一個有疑慮就交人工）。
+ */
 async function verdictGate(db: D1Database, submissionId: string): Promise<FastTrackOutcome> {
   const current = await currentCriteria(db);
   const ai = await aiStateOf(db, submissionId);
   if (!current || ai.state !== "ready" || ai.suggestion.criteriaVersion !== current || ai.suggestion.verdict !== "pass") return "ineligible_verdict";
   if (ai.suggestion.flags.length) return "ineligible_flags";
+  const any = await db.prepare(`SELECT COALESCE(MAX(verdict IS NOT NULL AND verdict<>'pass'), 0) AS doubt, COALESCE(MAX(json_array_length(flags) > 0), 0) AS flagged
+    FROM review_ai_suggestions WHERE submission_id=? AND criteria_version=?`).bind(submissionId, current).first<{ doubt: number; flagged: number }>();
+  if (any?.doubt) return "ineligible_verdict";
+  if (any?.flagged) return "ineligible_flags";
   return "approved";
 }
 
-async function approve(env: Env, submissionId: string, now: number): Promise<FastTrackOutcome> {
+/** 測試用的接縫：領取之後、蓋章那一批之前插入動作（模擬這段時間裡卡片被處置或 Worker 出錯） */
+export const fastTrackSeams: { afterClaim: ((submissionId: string) => Promise<void>) | null; beforeStamp: ((submissionId: string) => Promise<void>) | null } = { afterClaim: null, beforeStamp: null };
+
+/**
+ * 系統的領取一寫下去就已經「領了 44 分鐘」：Worker 在領取與蓋章之間掛掉時，一分鐘後領取就逾時，
+ * 審核員不會被擋 45 分鐘。一般情況下沒核准的每條路都會在 finally 放回。
+ */
+const SYSTEM_CLAIM_WINDOW_MS = 60_000;
+
+/** 蓋章那一批裡最後一次確認卡片仍在上架、沒被處置、沒冷凍、分級沒變；不成立就讓整批失敗（見 approve 的稽核列） */
+const LIVE_AT_WRITE = `EXISTS(SELECT 1 FROM review_submissions s JOIN cards c ON c.id=s.card_id
+  JOIN hosting_versions lv ON lv.version_id=c.approved_version_id AND lv.state='approved'
+  WHERE s.id=?1 AND c.status='approved' AND c.public_blocked=0 AND c.board_hidden=0 AND c.rating IS s.rating
+  AND NOT EXISTS(SELECT 1 FROM moderation_blocked_versions b WHERE b.version_id=c.approved_version_id)
+  AND NOT EXISTS(SELECT 1 FROM moderation_cases m WHERE m.provider=c.provider AND m.source_role_id=c.source_role_id AND m.status IN ('pending','disputed'))
+  AND NOT EXISTS(SELECT 1 FROM review_holds h WHERE h.card_id=s.card_id)
+  AND NOT EXISTS(SELECT 1 FROM managed_work_access p WHERE p.provider=c.provider AND p.source_role_id=c.source_role_id
+    AND (p.access<>'public' OR p.restriction<>'none' OR p.sync_state<>'complete')))`;
+
+async function approve(env: Env, submissionId: string, trigger: { suggestionId: string; at: number }, now: number): Promise<{ outcome: FastTrackOutcome; recorded: boolean }> {
   const db = env.DB;
-  // 領取前、蓋章前都再看一次 AI 結論：審卡員可能剛重判
+  const no = (outcome: FastTrackOutcome) => ({ outcome, recorded: false });
+  // 領取前再看一次 AI 結論：審卡員可能剛重判
   const ai = await aiStateOf(db, submissionId);
-  if (ai.state !== "ready" || ai.suggestion.verdict !== "pass" || ai.suggestion.flags.length) return "ineligible_verdict";
+  if (ai.state !== "ready" || ai.suggestion.verdict !== "pass" || ai.suggestion.flags.length) return no("ineligible_verdict");
   let generation: string;
   try {
-    generation = (await claim(db, submissionId, FAST_TRACK_ACTOR, now)).claim_generation;
+    generation = (await claim(db, submissionId, FAST_TRACK_ACTOR, now - CLAIM_TTL_MS + SYSTEM_CLAIM_WINDOW_MS)).claim_generation;
   } catch (error) {
-    if (error instanceof HttpError && error.status === 409) return "skipped_decided";
+    if (error instanceof HttpError && error.status === 409) return no("skipped_decided");
     throw error;
   }
-  const s = ai.suggestion;
-  // 稽核跟蓋章同一批：附 AI 判定摘要（判準版本、理由代碼、審核標記、建議編號）。同一張單只會有一筆
-  const audit = db.prepare(`INSERT INTO audit_log (id, subject_kind, subject_id, actor_member_id, actor_kind, action, reason, before_json, after_json, operation_id, created_at)
-    SELECT ?, 'review_submission', s.id, NULL, 'ai', 'review_fast_track_approve', '', json_object('status', 'pending'), ?, ?, ? FROM review_submissions s WHERE s.id = ?
-    ON CONFLICT(id) DO NOTHING`)
-    .bind(`fast-track:${submissionId}`, JSON.stringify({ criteriaVersion: s.criteriaVersion, reasons: s.reasons, flags: s.flags, suggestionId: s.id, model: s.model, finalSource: FAST_TRACK_SOURCE }),
-      `fast-track:${submissionId}`, now, submissionId);
+  let approved = false;
+  // 重新讀一次：領取之前判的結構條件，這段時間裡卡片可能被下架、封鎖、處置
+  const recheck = async () => { const r = await loadRow(db, submissionId); return r ? structural(r, now, true) : "skipped_decided"; };
   try {
-    await stamp(db, {
-      submissionId, memberId: FAST_TRACK_ACTOR, verdict: "approve", note: "", now, generation,
-      final: { source: FAST_TRACK_SOURCE, aiSuggestionId: s.id, aiNoteTypes: [], aiNote: "", retainMs: RETAIN_MS, system: { writes: [audit] } },
-    }, env);
-    return "approved";
-  } catch (error) {
-    // 託管作品：核准決定已經記下、只差同步完成（之後由排程補完）＝已核准
-    if (await db.prepare("SELECT 1 FROM review_stamps WHERE submission_id = ? AND member_id = ?").bind(submissionId, FAST_TRACK_ACTOR).first()) return "approved";
-    await release(db, submissionId, FAST_TRACK_ACTOR, generation).catch(() => undefined);
-    if (error instanceof HttpError && error.status === 409) return "skipped_decided";
-    throw error;
+    await fastTrackSeams.afterClaim?.(submissionId);
+    const changed = await recheck();
+    if (changed) return no(changed);
+    await fastTrackSeams.beforeStamp?.(submissionId);
+    const s = ai.suggestion;
+    // 稽核跟蓋章同一批：附 AI 判定摘要（判準版本、理由代碼、審核標記、建議編號）。同一張單只會有一筆。
+    // 它同時是這一批的守衛：卡片在這一刻已不在上架（LIVE_AT_WRITE 不成立）時 actor_kind 寫成不合法的值，
+    // CHECK 失敗讓整批（蓋章、核准、上架）一起不寫；D1 的 batch 不能 RAISE，用約束代替
+    const audit = db.prepare(`INSERT INTO audit_log (id, subject_kind, subject_id, actor_member_id, actor_kind, action, reason, before_json, after_json, operation_id, created_at)
+      SELECT ?2, 'review_submission', ?1, NULL, CASE WHEN ${LIVE_AT_WRITE} THEN 'ai' ELSE 'fast_track_card_not_live' END,
+        'review_fast_track_approve', '', json_object('status', 'pending'), ?3, ?2, ?4
+      WHERE EXISTS(SELECT 1 FROM review_submissions WHERE id=?1)
+      ON CONFLICT(id) DO NOTHING`)
+      .bind(submissionId, `fast-track:${submissionId}`,
+        JSON.stringify({ criteriaVersion: s.criteriaVersion, reasons: s.reasons, flags: s.flags, suggestionId: s.id, model: s.model, finalSource: FAST_TRACK_SOURCE }), now);
+    const row = await loadRow(db, submissionId);
+    try {
+      await stamp(db, {
+        submissionId, memberId: FAST_TRACK_ACTOR, verdict: "approve", note: "", now, generation,
+        final: { source: FAST_TRACK_SOURCE, aiSuggestionId: s.id, aiNoteTypes: [], aiNote: "", retainMs: RETAIN_MS,
+          system: { writes: [audit, checkEvent(db, submissionId, row!.card_id, trigger, "approved", now)] } },
+      }, env);
+      approved = true;
+      return { outcome: "approved", recorded: true };
+    } catch (error) {
+      // 託管作品：核准決定已經記下、只差同步完成（之後由排程補完）＝已核准
+      if (await db.prepare("SELECT 1 FROM review_stamps WHERE submission_id = ? AND member_id = ?").bind(submissionId, FAST_TRACK_ACTOR).first()) {
+        approved = true;
+        return { outcome: "approved", recorded: true };
+      }
+      const after = await recheck();
+      if (after) return no(after);
+      if (error instanceof HttpError && error.status === 409) return no("skipped_decided");
+      throw error;
+    }
+  } finally {
+    if (!approved) await release(db, submissionId, FAST_TRACK_ACTOR, generation).catch((error) => console.error("AI 快速通道放回領取失敗", error instanceof Error ? error.message : "unknown"));
   }
 }
 

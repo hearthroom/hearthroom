@@ -340,6 +340,8 @@ export async function authorActivity(db: D1Database, submissionId: string, now: 
 
 export interface SuggestionInput {
   criteriaVersion: string; model: string; verdict: AiVerdict | null; reasons: string[]; flags: string[];
+  /** 這次有沒有帶 flags：沒帶就保留已存的標記 */
+  flagsGiven?: boolean;
   confidence: number | null; note: string; handoffCause: string | null;
   /** 給作者的詳細說明草稿：只寫卡片本身，不帶作者行為、額度、裝置、分數 */
   authorNote: string;
@@ -366,8 +368,10 @@ export function parseSuggestion(body: Record<string, unknown>, opts: { tagsOnly?
   const model = body.model;
   if (typeof model !== "string" || !/^[\w./:@-]{1,100}$/.test(model)) bad("model");
   const flags = codes(body.flags, AI_FLAGS, "flags");
+  // 沒帶 flags＝不動已存的審核標記（例如先用 tags 打過）；明寫 [] 才清掉
+  const flagsGiven = body.flags !== undefined && body.flags !== null;
   if (opts.tagsOnly) {
-    return { criteriaVersion: criteriaVersion as string, model: model as string, verdict: null, reasons: [], flags, confidence: null, note: "", handoffCause: null, authorNote: "", inputTokens: null, outputTokens: null, costUsd: null, latencyMs: null };
+    return { criteriaVersion: criteriaVersion as string, model: model as string, verdict: null, reasons: [], flags, flagsGiven: true, confidence: null, note: "", handoffCause: null, authorNote: "", inputTokens: null, outputTokens: null, costUsd: null, latencyMs: null };
   }
   if (!oneOf(body.verdict, AI_VERDICTS)) bad("verdict");
   const verdict = body.verdict as AiVerdict;
@@ -395,7 +399,7 @@ export function parseSuggestion(body: Record<string, unknown>, opts: { tagsOnly?
     hint: "authorNote is shown to the card's author. Describe only the card itself (opening, setting, lorebook, writing) and how to improve it. Keep submission quota, pace, devices, accounts and scores in note, which only reviewers see.",
   });
   return {
-    criteriaVersion: criteriaVersion as string, model: model as string, verdict, reasons, flags, confidence, note: (note as string).trim(), handoffCause, authorNote: (authorNote as string).trim(),
+    criteriaVersion: criteriaVersion as string, model: model as string, verdict, reasons, flags, flagsGiven, confidence, note: (note as string).trim(), handoffCause, authorNote: (authorNote as string).trim(),
     inputTokens: count(body.inputTokens, "inputTokens"), outputTokens: count(body.outputTokens, "outputTokens"),
     costUsd: count(body.costUsd, "costUsd", 100), latencyMs: count(body.latencyMs, "latencyMs", 86_400_000),
   };
@@ -408,7 +412,7 @@ export async function saveSuggestion(db: D1Database, input: SuggestionInput & { 
   const update = opts.tagsOnly
     // 只打標記不動 updated_at：updated_at 代表結論何時改過（揭曉後「用 AI 的」靠它認出 AI 重判）
     ? "flags=excluded.flags,model=excluded.model"
-    : "model=excluded.model,verdict=excluded.verdict,reasons=excluded.reasons,flags=excluded.flags,confidence=excluded.confidence,handoff_cause=excluded.handoff_cause,note=excluded.note,author_note=excluded.author_note,phase=excluded.phase,input_tokens=excluded.input_tokens,output_tokens=excluded.output_tokens,cost_usd=excluded.cost_usd,latency_ms=excluded.latency_ms,updated_at=excluded.updated_at";
+    : `model=excluded.model,verdict=excluded.verdict,reasons=excluded.reasons,flags=${input.flagsGiven === false ? "review_ai_suggestions.flags" : "excluded.flags"},confidence=excluded.confidence,handoff_cause=excluded.handoff_cause,note=excluded.note,author_note=excluded.author_note,phase=excluded.phase,input_tokens=excluded.input_tokens,output_tokens=excluded.output_tokens,cost_usd=excluded.cost_usd,latency_ms=excluded.latency_ms,updated_at=excluded.updated_at`;
   const row = await db.prepare(`INSERT INTO review_ai_suggestions (${cols}) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     ON CONFLICT(submission_id,agent_member_id,criteria_version) DO UPDATE SET ${update} RETURNING id, verdict, phase, updated_at`)
     .bind(id, input.submissionId, input.cardId, input.agentId, input.criteriaVersion, input.model, input.verdict, JSON.stringify(input.reasons), JSON.stringify(input.flags),
