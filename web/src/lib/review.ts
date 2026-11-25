@@ -34,7 +34,7 @@ export const useReviewer = defineStore("reviewer", () => {
 
   function resetCounts() { featured.value = null; featuredProvider.value = null; pending.value = 0; pendingReviews.value = 0; pendingCases.value = 0; pendingComments.value = 0; checkedRole.value = "reviewer"; blogWriter.value = false; }
 
-  async function refresh(): Promise<boolean> {
+  async function refresh(load = fetchReviewMe): Promise<boolean> {
     const requestGeneration = ++generation;
     const provider = currentProvider();
     try {
@@ -45,7 +45,7 @@ export const useReviewer = defineStore("reviewer", () => {
         reviewer.value = false; resetCounts();
         return false;
       }
-      const result = await fetchReviewMe(token, provider);
+      const result = await load(token, provider);
       if (requestGeneration !== generation) return !!reviewer.value;
       if (provider !== currentProvider()) { reviewer.value = null; resetCounts(); return false; }
       reviewer.value = result.reviewer;

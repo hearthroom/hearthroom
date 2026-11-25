@@ -788,8 +788,23 @@ export interface ReviewDetail {
 /** 精選：呼叫者在供應商那邊是不是本站的社群代表，以及本站精選名額用了多少。老供應商沒有這條路時是 null。 */
 export interface FeaturedStatus { admin: boolean; featuredUsed: number; featuredQuota: number }
 
-export async function fetchReviewMe(token: string, provider = currentProvider()): Promise<{ reviewer: boolean; pending?:number; reviews?:number; cases?:number; comments?:number; role?:"reviewer"|"manager"|"owner"; featured?: FeaturedStatus | null; blogWriter?: boolean }> {
+export interface ReviewMe { reviewer: boolean; pending?:number; reviews?:number; cases?:number; comments?:number; role?:"reviewer"|"manager"|"owner"; featured?: FeaturedStatus | null; blogWriter?: boolean }
+export interface HeaderSummary { review: ReviewMe | null; notifications: { unread: number } | null }
+
+export async function fetchReviewMe(token: string, provider = currentProvider()): Promise<ReviewMe> {
   return json(await fetch(`${COMMUNITY_API}/review/me`, { headers: { ...from(), "X-Provider": provider, ...authHeaders(token) } }));
+}
+
+export async function fetchHeaderSummary(token: string, provider: ProviderId, lang: string): Promise<HeaderSummary | null> {
+  const query = new URLSearchParams({ lang });
+  const response = await fetch(`${COMMUNITY_API}/me/header-summary?${query}`, {
+    headers: { ...from(), "X-Provider": provider, ...authHeaders(token), "X-Device-Token": deviceToken() },
+    cache: "no-store",
+    redirect: "error",
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (response.status === 404) return null;
+  return json<HeaderSummary>(response);
 }
 
 export async function fetchReviewQueue(token: string, lang?: string, tab?: "new" | "updates"): Promise<{ items: ReviewQueueItem[]; claimTtlMs: number; counts?: ReviewQueueCounts; batchGroups?: ReviewBatchGroup[] }> {

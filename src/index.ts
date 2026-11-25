@@ -41,7 +41,7 @@ import { listReviewDecisions, correctReview, correctionEligibility } from './rev
 import { flipDetail, startFlip, withdrawFlip } from './review-flip';
 import { pickLocale } from './types';
 import { communityMaintenance, NOTIFICATION_RETENTION_MS, purgeExpiredCommunityNotifications } from "./community/service";
-import { communityRoutes } from "./community/routes";
+import { communityRoutes, notificationSummary } from "./community/routes";
 import { dispatchPush, queuePush } from "./community/push";
 import { libraryRoutes } from "./library";
 import {workSharingRoutes} from './work-sharing';
@@ -1784,24 +1784,46 @@ app.get('/v1/hosting/versions/:versionId/decision',async(c)=>{
 // 佇列不帶作者；審核頁帶原作者與他的其他卡（owner 2026-11-08 取消盲審，見 review-author.ts）。詳情是作者送審當下本站替這張單存的快照，定案就刪；
 // 同步開的重審單沒有快照（那時手上沒有作者的 token），審核人看的是變動後的公開資料。
 
-app.get("/v1/review/me", async (c) => {
-  const member = await requireMember(c);
-  const summary = await reviewSummary(c.env.DB, member);
+async function reviewerSummary(env: Env, member: { id: string }, bearer: string, provider: ReturnType<typeof providerOf>) {
+  const summary = await reviewSummary(env.DB, member);
   // 精選開關要不要出現：問供應商「這個人能不能代表本站」。只對審核人問——別人不會看到管理面板。
   let featured: CommunityStatus | null = null;
-  const bearer = bearerOf(c), provider = providerOf(c);
   if (summary.reviewer) {
     try {
-      featured = await upstream.fetchCommunityStatus(c.env, bearer, provider);
+      featured = await upstream.fetchCommunityStatus(env, bearer, provider);
     } catch {
       featured = null;
     }
   }
   // 部落格入口：應用 owner／admin 就有，不必是審核人。審核人剛問過供應商，直接用那個答案；其他人走一小時的快取。
   const blogWriter = summary.reviewer
-    ? featured?.admin === true && !(await isReviewAgent(c.env.DB, member.id))
-    : await blogWriterHint(c.env, member.id, bearer, provider);
-  return c.json({ ...summary, featured, blogWriter }, 200, { "Cache-Control": "private, no-store" });
+    ? featured?.admin === true && !(await isReviewAgent(env.DB, member.id))
+    : await blogWriterHint(env, member.id, bearer, provider);
+  return { ...summary, featured, blogWriter };
+}
+
+app.get("/v1/review/me", async (c) => {
+  const member = await requireMember(c);
+  return c.json(await reviewerSummary(c.env, member, bearerOf(c), providerOf(c)), 200, { "Cache-Control": "private, no-store" });
+});
+
+app.get("/v1/me/header-summary", async (c) => {
+  c.header("Cache-Control", "private, no-store");
+  c.header("Referrer-Policy", "no-referrer");
+  note(c, { event: "header_summary" });
+  const member = await requireMember(c);
+  const [review, notifications] = await Promise.allSettled([
+    reviewerSummary(c.env, member, bearerOf(c), providerOf(c)),
+    notificationSummary(c.env, member.id, c.req.query("lang"), c.req.header("X-Device-Token")),
+  ]);
+  if (review.status === "rejected" && notifications.status === "rejected") {
+    return c.json({ error: "header_summary_unavailable" }, 503);
+  }
+  note(c, { outcome: review.status === "fulfilled" && notifications.status === "fulfilled" ? "ok" : "partial" });
+  return c.json({
+    review: review.status === "fulfilled" ? review.value : null,
+    notifications: notifications.status === "fulfilled" ? notifications.value : null,
+  });
 });
 
 /**

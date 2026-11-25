@@ -13,7 +13,8 @@ import SiteMenu from "@/components/SiteMenu.vue";
 import { siteLinksKey, boardEndKey, boardListEndKey, headerOverlaysKey, petMenuKey } from "@/lib/site-links";
 import AccountMenu from "@/components/AccountMenu.vue";
 import NotificationBell from "@/components/NotificationBell.vue";
-import { useNotifications } from "@/lib/notifications";
+import { fetchNotificationSummary, useNotifications } from "@/lib/notifications";
+import { startHeaderPolling } from "@/lib/header-polling";
 import AdultToggle from "@/components/AdultToggle.vue";
 import AppearanceMenu from "@/components/AppearanceMenu.vue";
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
@@ -39,7 +40,8 @@ import { useUpdates } from "@/lib/updates";
 import { footerSupport, type FooterContext } from "@/lib/footer-nav";
 import { watchCampaignShareBinding, watchShareRefBinding } from "@/lib/share-ref";
 import { refreshGa4Account } from "@/lib/ga4";
-import { fetchMe } from "@/lib/api";
+import { fetchHeaderSummary, fetchMe, fetchReviewMe, type HeaderSummary } from "@/lib/api";
+import { currentProvider } from "@/lib/provider";
 import RoutesLayer from "@/components/routes/RoutesLayer.vue";
 import RouteArrivalNotice from "@/components/routes/RouteArrivalNotice.vue";
 import SignalBars from "@/components/routes/SignalBars.vue";
@@ -118,10 +120,40 @@ void router.isReady().then(() => {
 });
 // 到了某則說明「去試試」的那一頁，就當作用過它的入口，那裡的「新」收起來
 router.afterEach((to) => { updates.visited(to.path); });
-let reviewTimer: ReturnType<typeof setInterval> | undefined;
-// 審核待辦與通知未讀數同一個節奏：每分鐘一次，回到分頁再一次。通知那一趟順便告訴伺服器目前的介面語言。
-function refreshReview(){ if(session.me && document.visibilityState==='visible') { void reviewerStore.refresh(); void notifications.refresh(locale.value); } }
-watch(() => session.me?.accountNumId ?? null, (id) => { if (id) void notifications.refresh(locale.value); });
+let stopHeaderPolling: (() => void) | undefined;
+let legacyHeaderSummary = false;
+async function refreshHeader() {
+  if (!session.me) return;
+  const lang = locale.value;
+  if (legacyHeaderSummary) {
+    await Promise.all([reviewerStore.refresh(), notifications.refresh(lang)]);
+    return;
+  }
+
+  const provider = currentProvider();
+  let pending: Promise<HeaderSummary | null> | undefined;
+  const summary = (token: string) => pending ??= fetchHeaderSummary(token, provider, lang).then(result => {
+    if (result === null) legacyHeaderSummary = true;
+    return result;
+  });
+  await Promise.all([
+    reviewerStore.refresh(async token => {
+      const result = await summary(token);
+      if (result === null) return fetchReviewMe(token, provider);
+      if (!result.review) throw new Error("Review summary unavailable");
+      return result.review;
+    }),
+    notifications.refresh(lang, async token => {
+      const result = await summary(token);
+      if (result === null) return fetchNotificationSummary(token, lang);
+      if (!result.notifications) throw new Error("Notification summary unavailable");
+      return result.notifications;
+    }),
+  ]);
+}
+watch(() => [currentProvider(), session.me?.accountNumId ?? null, locale.value] as const, ([, id, lang]) => {
+  if (id) void notifications.refresh(lang);
+});
 // 點了分享連結之後在這裡註冊的人：登入後替他帶入分享者的推薦碼（lib/share-ref.ts）。
 watchShareRefBinding();
 // 點了活動分享連結的人：登入後送一次歸因綁定，伺服器決定算不算新玩家。
@@ -135,8 +167,15 @@ if (SILENT_LOGIN_ENABLED) void router.isReady().then(() => watch(() => session.r
   const returnTo = /\/login$/.test(route.path) ? safeReturnTo(route.query.returnTo) : route.fullPath;
   void trySilentLogin({ immersive: !!route.meta.preloadStage, returnTo, locale: String(locale.value) }).catch(() => {});
 }, { immediate: true }));
-onMounted(() => { session.restore(); useAppearance().init(); reviewTimer=setInterval(refreshReview,60000); window.addEventListener('focus',refreshReview); document.addEventListener('visibilitychange',refreshReview); });
-onBeforeUnmount(()=>{clearInterval(reviewTimer);window.removeEventListener('focus',refreshReview);document.removeEventListener('visibilitychange',refreshReview);document.removeEventListener('keydown',onSlash);});
+onMounted(() => {
+  session.restore();
+  useAppearance().init();
+  stopHeaderPolling = startHeaderPolling(refreshHeader);
+});
+onBeforeUnmount(() => {
+  stopHeaderPolling?.();
+  document.removeEventListener('keydown', onSlash);
+});
 
 /** 搜尋放在頁首，全站都搜得到；結果落在搜尋頁。按 / 直接聚焦。搜尋頁自己有一個大的，頁首那個就收起來。 */
 const q = ref((route.query.q as string) ?? "");
