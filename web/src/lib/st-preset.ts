@@ -112,8 +112,8 @@ export function entryRows(doc: PresetDocument): EntryRow[] {
       : prompt.injection_position === IN_CHAT ? "D"
       : history >= 0 && i > history ? "S" : "P";
     const side = history >= 0 && i > history ? "after" : "before";
-    // 開著＝來源排序裡開著，而且本站沒有把它列為不採用
-    const enabled = o.enabled !== false && !doc.selection.excludedEntryIds.includes(o.identifier);
+    // 開著＝來源排序裡開著，而且本站沒有把它列為不採用（缺 excludedEntryIds 的文件當成都沒排除，不讓整頁壞掉）
+    const enabled = o.enabled !== false && !(doc.selection.excludedEntryIds ?? []).includes(o.identifier);
     return [{ identifier: o.identifier, prompt, enabled, sourceEnabled: o.enabled !== false, slot, side }];
   });
 }
@@ -133,7 +133,7 @@ export function setEnabled(doc: PresetDocument, id: string, enabled: boolean, op
   if (isFramework(id)) return false;
   const entry = orderOf(doc).find((o) => o.identifier === id);
   if (!entry) return false;
-  const excluded = doc.selection.excludedEntryIds.filter((x) => x !== id);
+  const excluded = (doc.selection.excludedEntryIds ?? []).filter((x) => x !== id);
   if (enabled) entry.enabled = true;
   else if (opts.keepSource) excluded.push(id);
   else entry.enabled = false;
@@ -368,7 +368,7 @@ export function deleteEntry(doc: PresetDocument, id: string): boolean {
   if (at < 0) return false;
   prompts.splice(at, 1);
   // 上游只收指向現有條目的選擇：一起拿掉，不然整份存不進去
-  doc.selection.excludedEntryIds = doc.selection.excludedEntryIds.filter((x) => x !== id);
+  doc.selection.excludedEntryIds = (doc.selection.excludedEntryIds ?? []).filter((x) => x !== id);
   doc.selection.acceptedAdaptationIds = doc.selection.acceptedAdaptationIds.filter((x) => x !== adaptationId(id));
   return true;
 }

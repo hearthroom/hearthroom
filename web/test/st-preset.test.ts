@@ -430,3 +430,13 @@ describe("本站寫的預設：存檔前照上游規則找出存不進去的地�
     expect(nativeProblems(doc)).toEqual([ai]);
   });
 });
+
+describe("entryRows with a partial selection", () => {
+  it("treats a missing excludedEntryIds as none excluded instead of throwing (the library page would go blank)", () => {
+    const doc = imported();
+    delete (doc.selection as Partial<PresetDocument["selection"]>).excludedEntryIds;
+    const rows = entryRows(doc);
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((r) => r.enabled === r.sourceEnabled)).toBe(true);
+  });
+});
