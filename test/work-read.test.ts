@@ -87,6 +87,26 @@ it('rechecks a warm candidate cache after a transport retry and honors the curre
  expect(await opsMetrics(env.DB)).toContain('hearthroom_visibility_provider_retries_total{operation="public_batch",outcome="recovered"} 1');
 });
 
+it('rechecks current Provider and local visibility for a shared first-screen candidate',async()=>{
+ const {source,work}=await managedFixture();const {current,network}=providerFixture('public');
+ await env.DB.prepare("INSERT INTO community_settings(key,value,updated_at) VALUES ('public_candidate_projection_cache','true',1)").run();
+ const first=await request('/v1/cards?sort=new&zone=all&lang=en&limit=1');
+ expect((await first.json() as {items:unknown[]}).items).toHaveLength(1);
+ current.access='private';
+ const warm=await request('/v1/cards?sort=new&zone=all&lang=ja&limit=2');
+ expect(warm.status).toBe(200);expect(warm.headers.get('X-Cache-Layer')).toBe('edge');
+ expect((await warm.json() as {items:unknown[]}).items).toEqual([]);
+ expect(network).toHaveBeenCalledTimes(2);
+ expect((await getCard(env.DB,source))?.status).toBe('approved');
+
+ current.access='public';
+ await env.DB.prepare("UPDATE managed_work_access SET access='private',epoch=3 WHERE work_id=?").bind(work).run();
+ const fenced=await request('/v1/cards?sort=new&zone=all&lang=ko&limit=3');
+ expect(fenced.status).toBe(200);expect(fenced.headers.get('X-Cache-Layer')).toBe('origin');
+ expect((await fenced.json() as {items:unknown[]}).items).toEqual([]);
+ expect(network).toHaveBeenCalledTimes(2);
+});
+
 it.each(['network','timeout','503'] as const)('stops after one retry and returns no partial public data for persistent %s',async kind=>{
  await managedFixture();const {network}=providerFixture('public');
  network.mockImplementation(async()=>{

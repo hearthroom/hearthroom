@@ -34,7 +34,7 @@ import { accountAuthRoutes, accountAuthMaintenance, syncNickname } from './accou
 import { snapshot } from './snapshot-cache';
 import { cardLink, linkPreview } from './card-link';
 import { cardStateRoutes } from './card-state-routes';
-import { boardKey, readBoardCache, writeBoardCache } from "./board-cache";
+import { boardKey, readBoardCache, supportsSharedFirstScreen, writeBoardCache } from "./board-cache";
 export { boardCache } from "./board-cache";
 import { moderationRoutes, normalizeTags, reviewSummary } from "./moderation";
 import { listReviewDecisions, correctReview, correctionEligibility } from './review-correction';
@@ -588,18 +588,22 @@ app.get("/v1/cards", async (c) => {
       nov20PartialReexposure: nov20PartialReexposureElapsed !== undefined,
     }
     : undefined;
-  const cacheKey = await boardKey(c.req.url, moderation.revision, allowNsfw, lang(c), undefined, outage);
+  const firstScreen = offset === 0 && position.raw === 0 && !allowNsfw && supportsSharedFirstScreen(c.req.url);
+  const sharedFirstScreen = firstScreen && c.env.PUBLIC_CANDIDATE_PROJECTION_ACTIVE === true;
+  const legacyFirstScreenDetail = firstScreen && !sharedFirstScreen ? "first_screen_legacy" : undefined;
+  const cacheKey = await boardKey(c.req.url, moderation.revision, allowNsfw, lang(c), undefined, outage, sharedFirstScreen);
   const cacheStarted = performance.now();
-  const hit = c.req.query("sort") === "random" ? null : await readBoardCache(c.env, c.executionCtx, cacheKey);
+  const hit = sort === "random" ? null : await readBoardCache(c.env, c.executionCtx, cacheKey);
   const timing = `${moderation.timing}, access;dur=${accessMs.toFixed(1)}, cache;dur=${(performance.now() - cacheStarted).toFixed(1)}`;
   const cachedCandidates=hit?parsePublicCandidates(hit.body):null;
   if (hit&&cachedCandidates) {
-    hit.body=JSON.stringify({...await publicCandidatePage(c.env,cachedCandidates,position,{limit,offset,lang:lang(c),allowNsfw},source),sort:sortKey});
+    const body=JSON.stringify({...await publicCandidatePage(c.env,cachedCandidates,position,{limit,offset,lang:lang(c),allowNsfw},source),sort:sortKey});
     // 快取命中一樣是一次瀏覽行為；結果數這條路上沒有，但空不空看得出來——不標的話中間件會把每次命中都記成 ok，空結果率就偏低
     const q0 = c.req.query("q")?.trim();
     note(c, {
       event: q0 ? "search" : "list",
-      outcome: hit.body.startsWith('{"items":[]') ? "empty" : "ok",
+      outcome: body.startsWith('{"items":[]') ? "empty" : "ok",
+      detail: sharedFirstScreen ? "first_screen_hit" : legacyFirstScreenDetail,
       sortKey: c.req.query("sort") ?? "hot",
       tag: c.req.query("tag")?.trim() ?? "",
       term: q0 ? shapeTerm(q0) : "",
@@ -607,7 +611,7 @@ app.get("/v1/cards", async (c) => {
       zoneScope: c.req.query("zone") === "all" ? "all" : "current",
       offset: clamp(c.req.query("offset"), 0, 10_000),
     });
-    return boardResponse(hit.body, allowNsfw, hit.layer, timing);
+    return boardResponse(body, allowNsfw, hit.layer, timing);
   }
   const queryStarted = performance.now();
   const candidates = await publicCandidates(c.env,source,position.raw);
@@ -623,6 +627,7 @@ app.get("/v1/cards", async (c) => {
     zoneScope: c.req.query("zone") === "all" ? "all" : "current",
     resultCount: page.items.length,
     offset,
+    detail: sharedFirstScreen ? "first_screen_miss" : legacyFirstScreenDetail,
     outcome: page.items.length ? "ok" : "empty",
   });
   const body=JSON.stringify({...page,sort:sortKey});
@@ -2961,7 +2966,8 @@ export default {
     const scopedEnv = env.DB && metricsFlushMs > 0
       ? { ...env, DB: bindMetricsDb(env.DB, env.DB, ctx, metricsFlushMs) }
       : env;
-    const maintenance = await maintenanceResponse(request, scopedEnv, ctx);
+    const controls = { publicProjection: false };
+    const maintenance = await maintenanceResponse(request, scopedEnv, ctx, controls);
     if (maintenance) return maintenance;
     const path = new URL(request.url).pathname;
     // Transport is independent of the community schema, HTML transforms and cookies.
@@ -2978,7 +2984,7 @@ export default {
     if (path === "/internal/community/draft-transfer-gate" || path === CARD_REWARD_PUBLICATION_PATH) {
       return app.fetch(request, scopedEnv, ctx);
     }
-    const d1 = withD1Session(request, env);
+    const d1 = withD1Session(request, controls.publicProjection ? { ...env, PUBLIC_CANDIDATE_PROJECTION_ACTIVE: true } : env);
     const requestEnv = d1.env.DB && metricsFlushMs > 0
       ? { ...d1.env, DB: bindMetricsDb(d1.env.DB, env.DB, ctx, metricsFlushMs) }
       : d1.env;

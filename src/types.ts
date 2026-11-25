@@ -37,6 +37,8 @@ export type Env = Omit<Cloudflare.Env, "EVENTS" | "VISIT_LIMIT" | "AUTH_ROUTE_LI
   AUTH_KEYRING?: string;
   AUTH_METRICS_SECRET?: string;
   COMMUNITY_ENABLED?: string;
+  /** Request-scoped value loaded with the primary maintenance check. */
+  PUBLIC_CANDIDATE_PROJECTION_ACTIVE?: boolean;
   COMMUNITY_GUILD_ID?: string;
   COMMUNITY_SITE_URL?: string;
   COMMUNITY_INVITE_URL?: string;
