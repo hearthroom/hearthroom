@@ -6288,5 +6288,6 @@
   "reviewAi.note.type.ai_inaccurate": "AI 판단 부정확",
   "reviewAi.arb.report.col.modifiedRate": "AI 수정 비율",
   "reviewAi.arb.report.col.inaccurate": "부정확 표시",
-  "reviewAi.two.authorNote.count": "{n} / {max}"
+  "reviewAi.two.authorNote.count": "{n} / {max}",
+  "reviewAi.arb.report.rateNote": "'AI 수정 비율' = AI 수정 ÷ (AI대로 + AI 수정)이며, '부정확 표시'는 심사원이 확정할 때나 확정한 뒤 'AI 판단 부정확'을 표시한 건수예요."
 }

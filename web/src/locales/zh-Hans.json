@@ -6288,5 +6288,6 @@
   "reviewAi.note.type.ai_inaccurate": "AI 判断不准确",
   "reviewAi.arb.report.col.modifiedRate": "改了 AI 的比例",
   "reviewAi.arb.report.col.inaccurate": "标记不准确",
-  "reviewAi.two.authorNote.count": "{n} / {max}"
+  "reviewAi.two.authorNote.count": "{n} / {max}",
+  "reviewAi.arb.report.rateNote": "“改了 AI 的比例”＝改了 AI ÷（按 AI ＋ 改了 AI）；“标记不准确”为审核员在定案时或定案后标记“AI 判断不准确”的条数。"
 }

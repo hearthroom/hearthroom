@@ -766,6 +766,7 @@ it('report: suppresses figures under ten samples and exports the reference draft
   // AI 為主的主指標：改了 AI ÷（照 AI＋改了 AI）＝ 2／8；標不準確 1 筆
   expect($('[data-version=v2] [data-final-cell=modified-rate]')!.textContent).toBe('25%');
   expect($('[data-version=v2] [data-final-cell=inaccurate]')!.textContent).toBe('1');
+  expect($('[data-version=v2] [data-rate-note]')!.textContent).toBe(t('reviewAi.arb.report.rateNote'));
   expect($('[data-version=v1] [data-table=final]')).toBeNull();
   // 給 AI 的說明：新的在前、全文；只選了類型的寫明沒有說明；可依類型篩
   await vi.waitFor(() => expect($('[data-notes]')).not.toBeNull());

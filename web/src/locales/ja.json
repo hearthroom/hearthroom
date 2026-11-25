@@ -6288,5 +6288,6 @@
   "reviewAi.note.type.ai_inaccurate": "AIの判断が不正確",
   "reviewAi.arb.report.col.modifiedRate": "AIを変更した割合",
   "reviewAi.arb.report.col.inaccurate": "不正確と記録",
-  "reviewAi.two.authorNote.count": "{n} / {max}"
+  "reviewAi.two.authorNote.count": "{n} / {max}",
+  "reviewAi.arb.report.rateNote": "「AIを変更した割合」＝AIを変更 ÷（AIどおり ＋ AIを変更）。「不正確と記録」は、確定時または確定後に審査員が「AIの判断が不正確」と記録した件数です。"
 }

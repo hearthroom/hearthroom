@@ -215,6 +215,7 @@ const MATRIX_COLS = ['pass', 'reject', 'handoff'] as const;
               <tbody><tr><td>{{ int(finalTotal(v)) }}</td><td v-for="k in FINAL_SOURCES" :key="k" :data-final-cell="k">{{ int(v.finalSource[k] ?? 0) }}</td><td data-final-cell="modified-rate">{{ modifiedRate(v) === null ? '—' : `${Math.round(modifiedRate(v)! * 100)}%` }}</td><td data-final-cell="inaccurate">{{ int(v.inaccurate ?? 0) }}</td></tr></tbody>
             </table>
           </div>
+          <p v-if="enough(finalTotal(v))" class="subtle ai-rep__note" data-rate-note>{{ t('reviewAi.arb.report.rateNote') }}</p>
         </template>
 
         <template v-if="reasonRows(v).length">

@@ -6288,5 +6288,6 @@
   "reviewAi.note.type.ai_inaccurate": "AI judgment inaccurate",
   "reviewAi.arb.report.col.modifiedRate": "Changed from AI rate",
   "reviewAi.arb.report.col.inaccurate": "Marked inaccurate",
-  "reviewAi.two.authorNote.count": "{n} / {max}"
+  "reviewAi.two.authorNote.count": "{n} / {max}",
+  "reviewAi.arb.report.rateNote": "“Changed from AI rate” = Changed from AI ÷ (As AI suggested + Changed from AI); “Marked inaccurate” counts finals where the deciding reviewer marked “AI judgment inaccurate” at or after finalization."
 }
