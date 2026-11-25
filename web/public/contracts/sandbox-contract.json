@@ -1108,7 +1108,9 @@
       "hearthroom.send(text)": "sends text as the player message right after the player clicked the page; otherwise fills"
     },
     "clipboardCopyFills": true,
-    "textMaxChars": 8000
+    "textMaxChars": 8000,
+    "anchors": "href=\"#id\" scrolls to that element inside the page; a bare \"#\" does not navigate",
+    "largePages": "pages too large to inline are fetched only when shown and load as a blob document: relative URLs and location.reload() do not work there, so use absolute URLs"
   },
   "cardCss": {
     "source": "author asset cardCss (raw CSS, display only, never sent to the model)",
@@ -1619,5 +1621,5 @@
       ]
     }
   },
-  "stageCommit": "e21131d9586dbaaff2b919426784c93bf4db302f"
+  "stageCommit": "8635d2ebc8988ee8b91903197ec830d0b7ccb91e"
 }

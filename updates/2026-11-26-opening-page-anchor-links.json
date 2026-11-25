@@ -1,0 +1,11 @@
+{
+  "tier": "fix",
+  "audience": "everyone",
+  "title": {
+    "zh-Hant": "開場網頁裡的頁內連結以前點了會整頁跳走，現在會在頁內捲動到那一段。",
+    "zh-Hans": "开场网页里的页内链接以前点了会整页跳走，现在会在页内滚动到那一段。",
+    "en": "In-page links on an opening page now scroll to that section instead of navigating away from the page.",
+    "ja": "最初のページにあるページ内リンクを押すと、画面が切り替わらずその位置へスクロールします。",
+    "ko": "첫 페이지의 페이지 내 링크를 누르면 화면이 넘어가지 않고 해당 위치로 스크롤돼요."
+  }
+}
