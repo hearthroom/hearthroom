@@ -6,27 +6,41 @@ import type { Env } from './types';
 export { MAINTENANCE_KEY };
 
 class InvalidMaintenanceState extends Error {}
+export const PUBLIC_CANDIDATE_PROJECTION_KEY = 'public_candidate_projection_cache';
 
-/** Read the primary before generic replica sessions; never cache this admission switch. */
-export async function readMaintenance(db: D1Database): Promise<MaintenanceState> {
-  const primary=typeof db.withSession==='function' ? db.withSession('first-primary') : db;
-  const row=await primary.prepare('SELECT value FROM community_settings WHERE key=?').bind(MAINTENANCE_KEY).first<{value:string}>();
-  if (!row) return maintenanceOff();
+function parseStoredMaintenance(value?: string | null): MaintenanceState {
+  if (value === null || value === undefined) return maintenanceOff();
   try {
-    return parseMaintenance(JSON.parse(row.value));
+    return parseMaintenance(JSON.parse(value));
   } catch (cause) {
     throw new InvalidMaintenanceState('Invalid maintenance configuration', {cause});
   }
 }
+
+/** Scheduled and library paths read maintenance directly from the primary. */
+export async function readMaintenance(db: D1Database): Promise<MaintenanceState> {
+  const primary=typeof db.withSession==='function' ? db.withSession('first-primary') : db;
+  const row=await primary.prepare('SELECT value FROM community_settings WHERE key=?').bind(MAINTENANCE_KEY).first<{value:string}>();
+  return parseStoredMaintenance(row?.value);
+}
+
+async function readAdmission(db: D1Database) {
+  const primary = typeof db.withSession === 'function' ? db.withSession('first-primary') : db;
+  const row = await primary.prepare(`SELECT (SELECT value FROM community_settings WHERE key=?) AS value,
+    (SELECT value FROM community_settings WHERE key=?) AS public_projection`)
+    .bind(MAINTENANCE_KEY, PUBLIC_CANDIDATE_PROJECTION_KEY)
+    .first<{ value: string | null; public_projection: string | null }>();
+  return { maintenance: parseStoredMaintenance(row?.value), publicProjection: row?.public_projection === 'true' };
+}
 // 2026-11-24 D1 過載止血：每個 API 請求都先讀一次主庫的維護開關（一小時近十萬次）。同一個 Worker 實例 5 秒內共用一份；
 // 開關切換最多晚 5 秒生效。排程與資源庫照舊直接讀（readMaintenance）。
-let maintenanceMemo:{at:number;value:Promise<MaintenanceState>}|null=null;
+let maintenanceMemo:{at:number;value:ReturnType<typeof readAdmission>}|null=null;
 export const MAINTENANCE_MEMO_MS=5_000;
 export function resetMaintenanceMemo(){maintenanceMemo=null;}
-function cachedMaintenance(db:D1Database):Promise<MaintenanceState>{
+function cachedAdmission(db:D1Database):ReturnType<typeof readAdmission>{
  const now=Date.now();
  if(maintenanceMemo&&now-maintenanceMemo.at<MAINTENANCE_MEMO_MS)return maintenanceMemo.value;
- const value=readMaintenance(db);
+ const value=readAdmission(db);
  maintenanceMemo={at:now,value};
  value.catch(()=>{if(maintenanceMemo?.value===value)maintenanceMemo=null;});
  return value;
@@ -34,7 +48,9 @@ function cachedMaintenance(db:D1Database):Promise<MaintenanceState>{
 const STATIC = /\.(?:js|mjs|css|png|webp|jpe?g|gif|svg|ico|woff2?|ttf|map|webmanifest|txt|xml|atom)$/i;
 const noStore={'Cache-Control':'no-store','Retry-After':'15'};
 /** Runs before sessions, identity reads, HTML metadata, proxy upgrades and Provider calls. */
-export async function maintenanceResponse(request:Request,env:Env,ctx:ExecutionContext):Promise<Response|null> {
+export async function maintenanceResponse(
+  request:Request,env:Env,ctx:ExecutionContext, controls?: { publicProjection: boolean },
+):Promise<Response|null> {
   const url=new URL(request.url),path=url.pathname;
   // Preserve local proxy refusals without a DB/Provider call.
   if ((path==='/hh-api'||path.startsWith('/hh-api/'))&&!allowedHarborProxyRequest(request))return null;
@@ -46,7 +62,11 @@ export async function maintenanceResponse(request:Request,env:Env,ctx:ExecutionC
   const document=['GET','HEAD'].includes(request.method)&&(!path.split('/').pop()?.includes('.')||path.endsWith('.html')||request.headers.get('Accept')?.includes('text/html'));
   if(!status&&!api&&!document&&!sandboxAsset)return null;
   let state:MaintenanceState;
-  try { state=await cachedMaintenance(env.DB); }
+  try {
+    const admission = await cachedAdmission(env.DB);
+    state = admission.maintenance;
+    if (controls) controls.publicProjection = admission.publicProjection;
+  }
   catch (error) {
     ctx.waitUntil(bumpOp(env.DB,'maintenance','status','error'));
     // Let the requested route handle its own dependencies. Pollers still need

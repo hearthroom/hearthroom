@@ -462,7 +462,7 @@ HTML 首次載入那條路的 `Referer` 網域。快取不受影響：鍵是 URL
 
 | 事件 | 來源 | 記什麼 |
 |---|---|---|
-| `list` / `search` | `/v1/cards` | 排序鍵、標籤、搜尋詞、結果數、翻頁深度、語言範圍；`outcome` 是 `ok`／`empty`（快取命中也標） |
+| `list` / `search` | `/v1/cards` | 排序鍵、標籤、搜尋詞、結果數、翻頁深度、語言範圍；`outcome` 是 `ok`／`empty`（快取命中也標）。適用共用首屏候選的請求，`detail` 為 `first_screen_legacy`（開關關閉）、`first_screen_hit`（命中共用快取）或 `first_screen_miss`（重查候選）。 |
 | `suggest` | `/v1/suggest` | 輸入中的字（同 `term` 的形態過濾）、建議數；`outcome` 是 `ok`／`empty`（快取命中那次沒有結果數，記成 `ok`）。建議有沒有把空結果率壓下來，看它跟 `search` 的比值 |
 | `card_view` | `/v1/cards/:id` | roleId。**只有這一處**——HTML 殼多半是抓取器，卡片頁替作者發的「其他作品」副請求是 `/v1/cards?author=`，兩者都不算一次瀏覽，否則分母灌水三倍 |
 | `author_view` | `/v1/authors/:id` | 作者 id、作品數 |
