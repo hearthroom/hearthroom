@@ -6,6 +6,11 @@ import { useSession } from "./session";
 import { noticeNote } from "../../../shared/notice-note";
 import { enforcementDeadline, isEnforcementKind } from "../../../shared/enforcement-notice";
 import { reasonSummary } from "./review-reasons";
+import { currentProvider } from "./provider";
+
+export function fetchNotificationSummary(token: string, locale: string) {
+  return communityRequest<{ unread: number }>(`/me/community/notifications/summary?lang=${encodeURIComponent(locale)}`, token);
+}
 
 /**
  * 頁首鈴鐺的狀態：未讀數（每分鐘與回到分頁時輪詢）與打開浮層時才載入的清單。
@@ -26,12 +31,12 @@ export const useNotifications = defineStore("notifications", () => {
   }
   function reset() { generation++; unread.value = 0; items.value = []; loaded.value = false; }
 
-  async function refresh(locale: string): Promise<void> {
+  async function refresh(locale: string, load = fetchNotificationSummary): Promise<void> {
     const requestGeneration = ++generation;
     try {
       const t = await token();
       if (!t || requestGeneration !== generation) return;
-      const result = await communityRequest<{ unread: number }>(`/me/community/notifications/summary?lang=${encodeURIComponent(locale)}`, t);
+      const result = await load(t, locale);
       if (requestGeneration === generation) unread.value = result.unread;
     } catch { /* 下一輪再試；鈴鐺上的數字只是提示 */ }
   }
@@ -50,6 +55,7 @@ export const useNotifications = defineStore("notifications", () => {
   }
   async function read(notice: CommunityNotice): Promise<void> {
     if (notice.read_at) return;
+    generation++;
     notice.read_at = Date.now();
     unread.value = Math.max(0, unread.value - 1);
     try { const t = await token(); if (t) await communityRequest("/me/community/notifications/read", t, "POST", { id: notice.id }); } catch { /* 下一次輪詢修正 */ }
@@ -60,13 +66,14 @@ export const useNotifications = defineStore("notifications", () => {
     leave.to(notice.path);
   }
   async function readAll(): Promise<void> {
+    generation++;
     const now = Date.now();
     for (const n of items.value) if (!n.read_at) n.read_at = now;
     unread.value = 0;
     try { const t = await token(); if (t) await communityRequest("/me/community/notifications/read-all", t, "POST"); } catch { /* 同上 */ }
   }
 
-  watch(() => session.me?.accountNumId ?? null, () => reset());
+  watch(() => [currentProvider(), session.me?.accountNumId ?? null] as const, () => reset());
   return { unread, items, loaded, busy, refresh, load, read, follow, readAll };
 });
 

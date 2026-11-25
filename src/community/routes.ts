@@ -346,21 +346,23 @@ app.get("/v1/me/community/notifications", async (c) => {
   }));
   return c.json({ items });
 });
-app.get("/v1/me/community/notifications/summary", async (c) => {
-  const m = await requireMember(c);
-  const adult = await memberNsfw(c.env.DB,m.id);
-  const locale = c.req.query("lang");
+export async function notificationSummary(env: Env, memberId: string, locale: string | undefined, deviceToken: string | undefined) {
+  const adult = await memberNsfw(env.DB, memberId);
   const retentionCutoff = Date.now() - NOTIFICATION_RETENTION_MS;
   // The header bell polls this; it is also where the website learns which language the member
   // reads in, so a Discord DM can speak it. Missing or unknown values leave the stored one alone.
   if (locale && NOTICE_LOCALES.includes(locale))
-    await c.env.DB.prepare("UPDATE members SET locale=? WHERE id=? AND (locale IS NULL OR locale<>?)").bind(locale, m.id, locale).run();
-  const deviceHash = await hashDeviceToken(c.env, c.req.header("X-Device-Token"));
-  if (deviceHash) await recordRewardDevice(c.env.DB, m.id, deviceHash, Date.now()).catch(() => undefined);
-  const row = await c.env.DB.prepare(`SELECT COUNT(*) AS unread FROM community_notifications n LEFT JOIN cards c ON c.id=n.card_id LEFT JOIN workshops w ON w.id=n.workshop_id LEFT JOIN cards wc ON wc.id=w.card_id WHERE ${eligibleNotification()} AND n.member_id=? AND n.read_at IS NULL AND n.created_at>=? AND (? IS NOT 'CN' OR (c.rating IS NOT 'R' AND w.rating IS NOT 'R' AND wc.rating IS NOT 'R'))`)
-    .bind(m.id,retentionCutoff,adult.countryRegion)
+    await env.DB.prepare("UPDATE members SET locale=? WHERE id=? AND (locale IS NULL OR locale<>?)").bind(locale, memberId, locale).run();
+  const deviceHash = await hashDeviceToken(env, deviceToken);
+  if (deviceHash) await recordRewardDevice(env.DB, memberId, deviceHash, Date.now()).catch(() => undefined);
+  const row = await env.DB.prepare(`SELECT COUNT(*) AS unread FROM community_notifications n LEFT JOIN cards c ON c.id=n.card_id LEFT JOIN workshops w ON w.id=n.workshop_id LEFT JOIN cards wc ON wc.id=w.card_id WHERE ${eligibleNotification()} AND n.member_id=? AND n.read_at IS NULL AND n.created_at>=? AND (? IS NOT 'CN' OR (c.rating IS NOT 'R' AND w.rating IS NOT 'R' AND wc.rating IS NOT 'R'))`)
+    .bind(memberId,retentionCutoff,adult.countryRegion)
     .first<{ unread: number }>();
-  return c.json({ unread: row?.unread ?? 0 });
+  return { unread: row?.unread ?? 0 };
+}
+app.get("/v1/me/community/notifications/summary", async (c) => {
+  const m = await requireMember(c);
+  return c.json(await notificationSummary(c.env, m.id, c.req.query("lang"), c.req.header("X-Device-Token")));
 });
 // Browser push: the public key lets a browser subscribe; the subscription lands on the signed-in member.
 app.get("/v1/push/config", (c) => {
