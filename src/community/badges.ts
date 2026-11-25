@@ -35,7 +35,7 @@ type Metric = {
  * 放行千面旅人時兩邊一起改。停發期間已達標的人看到「已達成條件；目前暫停發放」。
  */
 export const PROGRESS_ONLY:Record<string,{metric:string;target:number;paused:boolean}>={
- sole_wanderer:{metric:'explored_roles',target:500,paused:true},
+ sole_wanderer:{metric:'explored_roles',target:500,paused:false},
 };
 /** 同一個計數的一組徽章：探險家各級與千面旅人都讀探索數，成就頁在組前說明「各級共用同一個計數」 */
 const SERIES_BY_METRIC:Record<string,BadgeSeries>={explored_roles:'explorer'};

@@ -75,14 +75,15 @@ it('leaves older Harbor responses without the new fields untouched',async()=>{
  expect(await env.DB.prepare('SELECT paid_invites,paid_invites_100_at FROM badge_qualifications WHERE member_id=?').bind(members[0]).first()).toEqual({paid_invites:120,paid_invites_100_at:base-20*DAY});
 });
 
-it('stores the verified explored count but holds the 500-character badge until a full refresh round',async()=>{
+it('awards the 500-character badge by verified crossing time after the full refresh round',async()=>{
  const wander=(n:number,count:number,at:number|null)=>applyBadgeStats(env,members[n-1],stats(n,{exploredRoles:count,exploredRoles500At:at===null?null:new Date(at).toISOString()}),base);
  await wander(1,499,null);
  await wander(2,500,base-2*DAY);
  await wander(3,520,base-3*DAY);
- // 刷新一輪要兩天多，先被刷到的人會搶走更早達標的人的名次（PM 2026-11-22）：數照存，全服唯一這兩枚先不發。
+ // 全站刷完一輪後放行（2026-11-25）：照越線時間排，最早的拿唯一，下一位拿先驅；沒滿 500 的不算。
  await awardFirstBadges(env,STAT_FIRST_BADGES,base+10*DAY);
- expect([...await holders('sole_wanderer'),...await holders('sole_wanderer_pioneer')]).toEqual([]);
+ expect(await holders('sole_wanderer')).toEqual([{member_id:members[2],created_at:base-3*DAY}]);
+ expect(await holders('sole_wanderer_pioneer')).toEqual([{member_id:members[1],created_at:base-2*DAY}]);
  expect(await env.DB.prepare('SELECT explored_roles,explored_roles_500_at FROM badge_qualifications WHERE member_id=?').bind(members[2]).first()).toEqual({explored_roles:520,explored_roles_500_at:base-3*DAY});
  // 舊版 Harbor 沒有這兩個欄位：不動已存的數，徽章牆照舊顯示進度。
  await applyBadgeStats(env,members[0],stats(1,{}),base+1);

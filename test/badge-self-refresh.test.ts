@@ -50,7 +50,7 @@ it('refreshes only when the badge page asks for it, and flags only the read that
  expect(calls).toBeLessThanOrEqual(1);
 });
 
-it('shows the wanderer progress from the explored count without awarding it from the wall or the sweep',async()=>{
+it('shows the wanderer progress from the explored count and awards it only through the first-badge flow',async()=>{
  await env.DB.prepare("INSERT INTO badge_qualifications(member_id,account_no,effective_invites,net_topup_usd_micros,consumed_credits,verified_at,explored_roles,explored_roles_500_at) VALUES(?,11,0,0,0,1,3,NULL)").bind(member).run();
  let wall=await badgeCollection(env,member);
  const wanderer=()=>wall.items.find(b=>b.key==='sole_wanderer');
@@ -58,9 +58,12 @@ it('shows the wanderer progress from the explored count without awarding it from
  expect(wall.items.filter(b=>b.series==='explorer').map(b=>b.key).sort()).toEqual(['player_explorer_10','player_explorer_100','player_explorer_300','player_explorer_50','sole_wanderer']);
  await env.DB.prepare('UPDATE badge_qualifications SET explored_roles=612,explored_roles_500_at=? WHERE member_id=?').bind(Date.now()-10*86400000,member).run();
  wall=await badgeCollection(env,member);
- expect(wanderer()).toMatchObject({state:'locked',progress:{value:500,target:500},pausedMet:true});
- await sweepMilestones(env);await awardFirstBadges(env,STAT_FIRST_BADGES);
+ expect(wanderer()).toMatchObject({state:'locked',progress:{value:500,target:500}});expect(wanderer()?.pausedMet).toBeUndefined();
+ // 讀取與每小時掃描都不會發；只有首發流程照越線時間發（11-25 放行）
+ await sweepMilestones(env);
  expect(await env.DB.prepare("SELECT COUNT(*) n FROM community_awards WHERE badge LIKE 'sole_wanderer%'").first('n')).toBe(0);
+ await awardFirstBadges(env,STAT_FIRST_BADGES);
+ expect(await env.DB.prepare("SELECT member_id FROM community_awards WHERE badge='sole_wanderer'").first('member_id')).toBe(member);
  const publicWall=await badgeCollection(env,member,true);
  expect(publicWall.items.find(b=>b.key==='sole_wanderer')?.progress).toBeUndefined();
 });

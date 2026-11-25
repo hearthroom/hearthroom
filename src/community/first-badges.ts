@@ -28,9 +28,9 @@ export const PIONEER_SLOTS = 9;
  */
 export const STAT_FIRST_BADGES: FirstBadge[] = [
   { key: 'sole_lighthouse', hold: 7 * DAY, crossings: 'SELECT member_id,paid_invites_100_at AS at FROM badge_qualifications WHERE paid_invites_100_at IS NOT NULL AND paid_invites>=100' },
-  // 千面旅人仍停發（PM 2026-11-22）：資格刷新一輪要兩天多，誰先被刷到誰先拿，更早達標的人事後無法更正。
-  // 等 Harbor exploredRoles 上線、全站資格完整刷新一輪後再決定是否放行；數照存，放行時取消這行註解，並把 badges.ts PROGRESS_ONLY 的 paused 改成 false。
-  // { key: 'sole_wanderer', hold: DAY, crossings: 'SELECT member_id,explored_roles_500_at AS at FROM badge_qualifications WHERE explored_roles_500_at IS NOT NULL AND explored_roles>=500' },
+  // 千面旅人：Harbor exploredRoles 上線後停發到全站資格刷新完一輪（PM 2026-11-22），11-25 確認刷完一輪後放行。
+  // 要再停發時把這行註解掉，並把 badges.ts PROGRESS_ONLY 的 paused 改成 true（測試守著兩邊一致）。
+  { key: 'sole_wanderer', hold: DAY, crossings: 'SELECT member_id,explored_roles_500_at AS at FROM badge_qualifications WHERE explored_roles_500_at IS NOT NULL AND explored_roles>=500' },
   { key: 'sole_starlight', hold: 30 * DAY, crossings: 'SELECT member_id,starlight_at AS at FROM badge_qualifications WHERE starlight_at IS NOT NULL AND net_topup_usd_micros>=1000000000 AND consumed_credits>=6000000' },
 ];
 
