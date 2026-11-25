@@ -16834,7 +16834,7 @@
                 }
               }
             },
-            "description": "`preset_invalid`, with `reason` naming what to fix in the document, the selection or the request. A missing or invalid `Idempotency-Key` returns `preset_invalid_input`."
+            "description": "`preset_invalid`, with `reason` naming what to fix in the document, the selection or the request. A missing or invalid `Idempotency-Key` returns `preset_invalid_input`. A use-only preset that is public is compared on every save: `preset_hidden_overlap` means part of the new content matches a preset shared or imported earlier by someone else, and the old content is kept."
           },
           "404": {
             "description": "`not_found` — the preset or revision does not exist for this account.",
@@ -18316,7 +18316,7 @@
           }
         ],
         "summary": "Publish a preset",
-        "description": "Lists the preset in the shared library so other players can find, favorite and use it. Publishing records the rights statement shown beside the button: send its `declarationVersion` from `GET /open/v1/presets`. Players who already use the preset follow its current content. Requires `preset.write`.",
+        "description": "Lists the preset in the shared library so other players can find, favorite and use it. Publishing records the rights statement shown beside the button: send its `declarationVersion` from `GET /open/v1/presets`. Players who already use the preset follow its current content. `contentVisibility` chooses whether others can read the content or only apply it; republish a published preset to change it. Requires `preset.write`.",
         "parameters": [
           {
             "description": "Preset ID (UUID).",
@@ -18412,7 +18412,7 @@
             }
           },
           "422": {
-            "description": "`preset_invalid` with `reason` `preset_invalid_input` — a field is out of range, or the request is not allowed for this preset.",
+            "description": "`preset_invalid` with `reason` `preset_invalid_input` — a field is out of range, or the request is not allowed for this preset; `preset_hidden_imported` — an imported preset can only be published with its content open; `preset_hidden_overlap` — part of the content matches a preset shared or imported earlier by someone else, so it can only be open; `preset_hidden_disabled` — use only is not available yet.",
             "content": {
               "application/json": {
                 "schema": {
@@ -18696,7 +18696,7 @@
           }
         ],
         "summary": "Read a shared preset",
-        "description": "Returns a shared preset with its entries, compatibility and sampling parameters, read-only. Available while the preset is listed, to its author, and to players who favorited or used it. The imported source file is never included. Requires `preset.read`.",
+        "description": "Returns a shared preset with its entries, compatibility and sampling parameters, read-only. Available while the preset is listed, to its author, and to players who favorited or used it. The imported source file is never included. For a use-only preset (`contentVisibility` `hidden`) read by anyone but its author, `contentHidden` is true and the content, compatibility and parameters are empty. Requires `preset.read`.",
         "parameters": [
           {
             "description": "Preset ID (UUID).",
@@ -37426,6 +37426,14 @@
               "specific"
             ],
             "description": "Author-selected use: general works across models with optional testing evidence; specific recommends the model list. Required explicitly on publication; an unpublished draft may be empty."
+          },
+          "contentVisibility": {
+            "type": "string",
+            "enum": [
+              "open",
+              "hidden"
+            ],
+            "description": "Content mode chosen at the last publication (`open` when never published); meaningful while `visibility` is `public`."
           }
         },
         "type": "object",
@@ -37445,7 +37453,8 @@
           "publishedAt",
           "attribution",
           "removed",
-          "purpose"
+          "purpose",
+          "contentVisibility"
         ]
       },
       "PresetWriteReceipt": {
@@ -38361,7 +38370,10 @@
                   "preset_revision_conflict",
                   "preset_idempotency_conflict",
                   "operation_active",
-                  "preset_binding_changed"
+                  "preset_binding_changed",
+                  "preset_hidden_disabled",
+                  "preset_hidden_imported",
+                  "preset_hidden_overlap"
                 ],
                 "type": "string"
               },
@@ -38795,6 +38807,14 @@
               "specific"
             ],
             "description": "Author-selected use: general works across models with optional testing evidence; specific recommends the model list. Required explicitly on publication; an unpublished draft may be empty."
+          },
+          "contentVisibility": {
+            "type": "string",
+            "enum": [
+              "open",
+              "hidden"
+            ],
+            "description": "`open`: other players can read the entries and sampling parameters. `hidden` (use only): other players can apply the preset but never read its content; only the author does. Omitted keeps the current mode (`open` when never published). Switching a published preset is a republish with the new value: `hidden` to `open` is always allowed; becoming `hidden` is refused with 422 `preset_invalid` and reason `preset_hidden_imported` (imported presets can only be open), `preset_hidden_overlap` (part of the content was shared earlier by someone else) or `preset_hidden_disabled` (not available yet)."
           }
         }
       },
@@ -38878,7 +38898,8 @@
           "favoriteCount",
           "heat",
           "fresh",
-          "purpose"
+          "purpose",
+          "contentVisibility"
         ],
         "properties": {
           "presetId": {
@@ -38965,6 +38986,14 @@
               "specific"
             ],
             "description": "Author-selected use: general works across models with optional testing evidence; specific recommends the model list. Required explicitly on publication; an unpublished draft may be empty."
+          },
+          "contentVisibility": {
+            "type": "string",
+            "enum": [
+              "open",
+              "hidden"
+            ],
+            "description": "`hidden`: use only. Other players can apply it but `GET /open/v1/preset-library/{presetId}` does not return its content."
           }
         }
       },
@@ -38991,7 +39020,8 @@
           "revision",
           "compatibility",
           "parameters",
-          "reportedByMe"
+          "reportedByMe",
+          "contentHidden"
         ],
         "properties": {
           "item": {
@@ -39012,6 +39042,10 @@
           },
           "reportedByMe": {
             "description": "The caller has an open report on it.",
+            "type": "boolean"
+          },
+          "contentHidden": {
+            "description": "True when the preset is use only (`contentVisibility` `hidden`) and the caller is not its author. Then `revision.document` is a valid empty document, `revision.contentHash` is empty, `compatibility` has empty lists and `parameters` is empty; `item` (title, author, purpose, models, uses, favorites, `enabledEntryCount`) is unchanged.",
             "type": "boolean"
           }
         }

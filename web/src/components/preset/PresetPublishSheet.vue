@@ -3,12 +3,17 @@
  * 公開一份自己的預設。一屏放得下（owner 2026-10-30）：一句說明、用途與模型清單、
  * 來源／原作者（選填），「公開」鈕與貼著它的聲明小字。不勾選、不另外確認：按下公開就是同意那句聲明，
  * 上游記下當時顯示的聲明版本（declarationVersion）。
+ *
+ * 內容公開方式（公開內容／只供使用）放在說明句之後、用途之前，不預選（UI 小稿 2026-11-26：公開內容之後收不回，
+ * 不替作者預選比較不可逆的那一邊）。匯入的預設只能公開內容：一打開就停用「只供使用」並自動選公開內容。
+ * 比對到他人內容是送出後才知道：彈層不關，停用「只供使用」、清掉選擇，讓作者自己改選。
+ * 多了這一組，手機上彈層會超過一屏，在彈層內捲動。
  */
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { ApiError } from "@/lib/api";
 import { legalPage, currentProvider } from "@/lib/provider";
-import { presetErrorText, publishPreset, resultUnknown, type PresetPurpose, type PresetSummary, type WriteReceipt } from "@/lib/presets";
+import { publishErrorText, publishPreset, resultUnknown, type ContentVisibility, type PresetPurpose, type PresetSummary, type WriteReceipt } from "@/lib/presets";
 import { operationKeys } from "@/lib/use-preset-access";
 import PresetSheet from "./PresetSheet.vue";
 import PresetModelPicker from "./PresetModelPicker.vue";
@@ -28,6 +33,15 @@ const busy = ref(false);
 const error = ref("");
 watch([purpose, tested], () => { error.value = ""; }, { deep: true });
 
+const importedOnly = props.preset.sourceKind === "imported";
+/** 送出後上游說「只供使用」不能用（比對到他人內容）：記下原因，選項停用到彈層關掉 */
+const hiddenRefused = ref<"" | "imported" | "overlap">("");
+const hiddenBlocked = computed(() => importedOnly ? "imported" : hiddenRefused.value);
+const content = ref<ContentVisibility | "">(importedOnly ? "open" : "");
+// 被拒時程式把選擇清空，那時錯誤要留著；只有作者自己選了才清
+watch(content, (v) => { if (v) error.value = ""; });
+const noteId = `publish-content-note-${Math.random().toString(36).slice(2)}`;
+
 const changedModels = computed(() => tested.value.length !== props.preset.recommendedModels.length || tested.value.some((m, i) => m !== props.preset.recommendedModels[i]));
 const termsUrl = computed(() => legalPage(currentProvider(), "terms", locale.value));
 
@@ -35,6 +49,7 @@ const termsUrl = computed(() => legalPage(currentProvider(), "terms", locale.val
 async function submit() {
   if (busy.value) return;
   error.value = "";
+  if (!content.value) { error.value = t("preset.share.contentVisibility.required"); return; }
   if (!purpose.value) { error.value = t("preset.purpose.required"); return; }
   if (purpose.value === "specific" && !tested.value.length) { error.value = t("preset.purpose.models.required"); return; }
   busy.value = true;
@@ -42,6 +57,8 @@ async function submit() {
   const input = {
     purpose: purpose.value, expectedVersion: props.preset.version, declaration: props.declaration, attribution: attribution.value.trim().slice(0, ATTRIBUTION_MAX),
     ...(changedModels.value ? { recommendedModels: tested.value } : {}),
+    // 上游有回模式就一律明送；舊上游（沒有這個欄位、也不收它）只在選了只供使用時才送
+    ...(props.preset.contentVisibility !== undefined || content.value === "hidden" ? { contentVisibility: content.value } : {}),
   };
   const action = `publish:${props.preset.id}:${JSON.stringify(input)}`;
   try {
@@ -50,10 +67,11 @@ async function submit() {
     emit("done", receipt);
   } catch (err) {
     if (!resultUnknown(err)) ops.done(action);
-    if (resultUnknown(err)) error.value = t("preset.error.unknown");
-    // 版本衝突在這裡不是「存檔」：不用編輯器那句，用公開自己的說法
-    else if (err instanceof ApiError && err.reason === "preset_revision_conflict") error.value = t("preset.share.error.conflict");
-    else error.value = (err instanceof ApiError && presetErrorText(err)) || t("preset.share.error.publish");
+    if (err instanceof ApiError && (err.reason === "preset_hidden_overlap" || err.reason === "preset_hidden_imported")) {
+      hiddenRefused.value = err.reason === "preset_hidden_imported" ? "imported" : "overlap";
+      content.value = "";
+    }
+    error.value = publishErrorText(err);
     // 聲明換版或別處先改了：清單要重讀，下一次按才會送新的版本與聲明
     if (err instanceof ApiError && err.code === "preset_conflict") emit("stale");
   } finally {
@@ -66,7 +84,26 @@ async function submit() {
   <PresetSheet :title="t('preset.share.publish.title', { name: preset.title })" testid="publish-sheet" @close="emit('close')">
     <p class="publish__lede">{{ $t("preset.share.publish.lede") }}</p>
 
-    <fieldset class="publish__field publish__purpose">
+    <fieldset class="publish__field publish__fieldset" data-testid="publish-content">
+      <legend class="publish__label">{{ $t("preset.share.contentVisibility.label") }}</legend>
+      <label class="publish__choice publish__choice--top">
+        <input v-model="content" type="radio" name="publish-content" value="open" data-testid="publish-content-open" />
+        <span><strong>{{ $t("preset.share.contentVisibility.open") }}</strong><span class="publish__hint">{{ $t("preset.share.contentVisibility.open.hint") }}</span></span>
+      </label>
+      <label class="publish__choice publish__choice--top" :class="{ 'publish__choice--off': hiddenBlocked }">
+        <input
+          v-model="content" type="radio" name="publish-content" value="hidden" :disabled="!!hiddenBlocked"
+          :aria-describedby="hiddenBlocked || content === 'hidden' ? noteId : undefined" data-testid="publish-content-hidden"
+        />
+        <span>
+          <strong>{{ $t("preset.share.contentVisibility.hidden") }}</strong><span class="publish__hint">{{ $t("preset.share.contentVisibility.hidden.hint") }}</span>
+          <span v-if="hiddenBlocked" :id="noteId" class="publish__note" data-testid="publish-hidden-why">{{ $t(hiddenBlocked === "imported" ? "preset.share.contentVisibility.disabledImported" : "preset.share.contentVisibility.disabledOverlap") }}</span>
+          <span v-else-if="content === 'hidden'" :id="noteId" class="publish__note" data-testid="publish-limit">{{ $t("preset.share.contentVisibility.limitNote") }}</span>
+        </span>
+      </label>
+    </fieldset>
+
+    <fieldset class="publish__field publish__fieldset publish__purpose">
       <legend class="publish__label">{{ $t("preset.purpose.label") }}</legend>
       <label v-for="value in (['general', 'specific'] as const)" :key="value" class="publish__choice">
         <input v-model="purpose" type="radio" name="publish-purpose" :value="value" :data-testid="`publish-purpose-${value}`" />
@@ -97,7 +134,7 @@ async function submit() {
 <style scoped>
 .publish__lede { font-size: 13.5px; line-height: 1.6; color: var(--text-2); }
 /* 韓文在詞中間斷行會剩一個音節掛在下一行：照站上 ConfirmDialog、CoachSpot 的做法整詞換行 */
-:lang(ko) .publish__lede, :lang(ko) .publish__hint, :lang(ko) .publish__declaration, :lang(ko) .notice { word-break: keep-all; }
+:lang(ko) .publish__lede, :lang(ko) .publish__hint, :lang(ko) .publish__note, :lang(ko) .publish__declaration, :lang(ko) .notice { word-break: keep-all; }
 .publish__field { display: grid; gap: var(--s-2); }
 .publish__label { font-size: 13px; font-weight: 600; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--s-2); }
 .publish__hint { font-weight: 400; color: var(--text-3); font-size: 12px; }
@@ -111,11 +148,18 @@ async function submit() {
 </style>
 
 <style scoped>
-.publish__purpose { border: 0; margin: 0; padding: 0; }
-.publish__purpose legend { margin-bottom: var(--s-2); }
+.publish__fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.publish__fieldset legend { margin-bottom: var(--s-2); }
 .publish__choice { display: flex; align-items: center; gap: var(--s-2); min-height: var(--h-lg); cursor: pointer; }
 .publish__choice > span { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--s-2); }
 .publish__choice strong { font-size: 13px; font-weight: 600; }
 .publish__choice input { accent-color: var(--accent-btn); }
+/* 內容公開方式的說明句較長、手機會換行，選項下方還可能多一句：圓鈕對齊第一行，不對齊整塊中線 */
+.publish__choice--top { align-items: flex-start; padding-block: var(--s-1); }
+.publish__choice--top input { margin-top: 3px; }
+.publish__choice--off { cursor: not-allowed; }
+.publish__choice--off input, .publish__choice--off strong, .publish__choice--off .publish__hint { opacity: .55; }
+/* 已知限制與停用原因：掛在選項下方、與選項文字對齊，整行一句 */
+.publish__note { flex-basis: 100%; font-size: 12px; line-height: 1.5; color: var(--text-2); }
 :lang(ko) .publish__choice { word-break: keep-all; }
 </style>

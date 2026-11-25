@@ -11,6 +11,10 @@
  * P2 分享：頁首下三格「我的｜喜愛與用過｜預設庫」（PM 2026-10-30）。前兩格是這一頁的分頁（?tab=，重新整理還在），
  * 預設庫是自己的一頁（/presets/library）；舊的 ?tab=public 連結轉過去。
  * 「我的」的選單多了公開／改回私人；改回私人不另外確認（PM 2026-10-30），完成後 toast 一行說明。
+ *
+ * 只供使用（UI 小稿 2026-11-26）：已公開的列多一顆「只供使用」chip；選單可切換內容模式，兩個方向都先確認
+ * （改成只供使用收不回已被看過的內容；改成公開內容後所有人看得到）。切換就是帶新模式再公開一次。
+ * 上游因比對拒絕時留在確認框裡說原因。匯入的、被下架的不給切換；上游沒回模式（舊版）也不給。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
@@ -18,8 +22,8 @@ import { useRoute, useRouter } from "vue-router";
 import { ApiError } from "@/lib/api";
 import { pageTitle } from "@/lib/i18n";
 import { dateTime, whole } from "@/lib/format";
-import { confirmDialog } from "@/lib/confirm";
-import { deletePreset, listPresets, resultUnknown, unpublishPreset, type PresetList, type PresetSummary, type WriteReceipt } from "@/lib/presets";
+import { confirmDialog, settleConfirm } from "@/lib/confirm";
+import { deletePreset, listPresets, publishErrorText, publishPreset, resultUnknown, unpublishPreset, type ContentVisibility, type PresetList, type PresetSummary, type WriteReceipt } from "@/lib/presets";
 import { operationKeys, usePresetAccess } from "@/lib/use-preset-access";
 import { useLocalePath } from "@/lib/use-locale";
 import PresetExportDialog from "@/components/preset/PresetExportDialog.vue";
@@ -140,6 +144,46 @@ async function unpublish(p: PresetSummary) {
   }
 }
 
+/** 已公開、本站寫的、沒被下架，而且上游有回目前的模式，才能切換 */
+const canSwitch = (p: PresetSummary) => p.visibility === "public" && !p.removed && p.contentVisibility !== undefined && p.sourceKind !== "imported";
+
+async function switchContent(p: PresetSummary, to: ContentVisibility) {
+  menu.value = "";
+  const key = to === "hidden" ? "switchToHidden" : "switchToOpen";
+  const input = {
+    purpose: p.purpose || (p.recommendedModels.length ? "specific" as const : "general" as const),
+    expectedVersion: p.version, declaration: declaration.value, attribution: p.attribution ?? "", contentVisibility: to,
+  };
+  const action = `content:${p.id}:${to}:${p.version}`;
+  const ok = await confirmDialog({
+    title: t(`preset.share.${key}.confirmTitle`), message: t(`preset.share.${key}.warning`), phraseWrap: true,
+    confirmText: t(`preset.share.${key}.confirm`), cancelText: t(`preset.share.${key}.keep`),
+    danger: true, dangerAppearance: "subdued", focusCancel: true,
+    // 斷線送不到：同一把冪等鍵再按一次就拿回原本的結果
+    pendingText: t("preset.error.unknown"), pendingConfirmText: t(`preset.share.${key}.confirm`),
+    onConfirm: async () => {
+      busy.value = p.id;
+      try {
+        await publishPreset(await token(), p.id, input, ops.key(action));
+        ops.done(action);
+      } catch (err) {
+        if (!resultUnknown(err)) ops.done(action);
+        // 要重新授權：關掉確認框，頁面換成授權說明
+        if (consentNeeded(err)) { settleConfirm(false); return; }
+        if (err instanceof ApiError && err.code === "preset_conflict") void load();
+        // 斷線留給確認框當「結果未知」；其餘換成這裡的說法，確認框照字顯示、不關
+        if (resultUnknown(err)) throw err;
+        throw new Error(publishErrorText(err));
+      } finally {
+        busy.value = "";
+      }
+    },
+  });
+  if (!ok) return;
+  say(t(`preset.share.${key}.toast`));
+  await load();
+}
+
 function copied(receipt: WriteReceipt, name: string) {
   copying.value = null;
   status.value = t("preset.copy.done", { name });
@@ -244,6 +288,10 @@ onBeforeUnmount(() => { document.removeEventListener("click", closeMenu); docume
               <span class="chip presets__chip">{{ $t(p.sourceKind === "imported" ? "preset.row.source.import" : "preset.row.source.native") }}</span>
               <span v-if="p.removed" class="chip presets__chip presets__chip--down" data-testid="preset-taken-down">{{ $t("preset.share.chip.takenDown") }}</span>
               <span v-else-if="p.visibility === 'public'" class="chip presets__chip presets__chip--public" data-testid="preset-public">{{ $t("preset.share.chip.public") }}</span>
+              <span v-if="!p.removed && p.visibility === 'public' && p.contentVisibility === 'hidden'" class="chip presets__chip content-chip" data-testid="preset-content-hidden">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>
+                {{ $t("preset.share.chip.contentHidden") }}
+              </span>
               <span v-if="p.bindingCount > 0">{{ $t("preset.row.inUse", { n: whole(p.bindingCount) }, p.bindingCount) }}</span>
               <span>{{ $t("preset.row.updated", { datetime: dateTime(p.updatedAt) }) }}</span>
             </span>
@@ -259,6 +307,10 @@ onBeforeUnmount(() => { document.removeEventListener("click", closeMenu); docume
                 <button type="button" role="menuitem" @click="menu = ''; exporting = p">{{ $t("preset.row.export") }}</button>
                 <button type="button" role="menuitem" :disabled="full" @click="menu = ''; copying = p">{{ $t("preset.row.copy") }}</button>
                 <!-- 被下架的也能改回私人：平台恢復後才不會又自動回到公開。封存的不在公開列表，上游也不收 -->
+                <template v-if="canSwitch(p)">
+                  <button v-if="p.contentVisibility === 'hidden'" type="button" role="menuitem" :disabled="!declaration" data-testid="preset-to-open" @click="switchContent(p, 'open')">{{ $t("preset.share.menu.toOpen") }}</button>
+                  <button v-else type="button" role="menuitem" :disabled="!declaration" data-testid="preset-to-hidden" @click="switchContent(p, 'hidden')">{{ $t("preset.share.menu.toHidden") }}</button>
+                </template>
                 <button v-if="p.visibility === 'public'" type="button" role="menuitem" data-testid="preset-unpublish" @click="unpublish(p)">{{ $t("preset.share.menu.unpublish") }}</button>
                 <button v-else type="button" role="menuitem" :disabled="p.removed || !declaration" data-testid="preset-publish" @click="menu = ''; publishing = p">{{ $t("preset.share.menu.publish") }}</button>
                 <button type="button" role="menuitem" class="presets__danger" data-testid="preset-remove" @click="remove(p)">
@@ -306,6 +358,9 @@ onBeforeUnmount(() => { document.removeEventListener("click", closeMenu); docume
 .presets__menu button:disabled { opacity: .45; cursor: not-allowed; }
 .presets__danger { color: var(--danger) !important; }
 .presets__chip--public { background: var(--accent-tint); color: var(--accent-text); font-weight: 500; }
+/* 只供使用：外框 chip，跟預設庫那顆同一個樣子 */
+.content-chip, .content-chip:hover { background: var(--surface); box-shadow: inset 0 0 0 1px var(--border-strong); color: var(--text); font-weight: 500; }
+.content-chip svg { flex: none; }
 /* 已下架是出事的狀態，不是類型：用站上錯誤提示（.notice--error）同一組危險淡底 */
 .presets__chip--down { background: color-mix(in srgb, var(--danger) 10%, var(--surface)); color: var(--danger); font-weight: 500; }
 .presets__note { line-height: 1.5; }

@@ -23,6 +23,9 @@
  * /preset-library/hot 有熱度的不足 12 份時用最新公開的補滿並標 fresh。模型篩選認 series:／model:／general／all。
  * 帶 roleId 讀寫的卡片綁定照卡分開存（預設庫的「套用到某張卡」）；畫布與回覆偏好照舊看最近存的那一份。
  * 「套用到某張卡」（mode=preset）會把那份記進「喜愛與用過」的用過。
+ *
+ * 只供使用（2026-11-26-preset-private-share）：預設庫的「夜讀筆記」是只供使用，別人讀詳情拿到空內容與 contentHidden。
+ * 公開時 contentVisibility=hidden：匯入的回 422 preset_hidden_imported；名稱含「撞」的當成比對到他人內容，回 422 preset_hidden_overlap。
  */
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -131,7 +134,7 @@ export function validateNative(doc) {
 
 function summary(p) {
   const head = revisions.get(p.headRevisionId);
-  return { purpose: "", visibility: "private", publishedAt: null, attribution: "", removed: false, ...p, allowedActions: p.bindingCount > 0 ? ["archive"] : ["delete"], recommendedModels: head?.recommendedModels ?? [] };
+  return { purpose: "", visibility: "private", contentVisibility: "open", publishedAt: null, attribution: "", removed: false, ...p, allowedActions: p.bindingCount > 0 ? ["archive"] : ["delete"], recommendedModels: head?.recommendedModels ?? [] };
 }
 function addRevision(preset, title, document, recommendedModels) {
   const revisionId = uuid();
@@ -180,7 +183,7 @@ function seedLibraryFixtures() {
   rows.forEach(([title, authorName, recommendedModels, usesLast7d, favoriteCount, age], i) => {
     const presetId = `10000000-0000-4000-8000-${String(i + 1).padStart(12, "0")}`;
     library.set(presetId, { purpose: i === 0 || !recommendedModels.length ? "general" : "specific", presetId, title, authorName, authorNumId: 4000 + i, authorAvatar: "", attribution: i === 1 ? "改寫自 Aster 的酒館預設" : "", recommendedModels, usesLast7d, favoriteCount,
-      publishedAt: daysAgo(age), updatedAt: daysAgo(Math.max(0, age - 1)), listed: true, mine: false,
+      publishedAt: daysAgo(age), updatedAt: daysAgo(Math.max(0, age - 1)), listed: true, mine: false, contentVisibility: title === "夜讀筆記" ? "hidden" : "open",
       document: doc([["main", "主敘事規則", "用鏡頭的方式寫場景：先交代整體環境，再帶到人物與細節。"], ["style", "文風細節", "旁白用第三人稱，台詞自然口語。"], ["end", "收尾處理", "每次回覆結尾留一個可以接話的地方。"]]) });
   });
 }
@@ -193,7 +196,7 @@ function seedLibrary() {
     const head = revisions.get(p.headRevisionId);
     library.set(p.id, {presetId:p.id,title:p.title,purpose:p.purpose, recommendedModels:head.recommendedModels,
       authorName:"測試作者",authorNumId:7,authorAvatar:"",attribution:p.attribution ?? "",usesLast7d:0,favoriteCount:0,
-      publishedAt:p.publishedAt,updatedAt:p.updatedAt,listed:p.visibility === "public",mine:true,document:head.document});
+      publishedAt:p.publishedAt,updatedAt:p.updatedAt,listed:p.visibility === "public",mine:true,contentVisibility:p.contentVisibility ?? "open",document:head.document});
   }
 }
 function libraryItem(x, extra = {}) {
@@ -271,7 +274,11 @@ export async function handlePresets({ m, path, url, body, raw, req, json, res })
       if (body.declaration !== DECLARATION) return json(res, 409, { error: "preset_conflict", reason: "preset_declaration_changed" }), true;
       const models = body.recommendedModels ?? revisions.get(p.headRevisionId).recommendedModels;
       if (!["general", "specific"].includes(body.purpose) || (body.purpose === "specific" && !models.length)) return json(res, 422, { error: "preset_invalid", reason: "preset_invalid_input" }), true;
-      Object.assign(p, { purpose: body.purpose, visibility: "public", publishedAt: p.publishedAt ?? now(), attribution: body.attribution ?? "" });
+      const content = body.contentVisibility ?? p.contentVisibility ?? "open";
+      if (!["open", "hidden"].includes(content)) return json(res, 400, { error: "invalid_request" }), true;
+      if (content === "hidden" && p.sourceKind === "imported") return json(res, 422, { error: "preset_invalid", reason: "preset_hidden_imported" }), true;
+      if (content === "hidden" && p.title.includes("撞")) return json(res, 422, { error: "preset_invalid", reason: "preset_hidden_overlap" }), true;
+      Object.assign(p, { purpose: body.purpose, visibility: "public", contentVisibility: content, publishedAt: p.publishedAt ?? now(), attribution: body.attribution ?? "" });
       if (body.recommendedModels) revisions.get(p.headRevisionId).recommendedModels = body.recommendedModels;
     } else p.visibility = "private";
     p.version++;
@@ -313,7 +320,12 @@ export async function handlePresets({ m, path, url, body, raw, req, json, res })
       return json(res, 200, { favorited: !!body.favorite }), true;
     }
     if (m === "POST" && mm[2] === "report") { reports.add(x.presetId); return json(res, 200, { reported: true }), true; }
-    if (m === "GET" && !mm[2]) return json(res, 200, { item: libraryItem(x), revision: { revisionId: `${x.presetId}-r`, presetId: x.presetId, version: 1, document: x.document, sourceKind: "native", compilerVersion: "mock-p1", contentHash: "mock", recommendedModels: x.recommendedModels, createdAt: x.updatedAt },
+    if (m === "GET" && !mm[2] && x.contentVisibility === "hidden" && !x.mine) {
+      const empty = { schemaVersion: "hearthroom.st-preset.v1", st: { prompts: [], prompt_order: [] }, selection: { profileId: 100001, excludedEntryIds: [], acceptedAdaptationIds: [], excludedFields: [] } };
+      return json(res, 200, { item: libraryItem(x), revision: { revisionId: `${x.presetId}-r`, presetId: x.presetId, version: 1, document: empty, sourceKind: "native", compilerVersion: "mock-p1", contentHash: "", recommendedModels: x.recommendedModels, createdAt: x.updatedAt },
+        compatibility: { compilerVersion: "mock-p1", reviewRequired: false, entries: [], fields: [] }, parameters: {}, reportedByMe: reports.has(x.presetId), contentHidden: true }), true;
+    }
+    if (m === "GET" && !mm[2]) return json(res, 200, { contentHidden: false, item: libraryItem(x), revision: { revisionId: `${x.presetId}-r`, presetId: x.presetId, version: 1, document: x.document, sourceKind: "native", compilerVersion: "mock-p1", contentHash: "mock", recommendedModels: x.recommendedModels, createdAt: x.updatedAt },
       compatibility: analyze(x.document), parameters: { temperature: x.document.st.temperature, top_p: x.document.st.top_p }, reportedByMe: reports.has(x.presetId) }), true;
   }
   if (m === "GET" && (mm = path.match(/^\/open\/v1\/presets\/([^/]+)$/))) {

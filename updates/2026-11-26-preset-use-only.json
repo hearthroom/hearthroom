@@ -1,0 +1,13 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/me/presets",
+  "draft": true,
+  "title": {
+    "zh-Hant": "公開預設時可以選「只供使用」，其他人能套用，但看不到條目內容。",
+    "zh-Hans": "公开预设时可以选「只供使用」，其他人能应用，但看不到条目内容。",
+    "en": "When sharing a preset, you can now choose Use only, so others can apply it without seeing its entries.",
+    "ja": "プリセットの公開時に「使用のみ」を選べるようになり、ほかの人は適用できても内容は見えません。",
+    "ko": "프리셋을 공개할 때 '사용만 허용'을 고를 수 있어, 다른 사람은 적용만 하고 항목 내용은 볼 수 없어요."
+  }
+}
