@@ -9714,7 +9714,7 @@
           "Author assets"
         ],
         "summary": "Replace the display rules of an owned role",
-        "description": "Full replacement of the author asset (there is no partial update). Optimistic locking: `version` must equal the version last read (`0` when no asset exists yet); a mismatch returns 409 `version_conflict`. `mountLayer` is required and must be `under`, `over` or `cover`; `pageMode` may be omitted (treated as `classic`), `immersive` or `sandbox`. Every rule needs a non-blank `find`; each `replace` is limited to 524288 bytes and the sum of `id`+`name`+`find`+`replace` across all rules to 33554432 bytes (`validate_reject`, with `message` and `detail` `{reason: emptyFind|ruleReplace|rulesTotal|ruleTargets|ruleCssDialect|sharedState|openingPage|cardCss, index, name, max, actual, unit: bytes}`). `openingPage` and `cardCss` are limited separately from the rules, each to 524288 UTF-8 bytes; over that, `detail.reason` is `openingPage` or `cardCss` with `index: -1`. Saving sets `status` to `passed` immediately and increments `version`. Rules act on the rendering layer only and never enter the prompt. Exception: `sharedState` is kept when omitted or `null`, and `{}` clears it; an invalid declaration is rejected with `reason: sharedState`.",
+        "description": "Full replacement of the author asset (there is no partial update). Optimistic locking: `version` must equal the version last read (`0` when no asset exists yet); a mismatch returns 409 `version_conflict`. `mountLayer` is required and must be `under`, `over` or `cover`; `pageMode` may be omitted (treated as `classic`), `immersive` or `sandbox`. Every rule needs a non-blank `find`; each `replace` is limited to 524288 bytes and the sum of `id`+`name`+`find`+`replace` across all rules to 33554432 bytes (`validate_reject`, with `message` and `detail` `{reason: emptyFind|ruleReplace|rulesTotal|ruleTargets|ruleCssDialect|sharedState|openingPage|cardCss, index, name, max, actual, unit: bytes}`). `openingPage` (104857600 UTF-8 bytes) and `cardCss` (524288 UTF-8 bytes) are limited separately from the rules; over that, `detail.reason` is `openingPage` or `cardCss` with `index: -1`. The request body is limited to 139460608 bytes (`413 file_too_large`). Saving sets `status` to `passed` immediately and increments `version`. Rules act on the rendering layer only and never enter the prompt. Exception: `sharedState` is kept when omitted or `null`, and `{}` clears it; an invalid declaration is rejected with `reason: sharedState`.",
         "security": [
           {
             "userToken": []
@@ -9753,7 +9753,7 @@
             }
           },
           "400": {
-            "description": "`invalid_param` (bad JSON) or `validate_reject` (unknown mountLayer/pageMode, empty `find`, rule or total size over limit, `openingPage` or `cardCss` over 524288 bytes). Body `{\"error\": \"<code>\"}`; for empty `find` and size limits also `message` (English sentence) and `detail` `{reason, index (0-based, -1 for the whole set), name, max, actual, unit: \"bytes\"}`.",
+            "description": "`invalid_param` (bad JSON) or `validate_reject` (unknown mountLayer/pageMode, empty `find`, rule or total size over limit, `openingPage` over 104857600 bytes or `cardCss` over 524288 bytes, `openingPageClear` with a non-empty `openingPage`). Body `{\"error\": \"<code>\"}`; for empty `find` and size limits also `message` (English sentence) and `detail` `{reason, index (0-based, -1 for the whole set), name, max, actual, unit: \"bytes\"}`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -9804,6 +9804,26 @@
           },
           "500": {
             "description": "`generic_error`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`file_too_large` — request body over 139460608 bytes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` (retryable) — an opening page over 524288 bytes could not be written to storage. Nothing was saved.",
             "content": {
               "application/json": {
                 "schema": {
@@ -23543,6 +23563,261 @@
           }
         }
       }
+    },
+    "/open/v1/role/author-asset/opening": {
+      "get": {
+        "operationId": "readAuthorAssetOpeningPage",
+        "tags": [
+          "Author assets"
+        ],
+        "summary": "Read the full opening page of a role",
+        "description": "Streams the opening page that `serveAuthorAsset` describes with `openingPageUrl`. Access is exactly the same as `serveAuthorAsset` with the same query: what the caller may render, the caller may read here. Used for private agent configurations, trials, versions pending review and drafts; published versions are served from the public assets URL instead. A stored object that cannot be read falls back to the stored copy when one exists, and is never returned as an empty page.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "roleId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Role id."
+          },
+          {
+            "name": "operationId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Together with conversationId, return this owned operation's exact admitted Workshop display projection. Foreign or mismatched operations are unavailable."
+          },
+          {
+            "name": "conversationId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Same as on `serveAuthorAsset`: read the page as composed for this owned conversation."
+          },
+          {
+            "name": "workshopTrial",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Same as on `serveAuthorAsset`: read the page as composed for this extension draft trial."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The opening page HTML. `Cache-Control: private, no-store`, `Content-Security-Policy: sandbox`, `X-Content-Type-Options: nosniff`: the response does not run as a document on the API origin; fetch it and hand it to your own sandboxed frame.",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid_param` — `roleId` missing or a context id malformed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`role_not_found` — no accessible role, or it has no opening page.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "`opening_page_expired` — an old sealed version whose large opening page is no longer retained.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` (retryable) — the stored page could not be read.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-harperharbor": {
+          "summary": "Read the full opening page",
+          "description": "Streams the opening page HTML of an accessible agent configuration with the same access rules as the display-rules read. Responses are private, uncached and sandboxed."
+        }
+      }
+    },
+    "/open/v1/role/{roleId}/opening-page": {
+      "put": {
+        "operationId": "uploadOpeningPage",
+        "tags": [
+          "Author assets"
+        ],
+        "summary": "Upload the opening page of an owned role as raw HTML",
+        "description": "Replaces only the opening page; every other author-asset field is unchanged. The body is the HTML itself (no JSON escaping), at most 104857600 UTF-8 bytes, and `Content-Length` is required. The body must be valid UTF-8 without NUL bytes (`validate_reject` reason `openingPage`, `detail.name: encoding`). An empty body clears the page. Optimistic locking uses the author-asset `version` (`0` creates the asset with defaults). Same ownership and capability checks as `saveAuthorAsset`.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "roleId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Role id owned by the caller."
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "Author-asset version last read; `0` when no asset exists yet."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "text/html": {
+              "schema": {
+                "type": "string",
+                "maxLength": 104857600
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved asset (new `version`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthorAssetResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid_param` (missing or bad `version`) or `validate_reject` (`openingPage` over 104857600 bytes, or not valid UTF-8).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`forbidden` (not the author) or `insufficient_scope` (needs `role.write`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`role_not_found`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`version_conflict`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "411": {
+            "description": "`invalid_param` — `Content-Length` is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` (retryable) — storage write failed or too many uploads are in progress; nothing was saved. A stale `version` is refused with 409 before the body is read.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-harperharbor": {
+          "summary": "Upload an opening page as raw HTML",
+          "description": "Replaces only the opening page of an owned agent configuration with the raw HTML body, up to 100 MiB. Requires role.write and authorship; uses the author-asset version for optimistic locking."
+        }
+      }
     }
   },
   "components": {
@@ -23760,7 +24035,7 @@
           },
           "openingPage": {
             "type": "string",
-            "description": "Opening page: author HTML (style, script and handlers allowed) shown at the top of the play canvas when a conversation starts, above any opening message. Display only: never sent to the model or read by memory compaction. Empty when not set."
+            "description": "Opening page: author HTML (style, script and handlers allowed) shown at the top of the play canvas when a conversation starts, above any opening message. Display only: never sent to the model or read by memory compaction. Inlined only when the page is at most 524288 UTF-8 bytes; a larger page is `\"\"` here and is read from `openingPageUrl`. Empty when not set."
           },
           "openingMode": {
             "type": "string",
@@ -23805,6 +24080,20 @@
                 "description": "Whether the platform currently allows cards to declare and run contexts. The same value for every card."
               }
             }
+          },
+          "openingPageBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Size of the opening page in UTF-8 bytes; `0` when there is none."
+          },
+          "openingPageExpired": {
+            "type": "boolean",
+            "description": "Present and `true` only on an old sealed version whose large opening page is no longer retained. Its content cannot be read (`410 opening_page_expired`); read the current version instead."
+          },
+          "openingPageUrl": {
+            "type": "string",
+            "description": "Where to fetch the full opening page when there is one. For a published version this is an absolute, immutable public URL on the assets domain (`https://assets.harperharbor.com/opening/<sha256>.html`, CORS `*`); otherwise (private agent configuration, trial, pending review, draft) it is an API path relative to the API origin (`/open/v1/role/author-asset/opening?…`) carrying the same `roleId`, `conversationId`, `operationId` and `workshopTrial` as this request, read with the same bearer token. Fetch it only when the page is shown. `\"\"` when there is no opening page."
           }
         }
       },
@@ -23897,7 +24186,7 @@
           },
           "openingPage": {
             "type": "string",
-            "description": "Opening page: author HTML (style, script and handlers allowed) shown at the top of the play canvas when a conversation starts, above any opening message. Display only: never sent to the model or read by memory compaction. Empty when not set."
+            "description": "Opening page: author HTML (style, script and handlers allowed) shown at the top of the play canvas when a conversation starts, above any opening message. Display only: never sent to the model or read by memory compaction. Inlined only when the page is at most 524288 UTF-8 bytes; a larger page is `\"\"` here and is read from `openingPageUrl`. Empty when not set."
           },
           "openingMode": {
             "type": "string",
@@ -23932,6 +24221,24 @@
               "mmd"
             ],
             "description": "Compatibility metadata retained by importers and legacy migration; takes precedence over automatic selector mapping. Authors do not need to set it. Existing values round-trip unchanged. Omitted when never set. New Fengyue imports use fengyue-v2 to include source-platform base styles. Legacy hints retain their rendering; reimport an old Fengyue card to get the latest compatibility. This version is not accepted as a display-rule cssDialect."
+          },
+          "openingPageBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Size of the opening page in UTF-8 bytes; `0` when there is none."
+          },
+          "openingPageExpired": {
+            "type": "boolean",
+            "description": "Present and `true` only on an old sealed version whose large opening page is no longer retained. Its content cannot be read (`410 opening_page_expired`); read the current version instead."
+          },
+          "openingPageUrl": {
+            "type": "string",
+            "description": "Where to read the full opening page when there is one: an API path relative to the API origin (`/open/v1/role/author-asset/opening?roleId=…`), read with the same bearer token. `\"\"` when there is no opening page, and on the issuer review read."
+          },
+          "openingPageTruncated": {
+            "type": "boolean",
+            "description": "Issuer review read only (`/hosting/revisions/{roleId}/review`): `true` when `openingPage` holds only the first 524288 bytes (cut on a UTF-8 character boundary) of a larger page; `openingPageBytes` is the full size."
           }
         }
       },
@@ -23984,8 +24291,8 @@
           },
           "openingPage": {
             "type": "string",
-            "maxLength": 524288,
-            "description": "Opening page HTML, at most 524288 UTF-8 bytes (`validate_reject` reason `openingPage`). Omitted or `null` keeps the stored page; `\"\"` clears it."
+            "maxLength": 104857600,
+            "description": "Opening page HTML, at most 104857600 UTF-8 bytes (`validate_reject` reason `openingPage`). Omitted or `null` keeps the stored page. `\"\"` clears a stored page of at most 524288 bytes but keeps a larger one, which older clients never received inline; use `openingPageClear` to remove any page. Pages larger than about 32 MiB should be sent with `PUT /open/v1/role/{roleId}/opening-page` instead of inside JSON."
           },
           "openingMode": {
             "type": "string",
@@ -24023,6 +24330,10 @@
               "mmd"
             ],
             "description": "Compatibility metadata retained by importers and legacy migration; takes precedence over automatic selector mapping. Authors do not need to set it. Existing values round-trip unchanged. Omitted or null preserves the stored hint; an empty string clears it. New Fengyue imports use fengyue-v2 to include source-platform base styles. Legacy hints retain their rendering; reimport an old Fengyue card to get the latest compatibility. This version is not accepted as a display-rule cssDialect."
+          },
+          "openingPageClear": {
+            "type": "boolean",
+            "description": "`true` removes the opening page whatever its size. Must not be combined with a non-empty `openingPage` (`invalid_param`)."
           }
         }
       },
@@ -31177,8 +31488,8 @@
           },
           "openingPage": {
             "type": "string",
-            "maxLength": 524288,
-            "description": "Opening page HTML, at most 524288 UTF-8 bytes (`validate_reject` reason `openingPage`). Omitted or `null` keeps the stored page; `\"\"` clears it."
+            "maxLength": 104857600,
+            "description": "Opening page HTML, at most 104857600 UTF-8 bytes (`validate_reject` reason `openingPage`). Same keep and clear rules as `AuthorAssetSaveRequest.openingPage`. The whole trial body is limited to 48 MiB; push a larger page afterwards with `PUT /open/v1/role/{roleId}/opening-page`."
           },
           "openingMode": {
             "type": "string",
@@ -31206,6 +31517,10 @@
               "mmd"
             ],
             "description": "Compatibility metadata retained by importers and legacy migration; takes precedence over automatic selector mapping. Authors do not need to set it. Existing values round-trip unchanged. Omitted or null preserves the stored hint; an empty string clears it. New Fengyue imports use fengyue-v2 to include source-platform base styles. Legacy hints retain their rendering; reimport an old Fengyue card to get the latest compatibility. This version is not accepted as a display-rule cssDialect."
+          },
+          "openingPageClear": {
+            "type": "boolean",
+            "description": "`true` removes the opening page whatever its size. Must not be combined with a non-empty `openingPage` (`invalid_param`)."
           }
         }
       },
