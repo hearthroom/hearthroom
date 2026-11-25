@@ -3610,7 +3610,7 @@ describe("開場網頁：大頁面", () => {
     await flush();
     expect(paste.defaultPrevented).toBe(true);
     expect(root.querySelector("#f-opening-page")).toBeNull();
-    expect($("[data-opening-file-notice]").textContent).toBe(i18n.global.t("editor.openingPage.pasted", { limit: "1 MB" }));
+    expect($("[data-opening-file-notice]").textContent).toBe(i18n.global.t("editor.openingPage.pasted"));
     await submit();
     expect(await (api.uploadOpeningPage.mock.calls[0][1] as Blob).text()).toBe(big);
   });
@@ -3648,5 +3648,72 @@ describe("開場網頁：大頁面", () => {
     expect(version).toBe(0);
     expect(await (sent as Blob).text()).toBe(big);
     expect(assetBody()).toMatchObject({ openingPage: "", version: 1, openingMode: "page" });
+  });
+});
+
+// 還原成目前上架的內容：大開場網頁也要真的跟著還原，畫面上看到的是上架版那一份。
+describe("還原上架版：大開場網頁", () => {
+  const MB = 1024 * 1024;
+  const KB = 1024;
+  const approvedUrl = "/open/v1/role/author-asset/opening?roleId=approved-r1";
+  const draftUrl = "/open/v1/role/author-asset/opening?roleId=r1";
+  const asset = (extra: Record<string, unknown>) => ({ rules: [], mountTrigger: "", mountLayer: "over", pageMode: "sandbox", openingMode: "page", openingPage: "", status: "passed", version: 4, ...extra } as any);
+  const role = { roleName: "大首屏", roleDetailDesc: "設定", roleWelcome: "", rolePrologue: ["出發"], language: "zh-Hant" };
+  async function revert() {
+    $<HTMLButtonElement>("[data-approved-restore]").click(); await flush();
+    await confirmState.current!.onConfirm!({} as any); settleConfirm(true); await flush();
+  }
+  beforeEach(() => {
+    setOpeningPageLimitsForTest({ max: 100 * MB });
+    // 下載會點一個 <a download>：測試環境裡真的點下去會讓頁面導走，影響後面的測試
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    visibilityMocks.read.mockResolvedValue({ workVisibility: visibilityPolicy({ revisionState: "changed" }) });
+    api.fetchRoleDetail.mockResolvedValue(role);
+  });
+  afterEach(() => setOpeningPageLimitsForTest({ max: null }));
+
+  it("預覽顯示上架版的大頁面（不是草稿那份），下載讀上架版；復原回到草稿那份", async () => {
+    api.fetchAuthorAsset.mockResolvedValueOnce(asset({ openingPageBytes: 3 * MB, openingPageUrl: draftUrl }))
+      .mockResolvedValueOnce(asset({ openingPageBytes: 5 * MB, openingPageUrl: approvedUrl }));
+    await mount("/cards/r1/edit");
+    expect($("[data-opening-file]").textContent).toContain("3 MB");
+    await revert();
+    expect($("[data-opening-file]").textContent).toContain("5 MB");
+    api.fetchOpeningPage.mockResolvedValueOnce(new Blob(["<p>上架版</p>"]));
+    $<HTMLButtonElement>("[data-opening-file] [data-opening-download]").click(); await flush();
+    expect(api.fetchOpeningPage).toHaveBeenLastCalledWith(approvedUrl, "tok", expect.anything());
+    $<HTMLButtonElement>("[data-approved-undo]").click(); await flush();
+    if (confirmState.current) { settleConfirm(true); await flush(); }
+    expect($("[data-opening-file]").textContent).toContain("3 MB");
+    expect(root.querySelector("[data-approved-undo]")).toBeNull();
+  });
+
+  it("上架版的頁面在編輯門檻內但沒內嵌：從上架版讀進文字框", async () => {
+    const approvedPage = "<p>" + "a".repeat(600 * KB) + "</p>";
+    api.fetchAuthorAsset.mockResolvedValueOnce(asset({ openingPage: "<p>草稿</p>" }))
+      .mockResolvedValueOnce(asset({ openingPageBytes: approvedPage.length, openingPageUrl: approvedUrl }));
+    api.fetchOpeningPage.mockResolvedValueOnce(new Blob([approvedPage]));
+    await mount("/cards/r1/edit");
+    await revert();
+    expect(api.fetchOpeningPage).toHaveBeenCalledWith(approvedUrl, "tok", expect.anything());
+    expect($<HTMLTextAreaElement>("#f-opening-page").value).toBe(approvedPage);
+  });
+
+  it("存檔：上游整份還原（含大頁面），不另外上傳也不清除；存完顯示還原後的那份", async () => {
+    api.fetchAuthorAsset.mockResolvedValueOnce(asset({ openingPage: "<p>草稿</p>" }))
+      .mockResolvedValueOnce(asset({ openingPageBytes: 5 * MB, openingPageUrl: approvedUrl }))
+      .mockResolvedValueOnce(asset({ openingPageBytes: 5 * MB, openingPageUrl: draftUrl, version: 5 }));
+    await mount("/cards/r1/edit");
+    await revert();
+    await submit();
+    expect(api.saveApprovedDraft).toHaveBeenCalledTimes(1);
+    expect(api.uploadOpeningPage).not.toHaveBeenCalled();
+    expect(api.saveAuthorAsset).not.toHaveBeenCalled();
+    expect($("[data-opening-file]").textContent).toContain("5 MB");
+    expect(root.querySelector("[data-approved-undo]")).toBeNull();
+    // 存完之後下載讀的是這張卡自己的頁面
+    api.fetchOpeningPage.mockResolvedValueOnce(new Blob(["x"]));
+    $<HTMLButtonElement>("[data-opening-file] [data-opening-download]").click(); await flush();
+    expect(api.fetchOpeningPage).toHaveBeenLastCalledWith(draftUrl, "tok", expect.anything());
   });
 });

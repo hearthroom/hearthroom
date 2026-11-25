@@ -135,7 +135,7 @@ const fileError = computed(() => {
 });
 const fileNotice = computed(() => {
   const code = props.fileControl?.notice.value;
-  if (code === "pasted") return t("editor.openingPage.pasted", { limit: formatPageSize(OPENING_PAGE_EDIT_MAX_BYTES, String(locale.value)) });
+  if (code === "pasted") return t("editor.openingPage.pasted");
   if (code === "picked") return t("editor.openingPage.pickedHint");
   if (code === "cleared") return t("editor.openingPage.clearedHint");
   return "";

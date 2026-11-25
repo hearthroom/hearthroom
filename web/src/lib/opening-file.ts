@@ -28,6 +28,8 @@ export interface OpeningFile {
   pending: boolean;
   /** 舊的封存版本，頁面已不保留。 */
   expired?: boolean;
+  /** 從哪裡讀內容；沒有就讀這張卡自己的（還原上架版的預覽讀的是上架版那份）。 */
+  url?: string;
 }
 
 export type OpeningFileError = "" | "errFail" | "errDownload" | "errTooBig" | "errType";
@@ -46,8 +48,11 @@ export interface OpeningSavePlan {
 export interface OpeningFileDeps {
   /** 文字框現在的內容。 */
   text(): string;
-  /** 換文字框的內容；baseline 時連「上次存的」一起換（讀進來的不算改動）。 */
-  setText(value: string, baseline: boolean): void;
+  /**
+   * 換文字框的內容；baseline 時連「上次存的」一起換（讀進來的不算改動）；
+   * "baselineOnly" 只換「上次存的」，不動作者文字框裡已經有的字。
+   */
+  setText(value: string, baseline: boolean | "baselineOnly"): void;
   token(): Promise<string | null>;
   /** 清除前的確認（大頁面清掉就救不回來）。 */
   confirmClear(): Promise<boolean>;
@@ -115,8 +120,12 @@ export function useOpeningFile(deps: OpeningFileDeps) {
     if (bytes <= OPENING_PAGE_EDIT_MAX_BYTES && !asset.openingPageExpired) void loadIntoEditor();
   }
 
-  /** 上游的頁面不大：讀進文字框。中途作者換了檔案或清掉，就不蓋。失敗留在檔案卡上，下載可重試。 */
-  async function loadIntoEditor() {
+  /**
+   * 上游的頁面不大：讀進文字框。中途作者換了檔案或清掉，就不蓋。失敗留在檔案卡上，下載可重試。
+   * baseline＝這是這張卡存著的那份（讀進來不算改動）；還原上架版的預覽不是，讀進來就是待存的改動。
+   * 文字框裡已經有作者的字（例如還原存檔後合併回來的改動）時只更新「上次存的」。
+   */
+  async function loadIntoEditor(baseline = true) {
     const target = file.value;
     try {
       const blob = await contentOf("load");
@@ -124,7 +133,7 @@ export function useOpeningFile(deps: OpeningFileDeps) {
       const text = await blob.text();
       if (file.value !== target) return;
       setFile(null);
-      deps.setText(text, true);
+      deps.setText(text, baseline && deps.text() ? "baselineOnly" : baseline);
     } catch (err) {
       if (file.value === target && !isAbortError(err)) error.value = "errDownload";
     }
@@ -143,7 +152,7 @@ export function useOpeningFile(deps: OpeningFileDeps) {
     transfer.value = { kind, percent: 0 };
     error.value = "";
     try {
-      const blob = await fetchOpeningPage(storedUrl, token, {
+      const blob = await fetchOpeningPage(current.url ?? storedUrl, token, {
         total: current.bytes,
         signal: own.signal,
         onProgress: (loaded, total) => { if (controller === own) transfer.value = { kind, percent: percentOf(loaded, total) }; },
@@ -172,6 +181,44 @@ export function useOpeningFile(deps: OpeningFileDeps) {
       if (!isAbortError(err)) error.value = "errDownload";
       return null;
     }
+  }
+
+  /**
+   * 預覽另一個版本（還原上架版）：那個版本的大頁面顯示成檔案卡，內容從那個版本讀；門檻內但沒內嵌的讀進文字框
+   * （算待存的改動）。上游這張卡自己的狀態（storedLarge）不變：真的存檔時上游整份還原，之後再照讀回來的 adopt。
+   */
+  async function showRevision(asset: Pick<AuthorAsset, "openingPage" | "openingPageBytes" | "openingPageUrl" | "openingPageExpired">) {
+    controller?.abort();
+    cleared.value = false;
+    error.value = "";
+    notice.value = "";
+    const inline = asset.openingPage ?? "";
+    if (inline) {
+      const size = utf8Length(inline);
+      if (size > OPENING_PAGE_EDIT_MAX_BYTES) {
+        setFile({ bytes: size, blob: new Blob([inline], { type: "text/html" }), pending: false });
+        deps.setText("", false);
+      } else setFile(null);
+      return;
+    }
+    const bytes = asset.openingPageBytes ?? 0;
+    if (bytes <= 0 || !asset.openingPageUrl) { setFile(null); return; }
+    setFile({ bytes, blob: null, pending: false, url: asset.openingPageUrl, ...(asset.openingPageExpired ? { expired: true } : {}) });
+    if (bytes <= OPENING_PAGE_EDIT_MAX_BYTES && !asset.openingPageExpired) await loadIntoEditor(false);
+  }
+
+  /** 目前的檔案狀態，給還原上架版的「復原」用（Blob 只留參照）。 */
+  function snapshot() {
+    return { file: file.value, storedLarge: storedLarge.value, storedUrl, cleared: cleared.value, notice: notice.value };
+  }
+  function restore(state: ReturnType<typeof snapshot>) {
+    controller?.abort();
+    file.value = state.file;
+    storedLarge.value = state.storedLarge;
+    storedUrl = state.storedUrl;
+    cleared.value = state.cleared;
+    notice.value = state.notice;
+    error.value = "";
   }
 
   /**
@@ -305,7 +352,7 @@ export function useOpeningFile(deps: OpeningFileDeps) {
 
   return {
     file, storedLarge, cleared, transfer, error, notice,
-    reset, adopt, adoptServer, pick, paste, importText, clear, cancel, download, previewContent,
+    reset, adopt, adoptServer, showRevision, snapshot, restore, pick, paste, importText, clear, cancel, download, previewContent,
     hasPage, bytes, dirty, planSave, upload, saved,
   };
 }
