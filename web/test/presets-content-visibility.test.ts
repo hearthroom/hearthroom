@@ -173,8 +173,7 @@ describe("公開彈層：內容公開方式", () => {
   });
 
   it("上游開關關著：不出現內容公開方式，照原本的流程公開，明送公開內容", async () => {
-    // 之前設過只供使用、改回私人的也一樣：開關關著不能再只供使用，要明送 open 才不會沿用
-    mocks.list.mockResolvedValue(mineList([summary({ contentHiddenAvailable: false, contentVisibility: "hidden" })], false));
+    mocks.list.mockResolvedValue(mineList([summary({ contentHiddenAvailable: false, contentVisibility: "open" })], false));
     mocks.publish.mockResolvedValue({ presetId: "p1", revisionId: "r2", version: 3 });
     await mount("/me/presets");
     await openPublish();
@@ -182,6 +181,16 @@ describe("公開彈層：內容公開方式", () => {
     expect(radio("hidden")).toBeNull();
     body$<HTMLButtonElement>("[data-testid=publish-confirm]").click(); await flush();
     expect(mocks.publish.mock.calls[0]![2]).toMatchObject({ purpose: "general", contentVisibility: "open" });
+  });
+
+  it("開關關著、原本是只供使用（改回私人後再公開）：不送模式，不會在作者不知情下把內容公開", async () => {
+    mocks.list.mockResolvedValue(mineList([summary({ contentHiddenAvailable: false, contentVisibility: "hidden" })], false));
+    mocks.publish.mockResolvedValue({ presetId: "p1", revisionId: "r2", version: 3 });
+    await mount("/me/presets");
+    await openPublish();
+    expect(body$("[data-testid=publish-content]")).toBeNull();
+    body$<HTMLButtonElement>("[data-testid=publish-confirm]").click(); await flush();
+    expect(mocks.publish.mock.calls[0]![2]).not.toHaveProperty("contentVisibility");
   });
 
   it("開關關著時匯入的預設也不出現這一組", async () => {
