@@ -1,5 +1,5 @@
 import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import worker from '../src/index';
 import { proxyHarborApi } from '../src/harbor-api-proxy';
 import { bumpHarborProxy, opsMetrics } from '../src/ops-metrics';
@@ -182,4 +182,63 @@ it('carries only the review selector from its scoped path for both HTTP and WebS
  });
  for(const path of ['/role/detail?roleId=synthetic','/conversation/ws?protocolVersion=2'])expect((await proxyHarborApi(request(`/reviews/${id}/open/v1${path}`,{headers:{'X-Hearthroom-Review':'forged'}}),options)).status).toBe(204);
  expect((await proxyHarborApi(request('/reviews/bad/open/v1/me'),options)).status).toBe(404);
+});
+
+// 開場網頁的原始上傳：上游要 Content-Length（沒有就 411），代理要串流轉送、不能把 100 MB 讀進 Worker。
+describe('opening page raw upload', () => {
+  const path = '/open/v1/role/role-1/opening-page?version=3';
+  it('streams the body upstream with the exact declared Content-Length', async () => {
+    const page = '<p>' + 'a'.repeat(70000) + '</p>';
+    let finish!: () => void;
+    const body = new ReadableStream<Uint8Array>({ start(c) {
+      c.enqueue(new TextEncoder().encode(page.slice(0, 10)));
+      finish = () => { c.enqueue(new TextEncoder().encode(page.slice(10))); c.close(); };
+    } });
+    const upstream = vi.spyOn(globalThis, 'fetch').mockImplementation(async input => {
+      const req = input as Request;
+      expect(req.url).toBe(`https://api.harperharbor.com${path}`);
+      expect(req.method).toBe('PUT');
+      expect(req.headers.get('Content-Length')).toBe(String(page.length));
+      const reader = req.body!.getReader();
+      // 第一段在客戶端送完之前就到了：串流，不是整份讀完再送
+      expect(new TextDecoder().decode((await reader.read()).value)).toBe(page.slice(0, 10));
+      finish();
+      let rest = '';
+      for (;;) { const { done, value } = await reader.read(); if (done) break; rest += new TextDecoder().decode(value); }
+      expect(page.slice(0, 10) + rest).toBe(page);
+      return Response.json({ version: 4 });
+    });
+    const res = await proxyHarborApi(request(path, { method: 'PUT', body, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Content-Length': String(page.length) }, duplex: 'half' } as RequestInit), options);
+    expect(res.status).toBe(200);
+    expect(upstream).toHaveBeenCalledTimes(1);
+  });
+
+  it('answers 411 without calling upstream when the client sent no length', async () => {
+    const upstream = vi.spyOn(globalThis, 'fetch');
+    const body = new ReadableStream<Uint8Array>({ start(c) { c.enqueue(new TextEncoder().encode('<p>x</p>')); c.close(); } });
+    const res = await proxyHarborApi(request(path, { method: 'PUT', body, duplex: 'half' } as RequestInit), options);
+    expect(res.status).toBe(411);
+    expect(await res.json()).toEqual({ error: 'invalid_param' });
+    expect(upstream).not.toHaveBeenCalled();
+  });
+
+  it('answers 413 above the contract limit without calling upstream', async () => {
+    const upstream = vi.spyOn(globalThis, 'fetch');
+    const res = await proxyHarborApi(request(path, { method: 'PUT', body: 'x', headers: { 'Content-Length': String(105 * 1024 * 1024) } }), options);
+    expect(res.status).toBe(413);
+    expect(await res.json()).toEqual({ error: 'file_too_large' });
+    expect(upstream).not.toHaveBeenCalled();
+  });
+
+  it('forwards an empty body (clears the page) with Content-Length 0', async () => {
+    const upstream = vi.spyOn(globalThis, 'fetch').mockImplementation(async input => {
+      const req = input as Request;
+      expect(req.headers.get('Content-Length')).toBe('0');
+      expect(await req.text()).toBe('');
+      return Response.json({ version: 4 });
+    });
+    const res = await proxyHarborApi(request(path, { method: 'PUT', body: '', headers: { 'Content-Length': '0' } }), options);
+    expect(res.status).toBe(200);
+    expect(upstream).toHaveBeenCalledTimes(1);
+  });
 });

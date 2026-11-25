@@ -12,6 +12,30 @@ const FORWARDED_HEADERS = [
   'Upgrade', 'Connection', 'Sec-WebSocket-Key', 'Sec-WebSocket-Version', 'Sec-WebSocket-Protocol', 'Sec-WebSocket-Extensions',
 ] as const;
 
+// 開場網頁的原始上傳（PUT /open/v1/role/{roleId}/opening-page）：上游要 Content-Length，沒有就回 411。
+// 串流本體轉送時 Worker 不會帶長度，所以照客戶端宣告的長度用 FixedLengthStream 轉一手（仍是串流，不整份讀進來）。
+// 上限照公開沙盒契約的 openingPageMaxBytes（100 MiB）加一點餘裕，超過的在這裡就擋，不佔上游的頻寬。
+const OPENING_PAGE_UPLOAD = /^\/open\/v1\/role\/[^/]+\/opening-page$/;
+export const OPENING_PAGE_UPLOAD_MAX_BYTES = 100 * 1024 * 1024 + 64 * 1024;
+
+/**
+ * 有宣告長度的原始上傳本體；回 Response 時是本地就拒絕。
+ * FixedLengthStream 讓送出去的請求在線上帶長度；Request 物件的標頭上看不到它，所以另外照實寫一份 Content-Length。
+ */
+function openingPageUploadBody(request: Request, path: string): { body: ReadableStream | string; length: number } | Response | null {
+  if (request.method !== 'PUT' || !OPENING_PAGE_UPLOAD.test(path)) return null;
+  const declared = request.headers.get('Content-Length') ?? '';
+  if (!/^\d+$/.test(declared)) {
+    return Response.json({ error: 'invalid_param' }, { status: 411, headers: { 'Cache-Control': 'no-store' } });
+  }
+  const length = Number(declared);
+  if (length > OPENING_PAGE_UPLOAD_MAX_BYTES) {
+    return Response.json({ error: 'file_too_large' }, { status: 413, headers: { 'Cache-Control': 'no-store' } });
+  }
+  if (length === 0 || !request.body) return { body: '', length: 0 };
+  return { body: request.body.pipeThrough(new FixedLengthStream(length)), length };
+}
+
 export function proxyRoute(path: string): ProxyRoute {
   path=reviewTarget(path)?.path??path;
   if (path === '/oauth/token' || path === '/oauth/revoke') return 'oauth';
@@ -46,6 +70,8 @@ export async function proxyHarborApi(request: Request, env: Env): Promise<Respon
   if (!env.HARBOR_HEARTHROOM_PROXY_SECRET || !client) {
     return Response.json({ error: 'temporarily_unavailable' }, { status: 503, headers: { 'Cache-Control': 'no-store' } });
   }
+  const upload = openingPageUploadBody(request, path);
+  if (upload instanceof Response) return upload;
   const target = new URL(HARBOR_ORIGIN);
   const review=reviewTarget(path);
   target.pathname = review?.path??path;
@@ -59,6 +85,7 @@ export async function proxyHarborApi(request: Request, env: Env): Promise<Respon
   }
   // The selector is untrusted: Provider checks the actual OAuth viewer with the issuer.
   if(review)headers.set('X-Hearthroom-Review',review.reviewId);
+  if (upload) headers.set('Content-Length', String(upload.length));
   const country = request.cf?.country;
   if (typeof country === 'string' && /^[A-Z]{2}$/.test(country)) headers.set('CF-IPCountry', country);
   headers.set('X-Harbor-Client-IP', client);
@@ -66,7 +93,7 @@ export async function proxyHarborApi(request: Request, env: Env): Promise<Respon
   try {
     const upstream = await fetch(new Request(target, {
       method: request.method, headers, redirect: 'manual', signal: request.signal,
-      body: request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body,
+      body: request.method === 'GET' || request.method === 'HEAD' ? undefined : upload ? upload.body : request.body,
     }));
     const responseHeaders = new Headers(upstream.headers);
     responseHeaders.delete('Set-Cookie');
