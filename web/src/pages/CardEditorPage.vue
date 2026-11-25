@@ -63,7 +63,9 @@ import {
   uploadImage,
   type WorldbookSummary,
 } from "@/lib/api";
-import { emptyRuleSet, ruleSetFromAuthorAsset, ruleSetFromImport, ruleSetToAuthorAsset, ruleSetToExport, ruleSetWarnings, validateRuleSet, utf8Bytes, OPENING_PAGE_MAX_BYTES, type RegexRuleSet, chatPageOf, type ChatPageChoice, openingModeOf, type OpeningMode } from "@/lib/regex-rules";
+import { emptyRuleSet, ruleSetFromAuthorAsset, ruleSetFromImport, ruleSetToAuthorAsset, ruleSetToExport, ruleSetWarnings, validateRuleSet, utf8Bytes, type RegexRuleSet, chatPageOf, type ChatPageChoice, openingModeOf, type OpeningMode } from "@/lib/regex-rules";
+import { isAbortError, OPENING_PAGE_FILENAME, openingPageMaxBytes, pageLimitMB } from "@/lib/opening-page";
+import { useOpeningFile, type OpeningSavePlan } from "@/lib/opening-file";
 import OpeningEditor from "@/components/editor/OpeningEditor.vue";
 import ReplyDefaultsEditor from "@/components/editor/ReplyDefaultsEditor.vue";
 import RegexRulesEditor from "@/components/editor/RegexRulesEditor.vue";
@@ -419,7 +421,15 @@ watch([panel, panelOpen], () => {
   try { localStorage.setItem(PANEL_KEY, panelOpen.value ? panel.value : "closed"); } catch { /* 同上 */ }
 });
 const regexFile = ref<HTMLInputElement | null>(null);
-const regexDirty = computed(() => JSON.stringify(regexSet.value) !== JSON.stringify(regexOriginal.value));
+/**
+ * 規則與功能欄整份比對；開場網頁單獨用 === 比（每按一鍵都會算這裡，網頁可能有幾 MB，
+ * 跟著整份序列化兩次是打字卡頓的主因）。
+ */
+const regexDirty = computed(() => {
+  const { openingPage: page, ...rest } = regexSet.value;
+  const { openingPage: savedPage, ...savedRest } = regexOriginal.value;
+  return (page ?? "") !== (savedPage ?? "") || JSON.stringify(rest) !== JSON.stringify(savedRest);
+});
 const cardCssText = computed({
   get: () => regexSet.value.cardCss ?? "",
   set: (value: string) => { regexSet.value.cardCss = value; },
@@ -433,10 +443,39 @@ function removeCardCss() { regexSet.value.cardCss = ""; delete regexSet.value.ca
 const openingPageText = computed({
   get: () => regexSet.value.openingPage ?? "",
   set: (v: string) => {
-    if (v.trim()) regexSet.value.openingPage = v;
+    // 有沒有字用 /\S/ 判斷：trim() 在頁尾有換行時會整份複製一次
+    if (/\S/.test(v)) regexSet.value.openingPage = v;
     else delete regexSet.value.openingPage;
   },
 });
+/**
+ * 超過編輯門檻的開場網頁（上游存著的、上傳的、一次貼上的、匯入的）不放進文字框，留在這裡當檔案；
+ * 存檔時超過 512 KB 的頁面先走原始上傳。
+ */
+const openingFile = useOpeningFile({
+  text: () => regexSet.value.openingPage ?? "",
+  setText: (value, baseline) => {
+    if (value) regexSet.value.openingPage = value;
+    else delete regexSet.value.openingPage;
+    if (!baseline) return;
+    if (value) regexOriginal.value.openingPage = value;
+    else delete regexOriginal.value.openingPage;
+  },
+  token: () => session.accessToken(),
+  confirmClear: () => confirmDialog({
+    title: t("editor.openingPage.clearTitle"), message: t("editor.openingPage.clearBody"),
+    confirmText: t("editor.openingPage.clearOk"), cancelText: t("editor.openingPage.clearKeep"), danger: true,
+  }),
+  confirmReplace: () => confirmDialog({
+    title: t("editor.openingPage.replaceTitle"), message: t("editor.openingPage.replaceBody"),
+    confirmText: t("editor.openingPage.replaceOk"), cancelText: t("editor.openingPage.clearKeep"),
+  }),
+  maxBytes: openingPageMaxBytes,
+});
+/** 作者資產有沒有沒存的改動：規則與文字框比對，加上檔案卡的（換了檔案、清除）。 */
+const presentationDirty = computed(() => regexDirty.value || openingFile.dirty());
+/** 「有沒有開場網頁」：檔案卡也算，必填與誰先說話的判斷要看得到它。 */
+const openingPagePresence = (text: string | undefined) => (openingFile.file.value || (text && /\S/.test(text)) ? OPENING_PAGE_FILENAME : "");
 /**
  * 開局呈現（開場白／開場網頁）也存在作者資產。savedOpening 是上次存下來（或剛匯入）的那一種：
  * 現在選的跟它不同就是「切換了」，另一種專屬的內容在儲存時移除，存之前切回來就都還在（ui.md §3.3）。
@@ -550,13 +589,13 @@ const dirty = computed(
     JSON.stringify(draft.value) !== JSON.stringify(original.value ?? pristine.value) ||
     wb.dirty() ||
     memberBooksDirty() ||
-    regexDirty.value,
+    presentationDirty.value,
 );
 
 
 const coverAlerted = ref(false);
 const serverCoverRejected = ref(false);
-const missing = computed<string[]>(() => missingRequired(draft.value, { openingMode: openingMode.value, openingPage: openingPageText.value }));
+const missing = computed<string[]>(() => missingRequired(draft.value, { openingMode: openingMode.value, openingPage: openingPagePresence(openingPageText.value) }));
 /** 底部列與「還缺什麼」的三項：開局那一項跟著呈現換（開場白／第一句選項）。 */
 const required = computed(() => requiredKeys(openingMode.value));
 const canPublish = computed(() => !isNew.value && !missing.value.length && !serverCoverRejected.value && !dirty.value);
@@ -1274,6 +1313,7 @@ async function loadRegexRules(token: string) {
     regexOriginal.value = JSON.parse(JSON.stringify(regexSet.value));
     regexVersion.value = asset.version;
     savedOpening.value = openingModeOf(regexSet.value);
+    openingFile.adopt(asset);
     return true;
   } catch {
     // Existing author assets are an unknown baseline, not empty data.
@@ -1293,6 +1333,8 @@ async function recoverPendingRegex(token: string) {
     savedOpening.value = openingModeOf(regexOriginal.value);
     if (local) local.pageMode ??= regexOriginal.value.pageMode;
     regexSet.value = local ?? copied(regexOriginal.value);
+    if (local || openingFile.dirty()) openingFile.adoptServer(asset);
+    else openingFile.adopt(asset);
     pendingRegexRead.value = false;
     return true;
   } catch { return false; }
@@ -1321,20 +1363,25 @@ async function reconcilePendingRegexWrite(token: string) {
   } catch { return false; }
 }
 
-/** 卡片存完才存規則：新卡要先有 roleId。沒改就不送。 */
-async function saveRegex(token: string, targetRoleId: string, snapshot: RegexRuleSet | null, version: number) {
+/**
+ * 卡片存完才存規則：新卡要先有 roleId。沒改就不送。
+ * savedAs 是存完要記成「上次存的」那份（大頁面送出時 openingPage 是空字串，記下來的要是真的內容）；
+ * clear 時帶 openingPageClear，上游才會清掉存著的大頁面。
+ */
+async function saveRegex(token: string, targetRoleId: string, snapshot: RegexRuleSet | null, version: number, opts: { savedAs?: RegexRuleSet; clear?: boolean } = {}) {
   if (!snapshot) return;
   pendingRegexWrite.value = { set: snapshot, version };
   storeDraft();
   let saved;
   try {
-    saved = await saveAuthorAsset(targetRoleId, ruleSetToAuthorAsset(snapshot, version), token);
+    saved = await saveAuthorAsset(targetRoleId, { ...ruleSetToAuthorAsset(snapshot, version), ...(opts.clear ? { openingPageClear: true as const } : {}) }, token);
   } catch (err) {
     if (err instanceof ApiError && err.status >= 400 && err.status < 500) pendingRegexWrite.value = null;
     throw err;
   }
   regexVersion.value = saved.version;
-  regexOriginal.value = snapshot;
+  regexOriginal.value = opts.savedAs ?? snapshot;
+  openingFile.saved(saved, { clear: !!opts.clear });
   pendingRegexWrite.value = null;
   storeDraft();
 }
@@ -1601,8 +1648,10 @@ function presentationSection(reason: string): "opening" | "display" | "advanced"
 function validatePresentationBeforeSave(snapshot: RegexRuleSet | null): boolean {
   if (snapshot) {
     const clearPage = openingModeOf(snapshot) === "greeting" && savedOpening.value !== "greeting";
-    if (!clearPage && utf8Bytes(snapshot.openingPage ?? "") > OPENING_PAGE_MAX_BYTES) {
-      error.value = t("editor.openingPage.tooLong", { max: OPENING_PAGE_MAX_BYTES / 1024 });
+    // 只擋改過的頁面：上游存著、沒動的那份照樣可以跟其他欄位一起存。
+    const pageChanged = openingFile.dirty() || (snapshot.openingPage ?? "") !== (regexOriginal.value.openingPage ?? "");
+    if (!clearPage && pageChanged && openingFile.bytes() > openingPageMaxBytes()) {
+      error.value = t("editor.openingPage.tooLong", { max: pageLimitMB(openingPageMaxBytes(), String(locale.value)) });
       void focusPresentation("opening");
       return false;
     }
@@ -1636,7 +1685,7 @@ async function save() {
   replyBlocked.value = false;
   regexSaveIssues.value = [];
   // 文件、開場與版面資產分開保存。先攔下已知的問題，避免留下未完成的卡。
-  let regexSnapshot = can("regex") && regexDirty.value ? copied(regexSet.value) : null;
+  let regexSnapshot = can("regex") && presentationDirty.value ? copied(regexSet.value) : null;
   let regexSnapshotVersion = regexVersion.value;
   if (!validatePresentationBeforeSave(regexSnapshot)) return;
   if (!draft.value.roleName.trim()) {
@@ -1702,7 +1751,7 @@ async function save() {
       ? await beginCardEdit(targetRoleId, token, editorProvider.value)
       : {resubmit:false};
     await commitPendingRevert(token);
-    regexSnapshot=can("regex")&&regexDirty.value?copied(regexSet.value):null;
+    regexSnapshot=can("regex")&&presentationDirty.value?copied(regexSet.value):null;
     regexSnapshotVersion=regexVersion.value;
     if (!validatePresentationBeforeSave(regexSnapshot)) return;
     const mode = regexSnapshot ? openingModeOf(regexSnapshot) : openingMode.value;
@@ -1718,6 +1767,24 @@ async function save() {
     if (!targetRoleId) {
       targetRoleId = await ensureCardDraft(token);
       track("card_create", { subject: targetRoleId });
+    }
+
+    // 開場網頁超過 512 KB 先用原始上傳送出（卡內顯示進度、可取消；失敗原本的頁面不變），
+    // 拿到新版本再送其餘的作者資產，那份 JSON 裡的 openingPage 是空字串＝不變。
+    let assetSent: RegexRuleSet | null = regexSnapshot;
+    let openingPlan: OpeningSavePlan | null = null;
+    if (regexSnapshot) {
+      openingPlan = await openingFile.planSave({ text: regexSnapshot.openingPage ?? "", original: regexOriginal.value.openingPage ?? "", dropPage: clearPage });
+      if (openingPlan.upload) {
+        const uploaded = await openingFile.upload(targetRoleId, openingPlan.upload, regexSnapshotVersion, token);
+        regexVersion.value = uploaded.version;
+        regexSnapshotVersion = uploaded.version;
+        // 頁面已經存上去：後面失敗重試時不要再傳一次
+        if (regexSnapshot.openingPage) regexOriginal.value = { ...regexOriginal.value, openingPage: regexSnapshot.openingPage };
+      }
+      assetSent = { ...regexSnapshot };
+      if (openingPlan.json) assetSent.openingPage = openingPlan.json;
+      else delete assetSent.openingPage;
     }
 
     // 送出的是此刻的快照。存檔期間草稿還可能在變（匯入的立繪要先上傳、傳完才填進頭像那格），
@@ -1745,13 +1812,13 @@ async function save() {
 
     // 作者資產（含開局呈現與網頁內容）先存：開場白留空時，上游要先看到開場網頁、首屏網頁或開場選項才收。
     try {
-      await saveRegex(token, targetRoleId, regexSnapshot, regexSnapshotVersion);
+      await saveRegex(token, targetRoleId, assetSent, regexSnapshotVersion, { savedAs: regexSnapshot ?? undefined, clear: openingPlan?.clear });
     } catch (err) {
       if (err instanceof ApiError && err.code === "validate_reject") presentationRejection = err;
       throw err;
     }
 
-    if (welcomeChanged(sent, original.value) && (sent.roleWelcome.trim() || playerSpeaksFirst(sent, { openingPage: (regexSnapshot ?? regexSet.value).openingPage, openingMode: mode }))) {
+    if (welcomeChanged(sent, original.value) && (sent.roleWelcome.trim() || playerSpeaksFirst(sent, { openingPage: openingPagePresence((regexSnapshot ?? regexSet.value).openingPage), openingMode: mode }))) {
       await patchRoleWelcome(
         targetRoleId,
         {
@@ -1804,6 +1871,7 @@ async function save() {
       if (clearGreeting && draft.value.roleWelcome === welcomeBeforeClearing) draft.value.roleWelcome = "";
       if (clearGreeting && JSON.stringify(draft.value.alternates) === alternatesBeforeClearing) draft.value.alternates = [];
       if (clearPage && regexSnapshot && regexSet.value.openingPage === pageBeforeClearing) delete regexSet.value.openingPage;
+      if (clearPage) openingFile.reset();
     }
     savedOpening.value = mode;
     creationPending.value = false;
@@ -1831,6 +1899,11 @@ async function save() {
       window.history.replaceState(window.history.state, "", platformPath(lp(`/cards/${cardNumber.value}/edit`),editorProvider.value));
     }
   } catch (err) {
+    // 作者取消了開場網頁的上傳：不是失敗，不顯示錯誤；建好的新卡照樣記進本機草稿。
+    if (isAbortError(err)) {
+      if (wasNew && roleId.value) storeDraft();
+      return;
+    }
     track(wasNew ? "card_create" : "card_edit", { ok: false });
     const why = err instanceof Error ? err.message : t("state.saveFailed");
     if (wasNew && roleId.value) {
@@ -1973,9 +2046,14 @@ function applyImport(result: ImportResult) {
   if (result.worldbook) void importBook(wb, { name: result.worldbook.name || draft.value.roleName, entries: result.worldbook.entries, format: result.worldbook.format });
   const portrait = result.background ?? result.image;
   if (portrait) void adoptImage(portrait);
+  openingFile.reset();
   if (result.regex) {
     result.regex.pageMode ??= "classic";
-    regexSet.value = result.regex;
+    // 匯入的卡帶著超過編輯門檻的開場網頁：收成待存的檔案，不放進文字框。
+    // 拿掉的是副本上的：匯入面板還留著原本那份，再按一次套用照樣有開場網頁。
+    const regex = { ...result.regex };
+    if (regex.openingPage && openingFile.importText(regex.openingPage)) delete regex.openingPage;
+    regexSet.value = regex;
   } else if (result.spec === "fengyue" || result.spec === "rili") {
     // 風月與日里卡都是新的網頁玩法，沒有舊版聊天頁要相容；同時清掉上一份草稿殘留的規則、首屏與樣式
     regexSet.value = {
@@ -2413,7 +2491,8 @@ async function exportCard(format: "png" | "json") {
                          v-model:prologue="draft.prologue" v-model:opening-page="openingPageText"
                          :saved-mode="savedOpening" :page-available="can('regex')" :rules="regexSet.rules"
                          :card-format="regexSet.format" :role-name="draft.roleName" :welcome-max="limits.roleWelcome"
-                         :missing="lacks('opening')" @edit-rules="goto('display')" />
+                         :missing="lacks('opening')" :max-bytes="openingPageMaxBytes()" :file-control="can('regex') ? openingFile : undefined"
+                         @edit-rules="goto('display')" />
         </section>
 
         <!-- 世界書 -->
