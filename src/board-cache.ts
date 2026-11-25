@@ -15,6 +15,7 @@ export async function boardKey(
   locale?: string,
   proofExpiresAt?: number,
   outage?: { duration: number; nov19Exposure: boolean; nov20Reexposure?: boolean; nov20PartialReexposure?: boolean },
+  sharedFirstScreen = false,
 ): Promise<Key> {
   const source = new URL(raw);
   const url = new URL(source.pathname, source.origin);
@@ -46,10 +47,24 @@ export async function boardKey(
   if (outage?.nov19Exposure) url.searchParams.set("_nov19OutageExposure", "1");
   if (outage?.nov20Reexposure) url.searchParams.set("_nov20OutageReexposure", "1");
   if (outage?.nov20PartialReexposure) url.searchParams.set("_nov20PartialReexposure", "1");
+  if (sharedFirstScreen) {
+    // The candidate query uses the same budget regardless of response locale or first-page size.
+    for (const field of ["lang", "limit", "offset"]) url.searchParams.delete(field);
+    url.searchParams.set("_projection", "first-screen-v1");
+  }
   // No bearer, cookie or viewer identity is stored in either cache.
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(url.toString()));
   const hash = [...new Uint8Array(digest)].map(n => n.toString(16).padStart(2, "0")).join("");
   return { edge: new Request(url), kv: `${boardCache.namespace}:${hash}` };
+}
+
+const FIRST_SCREEN_PARAMS = new Set(["zone", "sort", "author", "limit", "offset", "lang"]);
+const FIRST_SCREEN_SORTS = new Set(["hot", "top", "day", "week", "month", "new", "updated"]);
+
+export function supportsSharedFirstScreen(requestUrl: string): boolean {
+  const params = new URL(requestUrl).searchParams;
+  return [...params.keys()].every(name => FIRST_SCREEN_PARAMS.has(name)) &&
+    FIRST_SCREEN_SORTS.has(params.get("sort") ?? "hot");
 }
 
 function live(value: unknown): value is Entry {
