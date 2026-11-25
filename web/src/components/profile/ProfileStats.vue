@@ -139,7 +139,7 @@ onBeforeUnmount(() => closeExact(false));
 .pstats__text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .pstats__more { width: 12px; height: 12px; flex: none; margin-left: auto; color: var(--text-3); transition: transform var(--dur) var(--ease), color var(--dur) var(--ease); }
 .pstats__stat--open:hover .pstats__more { transform: translateX(2px); color: var(--accent-text); }
-.pstats__stat strong { font-size: 24px; font-weight: 750; line-height: 32px; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.pstats__stat strong { font-size: 24px; font-weight: 750; line-height: 32px; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; white-space: nowrap; }
 /* 縮寫的數字：可點開看確切值，淺虛線提示可點；點擊區用偽元素往外擴，不改版面 */
 .pstats__num { position: relative; justify-self: start; padding: 0; border: 0; background: none; font: inherit; color: inherit; cursor: pointer;
   text-decoration: underline dashed var(--line-strong); text-decoration-thickness: 1px; text-underline-offset: 6px; }
@@ -155,5 +155,10 @@ onBeforeUnmount(() => closeExact(false));
   .pstats__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .pstats__cell:nth-child(3) { box-shadow: inset 0 1px 0 var(--line); }
   .pstats__cell:nth-child(4) { box-shadow: inset 1px 1px 0 var(--line); }
+}
+/* 320 寬手機的兩欄格只剩約 90px：千萬級的「1234.5萬」用 24px 會折成兩行、整列變高，縮到 20px 並收一點左右留白 */
+@container (max-width: 300px) {
+  .pstats__stat { padding-inline: var(--s-4); }
+  .pstats__stat strong { font-size: 20px; }
 }
 </style>
