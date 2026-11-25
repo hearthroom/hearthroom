@@ -451,6 +451,44 @@
         ],
         "unknownOption": "INVALID_ARGS"
       },
+      "list": {
+        "returns": [
+          "entries",
+          "nextAfterSeq"
+        ],
+        "entry": [
+          "seq",
+          "role",
+          "content",
+          "status",
+          "callId",
+          "anchorSeq",
+          "charged",
+          "settled",
+          "toolCall?",
+          "reason?",
+          "reasonCode?",
+          "vars?"
+        ],
+        "charged": "credits actually deducted for this entry; interrupted = the model wrote part of the reply and is charged for what it used; failed = no reply"
+      },
+      "models": {
+        "returns": [
+          "models",
+          "selected"
+        ],
+        "model": [
+          "id",
+          "name",
+          "lane?",
+          "family?",
+          "series?",
+          "vendor?"
+        ],
+        "name": "model and lane as the player's model picker shows them, in the player's language",
+        "family": "the value a declaration model.family names",
+        "vendor": "the company that makes the model"
+      },
       "clientMessages": {
         "roles": [
           "user",
@@ -1581,5 +1619,5 @@
       ]
     }
   },
-  "stageCommit": "e3b24f3f84058655371bbbbcf50054586241d276"
+  "stageCommit": "a5189d98bd2f50f1192a854774599dfb0fac07d6"
 }
