@@ -62,6 +62,7 @@ export async function communityRequest<T>(
   token?: string | null,
   method = "GET",
   body?: unknown,
+  signal?: AbortSignal,
 ): Promise<T> {
   const response = await fetch(COMMUNITY_API + path, {
     method,
@@ -71,6 +72,7 @@ export async function communityRequest<T>(
       ...(token ? { Authorization: `Bearer ${token}`, "X-Device-Token": deviceToken() } : {}),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
+    signal,
     cache: "no-store",
     redirect: "error",
   });

@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { computed, ref, watch } from "vue";
-import { fetchReviewMe, type FeaturedStatus } from "./api";
+import { fetchReviewMe, type FeaturedStatus, type ReviewMe } from "./api";
 import { currentProvider, type ProviderId } from "./provider";
 import { useSession } from "./session";
 
@@ -34,7 +34,7 @@ export const useReviewer = defineStore("reviewer", () => {
 
   function resetCounts() { featured.value = null; featuredProvider.value = null; pending.value = 0; pendingReviews.value = 0; pendingCases.value = 0; pendingComments.value = 0; checkedRole.value = "reviewer"; blogWriter.value = false; }
 
-  async function refresh(load = fetchReviewMe): Promise<boolean> {
+  async function refresh(load: (token: string, provider: ProviderId) => Promise<ReviewMe> = fetchReviewMe): Promise<boolean> {
     const requestGeneration = ++generation;
     const provider = currentProvider();
     try {

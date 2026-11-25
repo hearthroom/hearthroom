@@ -62,3 +62,30 @@ it("requires authentication and keeps a partial success private", async () => {
   expect(await response.json()).toMatchObject({ review: { reviewer: true }, notifications: null });
   expect(writeDataPoint.mock.calls.some(([point]) => point.blobs[0] === "header_summary" && point.blobs[11] === "partial")).toBe(true);
 });
+
+it("returns unread counts when the optional Provider reviewer hint reaches its deadline", async () => {
+  identities({ reviewer: 77001 });
+  await makeReviewer(77001);
+  const originalTimeout = AbortSignal.timeout.bind(AbortSignal);
+  const shorten = vi.spyOn(AbortSignal, "timeout").mockImplementation(ms => originalTimeout(ms === 5_000 ? 25 : ms));
+  const aborted = vi.fn();
+  upstream.fetchCommunityStatus = async (_env, _token, _provider, signal) => {
+    return new Promise((_, reject) => {
+      if (!signal) return reject(new Error("Expected a polling deadline"));
+      const onAbort = () => {
+        aborted();
+        reject(signal.reason);
+      };
+      if (signal.aborted) onAbort();
+      else signal.addEventListener("abort", onAbort, { once: true });
+    });
+  };
+  try {
+    const response = await request(path, bearer("reviewer"));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ review: { reviewer: true, featured: null }, notifications: { unread: 0 } });
+    expect(aborted).toHaveBeenCalledTimes(1);
+  } finally {
+    shorten.mockRestore();
+  }
+});

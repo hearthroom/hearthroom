@@ -1784,13 +1784,13 @@ app.get('/v1/hosting/versions/:versionId/decision',async(c)=>{
 // 佇列不帶作者；審核頁帶原作者與他的其他卡（owner 2026-11-08 取消盲審，見 review-author.ts）。詳情是作者送審當下本站替這張單存的快照，定案就刪；
 // 同步開的重審單沒有快照（那時手上沒有作者的 token），審核人看的是變動後的公開資料。
 
-async function reviewerSummary(env: Env, member: { id: string }, bearer: string, provider: ReturnType<typeof providerOf>) {
+async function reviewerSummary(env: Env, member: { id: string }, bearer: string, provider: ReturnType<typeof providerOf>, signal?: AbortSignal) {
   const summary = await reviewSummary(env.DB, member);
   // 精選開關要不要出現：問供應商「這個人能不能代表本站」。只對審核人問——別人不會看到管理面板。
   let featured: CommunityStatus | null = null;
   if (summary.reviewer) {
     try {
-      featured = await upstream.fetchCommunityStatus(env, bearer, provider);
+      featured = await upstream.fetchCommunityStatus(env, bearer, provider, signal);
     } catch {
       featured = null;
     }
@@ -1798,7 +1798,7 @@ async function reviewerSummary(env: Env, member: { id: string }, bearer: string,
   // 部落格入口：應用 owner／admin 就有，不必是審核人。審核人剛問過供應商，直接用那個答案；其他人走一小時的快取。
   const blogWriter = summary.reviewer
     ? featured?.admin === true && !(await isReviewAgent(env.DB, member.id))
-    : await blogWriterHint(env, member.id, bearer, provider);
+    : await blogWriterHint(env, member.id, bearer, provider, signal);
   return { ...summary, featured, blogWriter };
 }
 
@@ -1811,9 +1811,11 @@ app.get("/v1/me/header-summary", async (c) => {
   c.header("Cache-Control", "private, no-store");
   c.header("Referrer-Policy", "no-referrer");
   note(c, { event: "header_summary" });
+  // A Provider hint is optional. Give it a shorter deadline than the browser request.
+  const hintDeadline = AbortSignal.timeout(5_000);
   const member = await requireMember(c);
   const [review, notifications] = await Promise.allSettled([
-    reviewerSummary(c.env, member, bearerOf(c), providerOf(c)),
+    reviewerSummary(c.env, member, bearerOf(c), providerOf(c), hintDeadline),
     notificationSummary(c.env, member.id, c.req.query("lang"), c.req.header("X-Device-Token")),
   ]);
   if (review.status === "rejected" && notifications.status === "rejected") {

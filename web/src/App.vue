@@ -125,8 +125,12 @@ let legacyHeaderSummary = false;
 async function refreshHeader() {
   if (!session.me) return;
   const lang = locale.value;
+  const legacyReview = (token: string, provider: ReturnType<typeof currentProvider>) =>
+    fetchReviewMe(token, provider, AbortSignal.timeout(15_000));
+  const legacyNotifications = (token: string, language: string) =>
+    fetchNotificationSummary(token, language, AbortSignal.timeout(15_000));
   if (legacyHeaderSummary) {
-    await Promise.all([reviewerStore.refresh(), notifications.refresh(lang)]);
+    await Promise.all([reviewerStore.refresh(legacyReview), notifications.refresh(lang, legacyNotifications)]);
     return;
   }
 
@@ -139,13 +143,13 @@ async function refreshHeader() {
   await Promise.all([
     reviewerStore.refresh(async token => {
       const result = await summary(token);
-      if (result === null) return fetchReviewMe(token, provider);
+      if (result === null) return legacyReview(token, provider);
       if (!result.review) throw new Error("Review summary unavailable");
       return result.review;
     }),
     notifications.refresh(lang, async token => {
       const result = await summary(token);
-      if (result === null) return fetchNotificationSummary(token, lang);
+      if (result === null) return legacyNotifications(token, lang);
       if (!result.notifications) throw new Error("Notification summary unavailable");
       return result.notifications;
     }),

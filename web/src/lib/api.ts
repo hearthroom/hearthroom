@@ -791,8 +791,8 @@ export interface FeaturedStatus { admin: boolean; featuredUsed: number; featured
 export interface ReviewMe { reviewer: boolean; pending?:number; reviews?:number; cases?:number; comments?:number; role?:"reviewer"|"manager"|"owner"; featured?: FeaturedStatus | null; blogWriter?: boolean }
 export interface HeaderSummary { review: ReviewMe | null; notifications: { unread: number } | null }
 
-export async function fetchReviewMe(token: string, provider = currentProvider()): Promise<ReviewMe> {
-  return json(await fetch(`${COMMUNITY_API}/review/me`, { headers: { ...from(), "X-Provider": provider, ...authHeaders(token) } }));
+export async function fetchReviewMe(token: string, provider = currentProvider(), signal?: AbortSignal): Promise<ReviewMe> {
+  return json(await fetch(`${COMMUNITY_API}/review/me`, { headers: { ...from(), "X-Provider": provider, ...authHeaders(token) }, signal }));
 }
 
 export async function fetchHeaderSummary(token: string, provider: ProviderId, lang: string): Promise<HeaderSummary | null> {
@@ -803,7 +803,8 @@ export async function fetchHeaderSummary(token: string, provider: ProviderId, la
     redirect: "error",
     signal: AbortSignal.timeout(15_000),
   });
-  if (response.status === 404) return null;
+  if (response.status === 404 && response.headers.get("Content-Type")?.startsWith("text/plain")
+    && (await response.clone().text()) === "404 Not Found") return null;
   return json<HeaderSummary>(response);
 }
 
