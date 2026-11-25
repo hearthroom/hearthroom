@@ -3783,7 +3783,7 @@
   "review.history.title": "My reviews",
   "review.history.hint": "Your review decisions and any later corrections appear here.",
   "review.history.empty": "No reviews yet",
-  "review.history.fastTrackEmpty": "No fast-track approvals",
+  "review.history.fastTrackEmpty": "No fast-track approvals yet",
   "review.history.emptyHint": "Your decisions will appear here after you submit a review.",
   "review.history.myDecision": "Your decision",
   "review.history.currentResult": "Current result",

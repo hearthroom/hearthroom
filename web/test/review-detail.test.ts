@@ -1145,3 +1145,17 @@ it('a 403 from author activity hides only that section; the profile and decision
  expect(el.querySelector('[data-author-profile] .profile__basis')).toBeTruthy();
  expect(el.querySelector('[data-decide-choices]')).toBeTruthy();
 });
+
+// AI 快速通道（任務 2026-11-25-ai-review-fast-track）：系統蓋的章標出來源；管理員沒蓋章也能從結果卡改判（＝撤回）
+it('a fast-track approval shows the system stamp and offers a manager the correction without a stamp of their own',async()=>{
+ const detail=pendingDetail();
+ api.fetchReviewDetail.mockReset().mockResolvedValue({...detail,submission:{...detail.submission,status:'approved',canCorrect:true,manager:true,claimedByMe:false,stampedByMe:false,
+  stamps:[{verdict:'approve',note:'',at:2,mine:false,finalSource:'ai_fast_track'}]}});
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('[data-other-stamps] [data-final-source="ai_fast_track"]')).toBeTruthy());
+ expect(el.querySelector('[data-other-stamps] [data-final-source="ai_fast_track"]')!.textContent!.trim()).toBe(i18n.global.t('reviewAi.two.source.ai_fast_track'));
+ const action=[...el.querySelectorAll('button')].find(b=>b.textContent?.trim()===i18n.global.t('review.correction.action'));
+ expect(action).toBeTruthy();
+ action!.click();
+ await vi.waitFor(()=>expect(el.querySelector('#correction-note')).toBeTruthy());
+});

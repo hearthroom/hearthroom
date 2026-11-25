@@ -3783,7 +3783,7 @@
   "review.history.title": "自分の審査履歴",
   "review.history.hint": "自分が行った審査の判断と、その後の訂正を確認できます。",
   "review.history.empty": "審査履歴はまだありません",
-  "review.history.fastTrackEmpty": "AI 優先承認の記録なし",
+  "review.history.fastTrackEmpty": "AI 優先承認の記録はまだありません",
   "review.history.emptyHint": "審査の判断を送信すると、ここに履歴が表示されます。",
   "review.history.myDecision": "自分の判断",
   "review.history.currentResult": "現在の結果",

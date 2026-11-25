@@ -182,7 +182,7 @@ describe('不走快速通道（留在人工佇列）', () => {
     expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM review_stamps WHERE submission_id=?').bind(update).first()).toEqual({ n: 1 });
   });
 
-  it('冷凍中、被處置中、上一次更新被駁回', async () => {
+  it('冷凍中、被處置中、已下架、有不受理案件、上一次更新被駁回', async () => {
     const { update } = await liveCardWithUpdate();
     await env.DB.prepare('INSERT INTO review_holds (card_id, member_id, submission_id, created_at) SELECT card_id, ?, id, ? FROM review_submissions WHERE id=?').bind(managerId, Date.now(), update).run();
     await suggest(update);
@@ -192,13 +192,23 @@ describe('不走快速通道（留在人工佇列）', () => {
     await suggest(update, { model: 'deepseek/deepseek-v4.1-flash-2' });
     expect(await statusOf(update)).toBe('pending');
     await env.DB.prepare('UPDATE cards SET public_blocked=0').run();
-    expect(await metric('ineligible_status')).toBe(2);
+    // 已下架（作者收回公開）
+    await env.DB.prepare("UPDATE cards SET status='unshared'").run();
+    await suggest(update, { model: 'deepseek/deepseek-v4.1-flash-3' });
+    expect(await statusOf(update)).toBe('pending');
+    await env.DB.prepare("UPDATE cards SET status='approved'").run();
+    // 這張卡有還開著的不受理案件
+    await env.DB.prepare("INSERT INTO review_drop_cases (id, card_id, source, opened_by, opened_at) SELECT 'case-1', card_id, 'single', ?, ? FROM review_submissions WHERE id=?").bind(managerId, Date.now(), update).run();
+    await suggest(update, { model: 'deepseek/deepseek-v4.1-flash-4' });
+    expect(await statusOf(update)).toBe('pending');
+    await env.DB.prepare('DELETE FROM review_drop_cases').run();
+    expect(await metric('ineligible_status')).toBe(4);
     // 更新被駁回後作者改稿重送：走人工
     await humanDecide(update, 'reject');
     const again = await submit();
     await suggest(again);
     expect(await statusOf(again)).toBe('pending');
-    expect(await metric('ineligible_status')).toBe(3);
+    expect(await metric('ineligible_status')).toBe(5);
   });
 });
 

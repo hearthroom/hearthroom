@@ -3783,7 +3783,7 @@
   "review.history.title": "我處理過的",
   "review.history.hint": "這裡列出你的審核決定與後續改判結果。",
   "review.history.empty": "還沒有審核紀錄",
-  "review.history.fastTrackEmpty": "沒有 AI 快速通道核准的單",
+  "review.history.fastTrackEmpty": "還沒有 AI 快速通道核准的單",
   "review.history.emptyHint": "你送出審核決定後，就會在這裡看到紀錄。",
   "review.history.myDecision": "你的決定",
   "review.history.currentResult": "目前結果",

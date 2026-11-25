@@ -3783,7 +3783,7 @@
   "review.history.title": "我处理过的",
   "review.history.hint": "这里列出你的审核决定和后续改判结果。",
   "review.history.empty": "还没有审核记录",
-  "review.history.fastTrackEmpty": "没有 AI 快速通道核准的单",
+  "review.history.fastTrackEmpty": "还没有 AI 快速通道核准的单",
   "review.history.emptyHint": "你提交审核决定后，就会在这里看到记录。",
   "review.history.myDecision": "你的决定",
   "review.history.currentResult": "当前结果",
