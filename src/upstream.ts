@@ -396,9 +396,10 @@ export function buildSearchBody(role: UpstreamRole): string {
  * 呼叫者在供應商那邊能不能代表本站（本站這個應用的 owner／admin）標精選，以及配額用量。
  * 老版本的供應商沒有這條路（404）就當「不能」——畫面上只是少一個開關。
  */
-async function fetchCommunityStatus(env: Env, bearer: string, provider: ProviderId = DEFAULT_PROVIDER): Promise<CommunityStatus | null> {
+async function fetchCommunityStatus(env: Env, bearer: string, provider: ProviderId = DEFAULT_PROVIDER, signal?: AbortSignal): Promise<CommunityStatus | null> {
   const res = await fetch(apiUrl(env, provider, "/open/v1/me/community"), {
     headers: { Authorization: `Bearer ${bearer}`, "User-Agent": UA },
+    signal,
   });
   if (res.status === 404) return null;
   const body = await readJson(res, "community status");

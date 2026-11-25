@@ -8,8 +8,8 @@ import { enforcementDeadline, isEnforcementKind } from "../../../shared/enforcem
 import { reasonSummary } from "./review-reasons";
 import { currentProvider } from "./provider";
 
-export function fetchNotificationSummary(token: string, locale: string) {
-  return communityRequest<{ unread: number }>(`/me/community/notifications/summary?lang=${encodeURIComponent(locale)}`, token);
+export function fetchNotificationSummary(token: string, locale: string, signal?: AbortSignal) {
+  return communityRequest<{ unread: number }>(`/me/community/notifications/summary?lang=${encodeURIComponent(locale)}`, token, "GET", undefined, signal);
 }
 
 /**
