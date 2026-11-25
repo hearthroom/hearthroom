@@ -62,3 +62,11 @@ it('可開名單的格子整格是按鈕：不再套數字按鈕，滑過帶確�
   expect(open.title).toBe('54,321');
   expect(open.textContent).toContain('5.4萬');
 });
+
+it('開著時視窗寬度改變（欄數可能從四欄變兩欄）：氣泡收起，不指錯位置', async () => {
+  await mount({});
+  exactButtons()[0].click(); await nextTick();
+  expect(bubble()).not.toBeNull();
+  window.dispatchEvent(new Event('resize')); await nextTick();
+  expect(bubble()).toBeNull();
+});

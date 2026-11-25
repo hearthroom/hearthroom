@@ -22,7 +22,7 @@ export function compact(n: number): string {
 export function statCount(n: number, opts: { own?: boolean } = {}): string {
   const full = Math.abs(n) < (opts.own ? 100_000 : 10_000);
   if (full) return new Intl.NumberFormat(locale()).format(n);
-  // roundingMode 是 ES2023；不支援的瀏覽器會忽略它改用四捨五入（多算一點，不會壞）
+  // roundingMode 是 ES2023；不支援的瀏覽器會忽略它改回四捨五入（19,999 寫成 2.0萬、999,999 跳成 100.0萬），顯示偏大但不會壞
   return new Intl.NumberFormat(locale(), { notation: "compact", minimumFractionDigits: 1, maximumFractionDigits: 1, roundingMode: "trunc" } as Intl.NumberFormatOptions).format(n);
 }
 

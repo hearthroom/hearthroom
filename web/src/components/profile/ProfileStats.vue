@@ -60,11 +60,14 @@ function toggleExact(key: string, value: number, event: MouseEvent) {
   opener = button;
   document.addEventListener('pointerdown', onOutside, true);
   document.addEventListener('keydown', onKey);
+  // 位置是開的那一刻量的；寬度一變（四欄可能換成兩欄）就收起，不指錯格子
+  window.addEventListener('resize', onResize);
 }
 function closeExact(refocus: boolean) {
   open.value = null;
   document.removeEventListener('pointerdown', onOutside, true);
   document.removeEventListener('keydown', onKey);
+  window.removeEventListener('resize', onResize);
   if (refocus) void nextTick(() => opener?.focus());
 }
 function onOutside(e: Event) {
@@ -73,6 +76,7 @@ function onOutside(e: Event) {
   closeExact(false);
 }
 function onKey(e: KeyboardEvent) { if (e.key === 'Escape') closeExact(true); }
+function onResize() { closeExact(false); }
 onBeforeUnmount(() => closeExact(false));
 </script>
 
