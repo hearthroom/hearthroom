@@ -38,7 +38,8 @@ describe("手機點擊不出現系統藍框", () => {
   it("拿掉系統高亮之後，chip 與分段控制有自己的按下回饋", () => {
     expect(rules(base, ".chip:active").join("")).toMatch(/background/);
     expect(rules(base, ".seg__item:active").join("")).toMatch(/color/);
-    expect(rules(base, ".btn:active").join("")).toMatch(/transform/);
+    // 站台的 .btn 排除遊玩畫布（畫布與作者卡片美化自己決定按鈕外觀），站台內的按鈕照舊有按下回饋。
+    expect(rules(base, ".btn:where(:not(.ms-stage *)):active").join("")).toMatch(/transform/);
   });
 
   for (const file of ["src/components/CardTile.vue", "src/components/MyCardTile.vue"]) {

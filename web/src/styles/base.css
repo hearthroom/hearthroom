@@ -149,7 +149,9 @@ h1, h2, h3, p, dl, dd { margin: 0; }
 
 /* ---- 控件 ---------------------------------------------------------------- */
 
-.btn {
+/* 遊玩畫布（.ms-stage）裡的 .btn 由畫布自己的樣式與作者的卡片美化決定：站台這條沒有
+   分層，會蓋過畫布的分層規則與作者的 lt-card-css（模型選單 QA，2026-11-25）。 */
+.btn:where(:not(.ms-stage *)) {
   display: inline-flex; align-items: center; justify-content: center; gap: var(--s-2);
   height: var(--h-md); padding: 0 var(--s-4);
   white-space: nowrap;
@@ -160,10 +162,10 @@ h1, h2, h3, p, dl, dd { margin: 0; }
   cursor: pointer;
   transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), color var(--dur) var(--ease);
 }
-.btn:hover { background: var(--surface-2); }
-.btn:active { transform: translateY(1px); }
-.btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
-.btn svg { width: 16px; height: 16px; flex: none; }
+.btn:where(:not(.ms-stage *)):hover { background: var(--surface-2); }
+.btn:where(:not(.ms-stage *)):active { transform: translateY(1px); }
+.btn:where(:not(.ms-stage *)):disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+.btn:where(:not(.ms-stage *)) svg { width: 16px; height: 16px; flex: none; }
 
 .btn--primary {
   background: var(--accent-grad); border-color: transparent; color: var(--on-accent);
