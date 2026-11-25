@@ -119,7 +119,8 @@ function describeLimit(code: string, detail: LimitDetail | undefined): string | 
     sizeKB: Math.ceil(bytes / 1024),
     maxKB: Math.round(max / 1024),
     sizeMB: (bytes / 1024 / 1024).toFixed(bytes >= 10 * 1024 * 1024 ? 0 : 1),
-    maxMB: Math.round(max / 1024 / 1024),
+    // 1 MB 以下的上限（例如開場網頁的 512 KB）印成 0.5，不印成 0。
+    maxMB: max >= 10 * 1024 * 1024 ? Math.round(max / 1024 / 1024) : Number((max / 1024 / 1024).toFixed(1)),
   });
 }
 /** 本站自己的 API 回的碼（不是供應商契約的一部分，所以不進 docs/provider-protocol.md）。 */
@@ -1904,6 +1905,12 @@ export interface AuthorAsset {
   cardCssDialect?: string;
   /** 開局呈現（greeting｜page）。舊上游不帶就是沒有，編輯頁照卡片格式判斷。 */
   openingMode?: string;
+  /** 開場網頁的大小（UTF-8 位元組）。超過 512 KB 時 openingPage 是空的，只有大小與讀取網址；舊上游不帶。 */
+  openingPageBytes?: number;
+  /** 讀整份開場網頁的 API 路徑（相對於上游，例如 /open/v1/role/author-asset/opening?roleId=…）。 */
+  openingPageUrl?: string;
+  /** 舊的封存版本，大開場網頁已不保留。 */
+  openingPageExpired?: boolean;
   status: string;
   version: number;
 }
@@ -1917,6 +1924,9 @@ const asAuthorAsset = (b: Partial<AuthorAsset>): AuthorAsset => ({
   ...(typeof b.cardCss === "string" ? { cardCss: b.cardCss } : {}),
   ...(typeof b.cardCssDialect === "string" ? { cardCssDialect: b.cardCssDialect } : {}),
   ...(b.openingMode ? { openingMode: b.openingMode } : {}),
+  ...(typeof b.openingPageBytes === "number" && b.openingPageBytes >= 0 ? { openingPageBytes: b.openingPageBytes } : {}),
+  ...(typeof b.openingPageUrl === "string" && b.openingPageUrl ? { openingPageUrl: b.openingPageUrl } : {}),
+  ...(b.openingPageExpired === true ? { openingPageExpired: true } : {}),
   status: b.status ?? "none",
   version: b.version ?? 0,
 });
@@ -1926,8 +1936,12 @@ export async function fetchAuthorAsset(roleId: string, token: string): Promise<A
   ));
 }
 
-/** 整份覆寫，帶樂觀鎖（body.version 是讀到的版本）。版本不符上游回 409。 */
-export async function saveAuthorAsset(roleId: string, body: Omit<AuthorAsset, "status">, token: string): Promise<AuthorAsset> {
+/**
+ * 整份覆寫，帶樂觀鎖（body.version 是讀到的版本）。版本不符上游回 409。
+ * openingPage 送空字串時，上游存著的頁面若超過 512 KB 視為不變；要清掉它得另帶 openingPageClear。
+ */
+export type AuthorAssetWrite = Omit<AuthorAsset, "status" | "openingPageBytes" | "openingPageUrl" | "openingPageExpired"> & { openingPageClear?: true };
+export async function saveAuthorAsset(roleId: string, body: AuthorAssetWrite, token: string): Promise<AuthorAsset> {
   return asAuthorAsset(await json<Partial<AuthorAsset>>(
     await fetch(`${UPSTREAM_API}/open/v1/role/${encodeURIComponent(roleId)}/author-asset`, {
       method: "PUT",
@@ -1935,6 +1949,80 @@ export async function saveAuthorAsset(roleId: string, body: Omit<AuthorAsset, "s
       body: JSON.stringify(body),
     }),
   ));
+}
+
+/** 上傳或下載開場網頁時的進度：loaded／total 都是位元組，total 不知道時是 0。 */
+export type TransferProgress = (loaded: number, total: number) => void;
+
+/**
+ * 用原始 HTML 上傳開場網頁（超過 512 KB 一律走這條）：本體就是那份檔案，不用 JSON 跳脫。
+ * 用 XHR 而不是 fetch：要上傳進度，而且上游要求 Content-Length（串流本體會變成分塊傳送被拒）。
+ * 只換開場網頁，其他作者資產欄位不動；成功回新版本。
+ */
+export function uploadOpeningPage(
+  roleId: string,
+  page: Blob,
+  version: number,
+  token: string,
+  opts: { onProgress?: TransferProgress; signal?: AbortSignal } = {},
+): Promise<AuthorAsset> {
+  return new Promise((resolve, reject) => {
+    if (opts.signal?.aborted) { reject(new DOMException("aborted", "AbortError")); return; }
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", `${UPSTREAM_API}/open/v1/role/${encodeURIComponent(roleId)}/opening-page?version=${encodeURIComponent(String(version))}`);
+    for (const [name, value] of Object.entries(authHeaders(token))) xhr.setRequestHeader(name, value);
+    xhr.setRequestHeader("Content-Type", "text/html; charset=utf-8");
+    const abort = () => xhr.abort();
+    opts.signal?.addEventListener("abort", abort, { once: true });
+    const done = () => opts.signal?.removeEventListener("abort", abort);
+    xhr.upload.onprogress = (e) => opts.onProgress?.(e.loaded, e.lengthComputable ? e.total : page.size);
+    xhr.onabort = () => { done(); reject(new DOMException("aborted", "AbortError")); };
+    xhr.onerror = () => { done(); reject(new ApiError(0, i18n.global.t("state.requestFailed"))); };
+    xhr.onload = () => {
+      done();
+      const res = new Response(xhr.responseText || "{}", { status: xhr.status, headers: { "Content-Type": "application/json" } });
+      json<Partial<AuthorAsset>>(res).then((body) => resolve(asAuthorAsset(body)), reject);
+    };
+    xhr.send(page);
+  });
+}
+
+/**
+ * 讀整份開場網頁（上游沒內嵌的大頁面）。邊讀邊回報進度，讀進 Blob、不轉成字串。
+ * url 是作者資產回的相對路徑；total 用作者資產回的大小（回應壓縮過時 Content-Length 是壓縮後的大小）。
+ */
+export async function fetchOpeningPage(
+  url: string,
+  token: string,
+  opts: { total?: number; onProgress?: TransferProgress; signal?: AbortSignal } = {},
+): Promise<Blob> {
+  const target = /^https?:/i.test(url) ? url : `${UPSTREAM_API}${url.startsWith("/") ? "" : "/"}${url}`;
+  const res = await fetch(target, { headers: authHeaders(token), signal: opts.signal });
+  if (!res.ok) await json(res);
+  const total = opts.total ?? 0;
+  if (!res.body) {
+    const blob = await res.blob();
+    opts.onProgress?.(blob.size, total || blob.size);
+    return new Blob([blob], { type: "text/html" });
+  }
+  const reader = res.body.getReader();
+  const parts: BlobPart[] = [];
+  let pending: Uint8Array[] = [];
+  let pendingBytes = 0;
+  let loaded = 0;
+  // 每 8 MB 收成一個 Blob：不讓上千個小區塊一直留在 JS 記憶體裡。
+  const flush = () => { if (pending.length) { parts.push(new Blob(pending as BlobPart[])); pending = []; pendingBytes = 0; } };
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    pending.push(value);
+    pendingBytes += value.byteLength;
+    loaded += value.byteLength;
+    if (pendingBytes >= 8 * 1024 * 1024) flush();
+    opts.onProgress?.(loaded, total);
+  }
+  flush();
+  return new Blob(parts, { type: "text/html" });
 }
 
 export async function createWorldbook(

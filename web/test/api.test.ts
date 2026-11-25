@@ -82,18 +82,20 @@ describe("錯誤訊息給人看", () => {
 
   // 2026-09-11 一位作者存 1.18 MB 的規則只看到「請求失敗 (validate_reject)」。
   // 上游現在附 detail：有就講出多大、上限多少、第幾條叫什麼；沒有就退回通用那句。
+  // 開場網頁的上限以 MB 講（契約放寬到 100 MB）；卡片樣式仍以 KB 講。
   it.each([
-    ["openingPage", "開場網頁", "開局"],
-    ["cardCss", "卡片樣式", "進階"],
-  ])("validate_reject 的 %s 明細保留原因和修改入口", async (reason, label, section) => {
+    ["openingPage", "開場網頁", "開局", 100 * 1024 * 1024, 120 * 1024 * 1024, "120.*100"],
+    ["openingPage", "開場網頁", "開局", 512 * 1024, 700 * 1024, "0\\.7.*0\\.5"],
+    ["cardCss", "卡片樣式", "進階", 512 * 1024, 512 * 1024 + 1, "513.*512"],
+  ])("validate_reject 的 %s 明細保留原因和修改入口", async (reason, label, section, max, actual, sizes) => {
     const { json } = await import("../src/lib/api");
     const res = new Response(JSON.stringify({
       error: "validate_reject",
-      detail: { reason, index: -1, max: 512 * 1024, actual: 512 * 1024 + 1 },
+      detail: { reason, index: -1, max, actual },
     }), { status: 400 });
     await expect(json(res)).rejects.toMatchObject({
       reason,
-      message: expect.stringMatching(new RegExp(`${label}.*513.*512.*${section}`)),
+      message: expect.stringMatching(new RegExp(`${label}.*${sizes}.*${section}`)),
     });
   });
 
@@ -392,5 +394,86 @@ describe('fetchEditorCardReference', () => {
     expect(new Headers(init.headers).get('Authorization')).toBe('Bearer synthetic-token');
     expect(new Headers(init.headers).get('X-Provider')).toBe('harbor');
     expect(init.method??'GET').toBe('GET');expect(init.body).toBeUndefined();
+  });
+});
+
+// 開場網頁的原始上傳與整份讀取（任務 2026-11-25-opening-page-object-storage）
+describe("uploadOpeningPage／fetchOpeningPage", () => {
+  class PageXHR {
+    static last: PageXHR | null = null;
+    static reply: { status: number; body: string } | "hang" = { status: 200, body: "{}" };
+    status = 0; responseText = ""; url = ""; method = ""; body: unknown = null; headers: Record<string, string> = {};
+    upload = { onprogress: null as null | ((e: { lengthComputable: boolean; loaded: number; total: number }) => void) };
+    onload: null | (() => void) = null; onerror: null | (() => void) = null; onabort: null | (() => void) = null;
+    open(method: string, url: string) { this.method = method; this.url = url; }
+    setRequestHeader(k: string, v: string) { this.headers[k] = v; }
+    abort() { queueMicrotask(() => this.onabort?.()); }
+    send(body: unknown) {
+      this.body = body; PageXHR.last = this;
+      const reply = PageXHR.reply;
+      if (reply === "hang") return;
+      queueMicrotask(() => {
+        this.upload.onprogress?.({ lengthComputable: true, loaded: 3, total: 6 });
+        this.status = reply.status; this.responseText = reply.body; this.onload?.();
+      });
+    }
+  }
+  beforeEach(() => { PageXHR.last = null; PageXHR.reply = { status: 200, body: "{}" }; vi.stubGlobal("XMLHttpRequest", PageXHR); });
+
+  it("PUT 原始 HTML：帶版本與 token，本體就是那個 Blob，回報進度、回新版本與大小", async () => {
+    const { uploadOpeningPage } = await import("../src/lib/api");
+    const { UPSTREAM_API } = await import("../src/lib/config");
+    PageXHR.reply = { status: 200, body: JSON.stringify({ rules: [], openingPage: "", openingPageBytes: 6, openingPageUrl: "/open/v1/role/author-asset/opening?roleId=r%201", status: "passed", version: 8 }) };
+    const page = new Blob(["<p>x</p>"]);
+    const progress: number[][] = [];
+    const saved = await uploadOpeningPage("r 1", page, 7, "tok", { onProgress: (a, b) => progress.push([a, b]) });
+    expect(PageXHR.last!.method).toBe("PUT");
+    expect(PageXHR.last!.url).toBe(`${UPSTREAM_API}/open/v1/role/r%201/opening-page?version=7`);
+    expect(PageXHR.last!.headers).toMatchObject({ Authorization: "Bearer tok", "Content-Type": "text/html; charset=utf-8" });
+    expect(PageXHR.last!.body).toBe(page);
+    expect(progress).toEqual([[3, 6]]);
+    expect(saved).toMatchObject({ version: 8, openingPageBytes: 6, openingPageUrl: "/open/v1/role/author-asset/opening?roleId=r%201", openingPage: "" });
+  });
+
+  it("上游拒收照一般的錯誤翻譯（版本衝突、太大）", async () => {
+    const { uploadOpeningPage, ApiError } = await import("../src/lib/api");
+    PageXHR.reply = { status: 409, body: JSON.stringify({ error: "version_conflict" }) };
+    await expect(uploadOpeningPage("r1", new Blob(["x"]), 1, "tok")).rejects.toMatchObject({ status: 409, code: "version_conflict" });
+    PageXHR.reply = { status: 413, body: JSON.stringify({ error: "file_too_large" }) };
+    const err = await uploadOpeningPage("r1", new Blob(["x"]), 1, "tok").catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(413);
+  });
+
+  it("取消：中止上傳、丟 AbortError", async () => {
+    const { uploadOpeningPage } = await import("../src/lib/api");
+    const { isAbortError } = await import("../src/lib/opening-page");
+    PageXHR.reply = "hang";
+    const abort = new AbortController();
+    const pending = uploadOpeningPage("r1", new Blob(["x"]), 1, "tok", { signal: abort.signal });
+    abort.abort();
+    await expect(pending).rejects.toSatisfy(isAbortError);
+  });
+
+  it("讀整份：相對路徑接在上游前面、帶 token，邊讀邊回報進度（分母用作者資產的大小）", async () => {
+    const { fetchOpeningPage } = await import("../src/lib/api");
+    const { UPSTREAM_API } = await import("../src/lib/config");
+    const fetchMock = vi.fn(async () => new Response(new ReadableStream({
+      start(c) { c.enqueue(new TextEncoder().encode("<p>")); c.enqueue(new TextEncoder().encode("hi</p>")); c.close(); },
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const progress: number[][] = [];
+    const blob = await fetchOpeningPage("/open/v1/role/author-asset/opening?roleId=r1", "tok", { total: 9, onProgress: (a, b) => progress.push([a, b]) });
+    expect(fetchMock).toHaveBeenCalledWith(`${UPSTREAM_API}/open/v1/role/author-asset/opening?roleId=r1`, expect.objectContaining({ headers: { Authorization: "Bearer tok" } }));
+    expect(await blob.text()).toBe("<p>hi</p>");
+    expect(progress).toEqual([[3, 9], [9, 9]]);
+  });
+
+  it("讀不到（沒有頁面、舊版本不保留）丟出帶狀態碼的錯誤", async () => {
+    const { fetchOpeningPage } = await import("../src/lib/api");
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ error: "opening_page_expired" }), { status: 410 })));
+    await expect(fetchOpeningPage("/x", "tok")).rejects.toMatchObject({ status: 410, code: "opening_page_expired" });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ error: "role_not_found" }), { status: 404 })));
+    await expect(fetchOpeningPage("/x", "tok")).rejects.toMatchObject({ status: 404 });
   });
 });
