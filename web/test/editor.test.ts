@@ -3398,10 +3398,10 @@ it('deep-links to a missing portrait without launching a file picker',async()=>{
 
 
 // 開場網頁存成物件、上限放寬（任務 2026-11-25-opening-page-object-storage）。
-// 上限照契約：現在 512 KB，契約改成 100 MB 後同一份程式要都對，兩種都測。
+// 上限照契約：現在 524288，契約改成 100000000（100 MB）後同一份程式要都對，兩種都測。
 describe("開場網頁：大頁面", () => {
   const KB = 1024;
-  const MB = 1024 * 1024;
+  const MB = 1000 * 1000;
   const URL_PATH = "/open/v1/role/author-asset/opening?roleId=r1";
   const page = (bytes: number) => "<p>" + "a".repeat(bytes - 7) + "</p>";
   const pageAsset = (extra: Record<string, unknown> = {}) => ({ rules: [], mountTrigger: "", mountLayer: "over", pageMode: "sandbox", openingMode: "page", openingPage: "", status: "passed", version: 4, ...extra } as any);
@@ -3438,7 +3438,7 @@ describe("開場網頁：大頁面", () => {
     setOpeningPageLimitsForTest({ max: null });
     await openLarge({ openingPage: "<div>首屏</div>" });
     await pickFile($("[data-opening-file-input]"), new File([page(600 * KB)], "big.html"));
-    expect($("[data-opening-file-error]").textContent).toContain(i18n.global.t("editor.openingPage.errTooBig", { max: "512 KB" }));
+    expect($("[data-opening-file-error]").textContent).toContain(i18n.global.t("editor.openingPage.errTooBig", { max: "524.3 KB" }));
     expect($<HTMLTextAreaElement>("#f-opening-page").value).toBe("<div>首屏</div>");
     await type($("#f-opening-page"), page(600 * KB));
     expect(root.textContent).toContain(i18n.global.t("editor.openingPage.tooLong", { max: "0.5" }));
@@ -3653,7 +3653,7 @@ describe("開場網頁：大頁面", () => {
 
 // 還原成目前上架的內容：大開場網頁也要真的跟著還原，畫面上看到的是上架版那一份。
 describe("還原上架版：大開場網頁", () => {
-  const MB = 1024 * 1024;
+  const MB = 1000 * 1000;
   const KB = 1024;
   const approvedUrl = "/open/v1/role/author-asset/opening?roleId=approved-r1";
   const draftUrl = "/open/v1/role/author-asset/opening?roleId=r1";
