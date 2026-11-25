@@ -7,6 +7,9 @@
  * 沒有匯出、沒有另存副本（owner 2026-10-30：不做 fork）。
  *
  * 看得到的條件由上游判斷（公開中、在我的喜愛與用過裡，或我是作者），否則 404。
+ *
+ * 只供使用（內容不公開）：上游對作者以外的人回 contentHidden，內容是空的；這裡不列條目，改顯示鎖頭、
+ * 一句說明與上游給的啟用條目數，套用、喜愛、檢舉照舊。作者本人照舊看完整內容，上方多一條資訊條說明別人看到什麼。
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
@@ -45,9 +48,14 @@ const toast = ref("");
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
 
 const item = computed(() => data.value?.item ?? null);
+/** 我看不到內容（只供使用、我不是作者） */
+const hiddenForMe = computed(() => !!data.value?.contentHidden);
+/** 這份是只供使用：標記與事實列跟著它，作者本人也看得到 */
+const hiddenMode = computed(() => hiddenForMe.value || item.value?.contentVisibility === "hidden");
+const authorNote = computed(() => hiddenMode.value && !hiddenForMe.value && !!item.value?.mine);
 /** 只列會執行的自訂條目：數量對得上上方的「共 N 條」；由綺夢社提供的那幾格（歷史、角色卡）不在這裡 */
 const entries = computed(() => {
-  if (!data.value) return [];
+  if (!data.value || hiddenForMe.value) return [];
   const compat = new Map(data.value.compatibility.entries.map((e) => [e.identifier, e]));
   return entryRows(data.value.revision.document)
     .filter((r) => r.slot !== "F" && r.enabled)
@@ -167,6 +175,12 @@ onBeforeUnmount(() => clearTimeout(toastTimer));
           <span class="chip shared__chip shared__chip--strong">{{ $t("preset.share.unlisted") }}</span>
           <span class="subtle">{{ $t("preset.share.unlisted.hint") }}</span>
         </p>
+        <p v-if="hiddenMode" class="shared__unlisted">
+          <span class="chip shared__chip content-chip" data-testid="shared-content-chip">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>
+            {{ $t("preset.share.chip.contentHidden") }}
+          </span>
+        </p>
       </header>
 
       <aside class="shared__side">
@@ -220,10 +234,27 @@ onBeforeUnmount(() => clearTimeout(toastTimer));
             <dt>{{ $t("preset.share.detail.source.label") }}</dt>
             <dd class="shared__wrap">{{ item.attribution }}</dd>
           </div>
+          <div v-if="hiddenMode">
+            <dt>{{ $t("preset.share.detail.content") }}</dt>
+            <dd data-testid="shared-content-fact">{{ authorNote ? $t("preset.share.contentVisibility.hidden") : $t("preset.share.detail.contentHidden.factValue") }}</dd>
+          </div>
         </dl>
       </aside>
 
-      <section class="panel shared__content" :aria-busy="loading || undefined">
+      <section v-if="hiddenForMe" class="panel shared__content shared__hidden" data-testid="shared-hidden">
+        <span class="shared__lock" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>
+        </span>
+        <h2 class="shared__h2">{{ $t("preset.share.detail.contentHidden.title") }}</h2>
+        <p class="muted">{{ $t("preset.share.detail.contentHidden.body") }}</p>
+        <!-- 上游的啟用條目數連綺夢社提供的幾格也算；看不到內容時只有這個數字 -->
+        <p class="subtle" data-testid="shared-hidden-count">{{ $t("preset.share.detail.contentHidden.entryCount", { n: whole(item.enabledEntryCount) }, item.enabledEntryCount) }}</p>
+      </section>
+      <section v-else class="panel shared__content" :aria-busy="loading || undefined">
+        <p v-if="authorNote" class="notice shared__authorNote" role="note" data-testid="shared-author-note">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8v.01" /></svg>
+          <span>{{ $t("preset.share.detail.contentHidden.authorNote") }}</span>
+        </p>
         <h2 class="shared__h2">{{ $t("preset.share.detail.content") }}</h2>
         <p class="subtle" data-testid="shared-summary">{{ summary }}</p>
         <ul class="shared__entries">
@@ -261,11 +292,20 @@ onBeforeUnmount(() => clearTimeout(toastTimer));
 .shared__title { margin: 0; font-size: clamp(24px, 4vw, 30px); overflow-wrap: anywhere; }
 .shared__by { margin: 0; overflow-wrap: anywhere; }
 /* 韓文在詞中間斷行會剩一個音節掛在下一行：照站上 ConfirmDialog、CoachSpot 的做法整詞換行 */
-:lang(ko) .shared__unlisted, :lang(ko) .shared__facts dd, :lang(ko) .shared__card p { word-break: keep-all; }
+:lang(ko) .shared__unlisted, :lang(ko) .shared__facts dd, :lang(ko) .shared__card p, :lang(ko) .shared__hidden p, :lang(ko) .shared__authorNote { word-break: keep-all; }
 .shared__unlisted { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-2); }
 .shared__chip { height: auto; min-height: 22px; padding-block: 2px; cursor: default; overflow-wrap: anywhere; }
 .shared__chip:hover { background: var(--surface-2); color: var(--text-2); }
 .shared__chip--strong, .shared__chip--strong:hover { background: var(--border); color: var(--text); font-weight: 500; }
+/* 只供使用：外框 chip，跟預設庫清單那顆同一個樣子 */
+.content-chip, .content-chip:hover { background: var(--surface); box-shadow: inset 0 0 0 1px var(--border-strong); color: var(--text); font-weight: 500; }
+.content-chip svg { flex: none; }
+/* 他人看只供使用的預設：鎖頭、標題、一句說明、啟用條目數，不列任何條目 */
+.shared__hidden { justify-items: start; }
+.shared__hidden > p { line-height: 1.6; }
+.shared__lock { width: 40px; height: 40px; border-radius: var(--r-md); background: var(--surface-2); color: var(--text-2); display: flex; align-items: center; justify-content: center; }
+.shared__authorNote { display: flex; align-items: flex-start; gap: var(--s-2); font-size: 13px; line-height: 1.6; }
+.shared__authorNote svg { flex: none; margin-top: 3px; }
 .shared__actions { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-2); }
 .shared__apply { width: 100%; }
 /* 手機：加入喜愛、複製連結並排，檢舉只留圖示；放不下就換行，不切掉按鈕 */

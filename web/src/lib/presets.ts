@@ -15,6 +15,9 @@ export type UiStatus = "needs_adjustment" | "relocated" | "unsupported";
 
 export type PresetPurpose = "general" | "specific";
 
+/** open：其他人看得到條目與參數；hidden（只供使用）：其他人能套用，看不到內容。舊上游沒有這一項，當 open。 */
+export type ContentVisibility = "open" | "hidden";
+
 export interface PresetSummary {
   purpose?: PresetPurpose | "";
   id: string;
@@ -32,6 +35,8 @@ export interface PresetSummary {
   visibility?: "private" | "public";
   publishedAt?: string | null;
   attribution?: string;
+  /** 公開時的內容模式；私人預設也會帶（上次公開選的，沒公開過是 open），只在已公開時有意義 */
+  contentVisibility?: ContentVisibility;
   /** 平台下架了：作者看得到這個標示，不能再公開 */
   removed?: boolean;
 }
@@ -112,6 +117,9 @@ const REASON_KEY: Record<string, string> = {
   operation_active: "preset.error.busy",
   preset_removed: "preset.share.takenDown.note",
   preset_declaration_changed: "preset.share.error.declarationChanged",
+  // 只供使用被拒；preset_hidden_disabled（還沒開放）沒有專屬的句子，落到一般的公開失敗句
+  preset_hidden_imported: "preset.share.contentVisibility.disabledImported",
+  preset_hidden_overlap: "preset.share.contentVisibility.disabledOverlap",
 };
 /** 沒有細碼時看碼本身；這幾個在預設頁上有比站上通用句更準的說法。 */
 const CODE_KEY: Record<string, string> = {
@@ -306,6 +314,8 @@ export interface PresetLibraryItem {
   heat?: number;
   /** 只有熱門區為了補滿 12 份而放進來的最新公開預設是 true */
   fresh?: boolean;
+  /** hidden＝只供使用：作者以外的人看不到條目與參數 */
+  contentVisibility?: ContentVisibility;
 }
 export interface PresetLibraryList { items: PresetLibraryItem[] }
 export interface PresetLibraryDetail {
@@ -315,17 +325,38 @@ export interface PresetLibraryDetail {
   /** 這份預設有設的取樣參數（只有設了的鍵），數值原樣 */
   parameters: Record<string, number>;
   reportedByMe: boolean;
+  /**
+   * true：只供使用，而且看的人不是作者。這時 revision.document 是一份合法的空內容、compatibility 與
+   * parameters 是空的，畫面不列條目，只顯示外層資訊與 item.enabledEntryCount。舊上游沒有這一項。
+   */
+  contentHidden?: boolean;
 }
 export const REPORT_REASONS = ["copyright", "inappropriate", "spam", "other"] as const;
 export type PresetReportReason = (typeof REPORT_REASONS)[number];
 /** 公開列表一頁幾筆；回來的筆數等於它，就還有下一頁 */
 export const LIBRARY_PAGE = 20;
 
-export interface PublishInput { purpose: PresetPurpose; expectedVersion: number; declaration: string; attribution: string; recommendedModels?: string[] }
+export interface PublishInput { purpose: PresetPurpose; expectedVersion: number; declaration: string; attribution: string; recommendedModels?: string[]; contentVisibility?: ContentVisibility }
 
-/** 公開：不改內容。recommendedModels 不送就沿用原本的；用途必選，特定模型至少一項。 */
+/**
+ * 公開：不改內容。recommendedModels 不送就沿用原本的；用途必選，特定模型至少一項。
+ * contentVisibility 不送就沿用目前的模式；已公開的預設換模式也是再公開一次（只供使用 → 公開內容一律可以，
+ * 反過來要通過上游的比對，被拒回 422 preset_hidden_overlap）。
+ */
 export async function publishPreset(token: string, presetId: string, input: PublishInput, key: string): Promise<WriteReceipt> {
   return json<WriteReceipt>(await send(`/presets/${id(presetId)}/publish`, token, input, key));
+}
+
+/**
+ * 公開（含換內容模式）失敗時的一句話：結果未知、版本衝突用公開自己的說法；上游有對應文案的細碼照細碼講，
+ * 其餘一般的公開失敗句。
+ */
+export function publishErrorText(err: unknown): string {
+  const t = i18n.global.t;
+  if (resultUnknown(err)) return t("preset.error.unknown");
+  // 版本衝突在這裡不是「存檔」：不用編輯器那句
+  if (err instanceof ApiError && err.reason === "preset_revision_conflict") return t("preset.share.error.conflict");
+  return (err instanceof ApiError && presetErrorText(err)) || t("preset.share.error.publish");
 }
 
 /** 改回私人：只離開公開列表與搜尋，用過或喜愛的人照常用。 */

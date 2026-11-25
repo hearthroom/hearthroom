@@ -2,6 +2,7 @@
 /**
  * 公開列表與「喜愛與用過」共用的一列：名稱、作者、測試過的模型、近 7 天使用人數，右邊一顆喜愛鈕。
  * 點名稱開唯讀詳情。自己的預設不給喜愛鈕（上游不收），標一個中性的「我的」。
+ * 只供使用（內容不公開）的標一顆外框 chip 加鎖頭，中性色；字跟發布時的選項同名，不跟「已不公開」撞。
  */
 import { computed } from "vue";
 import { whole, monthDayOf } from "@/lib/format";
@@ -30,6 +31,10 @@ const fresh = computed(() => isNew(props.item));
           <span class="share-row__note">{{ $t("preset.share.unlisted.short") }}</span>
         </template>
         <span v-if="item.mine" class="chip share-row__chip">{{ $t("preset.share.tabs.mine") }}</span>
+        <span v-if="item.contentVisibility === 'hidden'" class="chip share-row__chip content-chip" data-testid="share-content-hidden">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>
+          {{ $t("preset.share.chip.contentHidden") }}
+        </span>
         <span class="chip share-row__chip" data-testid="share-purpose">{{ $t(`preset.purpose.${presetPurpose(item)}`) }}</span>
         <span v-if="presetPurpose(item) === 'general' && presetModelMatches(item.recommendedModels, model || '', groups || [])" class="chip share-row__chip" data-testid="share-tested">{{ $t('preset.purpose.tested') }}</span>
         <span v-for="m in models" :key="m" class="chip share-row__chip">{{ m }}</span>
@@ -61,6 +66,9 @@ const fresh = computed(() => isNew(props.item));
 .share-row__chip:hover { background: var(--surface-2); color: var(--text-2); }
 .share-row__chip--strong, .share-row__chip--strong:hover { background: var(--border); color: var(--text); font-weight: 500; }
 .share-row__chip--new, .share-row__chip--new:hover { background: var(--accent-tint); color: var(--accent-text); font-weight: 500; }
+/* 只供使用：外框 chip（不是強調色），跟「已不公開」那顆實底的分得開 */
+.content-chip, .content-chip:hover { background: var(--surface); box-shadow: inset 0 0 0 1px var(--border-strong); color: var(--text); font-weight: 500; }
+.content-chip svg { flex: none; }
 .share-row__note { font-size: 12px; color: var(--text-3); }
 /* 韓文在詞中間斷行會剩一個音節掛在下一行：照站上 ConfirmDialog、CoachSpot 的做法整詞換行 */
 :lang(ko) .share-row__note { word-break: keep-all; }
