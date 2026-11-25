@@ -217,6 +217,18 @@ const MATRIX_COLS = ['pass', 'reject', 'handoff'] as const;
           </div>
         </template>
 
+        <!-- AI 快速通道：已上架卡的更新、分級不變、AI 通過無標記時自動核准（舊版伺服器不帶） -->
+        <template v-if="v.fastTrack">
+          <h3 class="ai-rep__h3">{{ t('reviewAi.two.source.ai_fast_track') }}</h3>
+          <p class="subtle ai-rep__note">{{ t('reviewAi.fastTrack.note') }}</p>
+          <div class="ai-rep__scroll">
+            <table class="ai-rep__table" data-table="fast-track">
+              <thead><tr><th scope="col">{{ t('reviewAi.fastTrack.col.approved') }}</th><th scope="col">{{ t('reviewAi.fastTrack.col.eligible') }}</th><th scope="col">{{ t('reviewAi.fastTrack.col.rate') }}</th><th scope="col">{{ t('reviewAi.fastTrack.col.revoked') }}</th></tr></thead>
+              <tbody><tr><td data-fast-cell="approved">{{ int(v.fastTrack.approved) }}</td><td data-fast-cell="eligible">{{ int(v.fastTrack.eligible) }}</td><td data-fast-cell="rate">{{ v.fastTrack.rate === null ? '—' : `${Math.round(v.fastTrack.rate * 100)}%` }}</td><td data-fast-cell="revoked">{{ int(v.fastTrack.revoked) }}</td></tr></tbody>
+            </table>
+          </div>
+        </template>
+
         <template v-if="reasonRows(v).length">
           <h3 class="ai-rep__h3">{{ t('reviewAi.arb.report.reasons') }}</h3>
           <p class="subtle ai-rep__note">{{ t('reviewAi.arb.report.reasonsNote') }}</p>

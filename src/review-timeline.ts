@@ -1,4 +1,5 @@
 import { parseReviewReasons } from '../shared/review-reasons';
+import { FAST_TRACK_ACTOR } from './review-fast-track';
 
 /**
  * 單卡審核紀錄（審卡 V2 第二批，ui.md §4.2）：一張卡從第一次送審到現在的每一件事排成一條線。
@@ -23,6 +24,8 @@ export interface TimelineItem {
   mine: boolean;
   /** 不受理的來源：single／author_batch／device_batch／auto_same_content */
   source?: string | null;
+  /** 系統蓋的章：ai_fast_track＝AI 快速通道（review-fast-track.ts），actor 是 null */
+  system?: 'ai_fast_track';
   reasons?: string[];
   note?: string;
   /** 審核標記（只給審核員） */
@@ -65,6 +68,7 @@ export async function reviewTimeline(db: D1Database, submissionId: string, viewe
     const suggestions = st.verdict === 'approve' ? parseReviewReasons(st.suggestions) : [];
     items.push({ ...marksOf(st.marks), ...(suggestions.length ? { suggestions } : {}),
       at: st.created_at, action: st.verdict, actor: (st.name ?? '').slice(0, 80) || null, mine: st.member_id === viewer,
+      ...(st.member_id === FAST_TRACK_ACTOR ? { system: 'ai_fast_track' as const } : {}),
       ...(st.verdict === 'reject' ? { reasons: parseReviewReasons(st.reject_reasons), note: st.note.slice(0, 2000) } : {}),
       ...base(st.submission_id),
     });

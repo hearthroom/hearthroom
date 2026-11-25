@@ -406,7 +406,8 @@ describe('AI 說服你了嗎（owner 2026-11-24）', () => {
     expect((await persuade(sa, 'maybe')).status).toBe(400);
     expect((await persuade(sa, undefined)).status).toBe(400);
     expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM review_ai_arbitrations').first<{ n: number }>())!.n).toBe(0);
-    expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM review_events WHERE ai_suggestion_id=?").bind(sa).first<{ n: number }>())!.n).toBe(0);
+    // 審卡員寫結論時的快速通道判定事件也帶建議編號（review-fast-track.ts），評說服不另寫事件
+    expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM review_events WHERE ai_suggestion_id=? AND action<>'fast_track_check'").bind(sa).first<{ n: number }>())!.n).toBe(0);
     expect((await json(await get('/v1/review-ai/disagreements', 'human'))).items.map((i: any) => i.suggestionId)).toContain(sa);
     const metrics = await opsMetrics(env.DB);
     expect(metrics).toContain('hearthroom_review_ai_operations_total{operation="persuade",outcome="success"} 3');

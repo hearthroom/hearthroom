@@ -8,6 +8,7 @@ import {readCurrentWorkPolicies} from './work-read';
 import { boundedSearchPattern } from './search-text';
 import { guardAuthorNote } from './author-note-guard';
 import { FLIP_COLUMNS, flipState, type FlipColumns } from './review-flip';
+import { FAST_TRACK_ACTOR } from './review-fast-track';
 
 export const REVIEW_CORRECTION_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -160,6 +161,10 @@ export async function correctReview(env:Env,input:{id:string;member:string;opera
    .bind('review-correction:'+x.operation_id,'/mine/reviews/'+s.id,input.now,JSON.stringify({status:'rejected',kind:s.kind,note:x.note.slice(0,500),correction:true,rewardKept:!!command.rewardPayoutEntryIds?.length,versionId:v.version_id}),s.card_id),
   db.prepare("UPDATE review_corrections SET state='complete',completed_at=?,public_state=?,public_version_id=? WHERE operation_id=? AND state='applying'")
    .bind(input.now,receipt.access==='public'&&receipt.restriction!=='suspended'?x.public_state:'unpublished',receipt.access==='public'&&receipt.restriction!=='suspended'?x.public_version_id:null,x.operation_id),
+  // AI 快速通道核准的單被改判＝撤回（review-fast-track.ts）：只在這一批真的完成改判時算一次
+  db.prepare(`INSERT INTO ops_metrics(metric,operation,outcome,value) SELECT 'review_fast_track_revoke','revoke','success',1
+   WHERE changes()>0 AND EXISTS(SELECT 1 FROM review_events WHERE submission_id=? AND action='approve' AND final_source='ai_fast_track')
+   ON CONFLICT(metric,operation,outcome) DO UPDATE SET value=value+1`).bind(s.id),
   db.prepare("INSERT INTO ops_metrics VALUES('review_correction','correct','success',1) ON CONFLICT(metric,operation,outcome) DO UPDATE SET value=value+1"),
  );
  try{await db.batch(writes);}catch(error){
@@ -176,15 +181,19 @@ export async function correctReview(env:Env,input:{id:string;member:string;opera
  * 我處理過的審核，新的在前，游標分頁。q：純數字＝卡號精確比對；其他＝卡名（任一語系）包含，
  * 英文不分大小寫，% 與 _ 照字面比。搜尋打的是全部紀錄，不是已載入的那一頁。
  */
-export async function listReviewDecisions(db:D1Database, member:string, now:number, lang:string, before?:number, q?:string) {
+/**
+ * source=ai_fast_track（限管理員）：改列 AI 快速通道（系統身分）蓋的章，管理員從這裡找要撤回（改判）的單。
+ */
+export async function listReviewDecisions(db:D1Database, member:string, now:number, lang:string, before?:number, q?:string, source?:'ai_fast_track') {
   const byNumber=q!==undefined&&/^\d+$/.test(q);
   const pattern=q===undefined||byNumber?null:boundedSearchPattern(`%${q.replace(/[\\%_]/g,ch=>'\\'+ch)}%`);
   if(q!==undefined&&!byNumber&&pattern===null)return {items:[],nextCursor:null};
   const filter=q===undefined?'':byNumber?' AND c.id=?':
     " AND EXISTS(SELECT 1 FROM json_each(coalesce(json_extract(v.public_role,'$.names'),c.names)) n WHERE n.value LIKE ? ESCAPE '\\')";
-  const params:unknown[]=[member,before??Number.MAX_SAFE_INTEGER];
-  if(q!==undefined)params.push(byNumber?q:pattern);
   const manager=['manager','owner'].includes(String(await reviewerRole(db,member)));
+  if(source&&!manager)throw new HttpError(403,'review_manager_required');
+  const params:unknown[]=[source?FAST_TRACK_ACTOR:member,before??Number.MAX_SAFE_INTEGER];
+  if(q!==undefined)params.push(byNumber?q:pattern);
   const rows=await db.prepare(`SELECT st.rowid cursor,s.id,s.status,s.kind,s.decided_at,s.submitted_at,st.verdict,st.note,st.created_at,s.reopen_of,${FLIP_COLUMNS('s')},
     EXISTS(SELECT 1 FROM review_corrections x WHERE x.submission_id=s.id AND x.state='complete') corrected,
     v.version_id,c.id card_id,coalesce(json_extract(v.public_role,'$.names'),c.names) names
@@ -199,7 +208,9 @@ export async function listReviewDecisions(db:D1Database, member:string, now:numb
   return {items:page.map(r=>({
     id:r.id,status:r.status,kind:r.kind,verdict:r.verdict,note:r.note,at:r.created_at,
     submittedAt:r.submitted_at,corrected:!!r.corrected,decidedAt:r.decided_at,versionId:r.version_id,card:{id:String(r.card_id),name:pickLocale(JSON.parse(r.names) as Localized,lang)},
-    canCorrect:r.status==='approved'&&r.verdict==='approve'&&r.version_id!==null&&r.decided_at!==null&&now-r.decided_at<=REVIEW_CORRECTION_TTL_MS,
+    // 快速通道的單只有管理員看得到，管理員改判不受 24 小時限制
+    canCorrect:r.status==='approved'&&r.verdict==='approve'&&r.version_id!==null&&r.decided_at!==null&&(!!source||now-r.decided_at<=REVIEW_CORRECTION_TTL_MS),
+    ...(source?{finalSource:source}:{}),
     // 駁回改判為通過（ui-flip-approve.md）：改判審核中／已改判為通過，以及管理員看不看得到入口
     flip:flipState(r,manager),
   })),nextCursor:rows.results.length>50?page.at(-1)!.cursor:null};

@@ -81,3 +81,28 @@ it('loading the next page keeps the button, disabled, and says it is loading',as
  await vi.waitFor(()=>expect(el.textContent).toContain('月下'));
  expect(el.querySelector('[data-load-more]')).toBeNull();
 });
+
+// AI 快速通道（任務 2026-11-25-ai-review-fast-track）：管理員可以把範圍切到系統自動核准的單，從那裡進詳情改判＝撤回
+it('managers can switch the history to fast-track approvals; reviewers never see the switch',async()=>{
+ api.fetchReviewMe.mockResolvedValue({reviewer:true,reviews:3,role:'manager'} as never);
+ api.fetchReviewDecisions.mockImplementation(async(_t:string,_l:string,_b?:number,_q?:string,source?:string)=>({items:source?[{...row('3','快車'),status:'approved',verdict:'approve',canCorrect:true,finalSource:'ai_fast_track'}]:[row('1','夜行')],nextCursor:null}));
+ await mount('/review/decisions');
+ await vi.waitFor(()=>expect(el.querySelector('[data-scope=ai_fast_track]')).toBeTruthy());
+ el.querySelector<HTMLButtonElement>('[data-scope=ai_fast_track]')!.click();
+ await vi.waitFor(()=>expect(el.textContent).toContain('快車'));
+ expect(router.currentRoute.value.query.source).toBe('ai_fast_track');
+ expect(api.fetchReviewDecisions).toHaveBeenLastCalledWith('tok',expect.any(String),undefined,undefined,'ai_fast_track');
+ expect(el.textContent).toContain(`${i18n.global.t('reviewAi.two.source.ai_fast_track')} · ${i18n.global.t('review.action.approve')}`);
+ expect(el.querySelector('[data-scope=ai_fast_track]')!.getAttribute('aria-pressed')).toBe('true');
+ api.fetchReviewDecisions.mockResolvedValue({items:[],nextCursor:null});
+ el.querySelector<HTMLButtonElement>('[data-scope=ai_fast_track]')!.closest('.seg')!.querySelector<HTMLButtonElement>('button')!.click();
+ await vi.waitFor(()=>expect(router.currentRoute.value.query.source).toBeUndefined());
+});
+
+it('a reviewer never sees the scope switch and a forged source in the URL is ignored',async()=>{
+ api.fetchReviewMe.mockResolvedValue({reviewer:true,reviews:3,role:'reviewer'} as never);
+ await mount('/review/decisions?source=ai_fast_track');
+ await vi.waitFor(()=>expect(el.textContent).toContain('夜行'));
+ expect(el.querySelector('[data-scope=ai_fast_track]')).toBeNull();
+ expect(api.fetchReviewDecisions).toHaveBeenLastCalledWith('tok',expect.any(String),undefined,undefined);
+});

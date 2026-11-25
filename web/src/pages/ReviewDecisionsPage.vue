@@ -5,6 +5,7 @@ import { stageAvailable } from "@stage-site";
  *
  * 搜尋（2026-11-02）：卡名部分比對、純數字是卡號精確比對，由伺服器搜全部紀錄——
  * 只在前端過濾已載入的那一頁，會漏掉更早的卡。條件放在網址 ?q=，從詳情返回時還在。
+ * 管理員多一個範圍切換：AI 快速通道（?source=ai_fast_track）列系統自動核准的單，從詳情改判就是撤回。
  */
 import {computed,onBeforeUnmount,onMounted,ref,watch} from 'vue';
 import {RouterLink,useRoute,useRouter} from 'vue-router';
@@ -21,11 +22,17 @@ const items=ref<ReviewDecision[]>([]),loading=ref(false),error=ref(''),next=ref<
 const typed=ref(String(route.query.q??''));
 /** 實際拿去查的條件（網址上那一份）；輸入框停下 300ms 才更新 */
 const query=computed(()=>String(route.query.q??'').trim());
+const manager=computed(()=>reviewer.role==='manager'||reviewer.role==='owner');
+/** 範圍：我處理過的／AI 快速通道（限管理員） */
+const fastTrack=computed(()=>manager.value&&route.query.source==='ai_fast_track');
+function setSource(on:boolean){if(on!==fastTrack.value)void router.replace({query:{...route.query,source:on?'ai_fast_track':undefined}});}
 let sequence=0,debounce:ReturnType<typeof setTimeout>|undefined;
 async function load(more=false){
  const seq=++sequence;loading.value=true;error.value='';
  try{const token=await session.accessToken();if(!token)throw new Error(t('auth.expired'));
-  const result=await fetchReviewDecisions(token,String(locale.value),more?next.value??undefined:undefined,query.value||undefined);
+  const result=fastTrack.value
+   ?await fetchReviewDecisions(token,String(locale.value),more?next.value??undefined:undefined,query.value||undefined,'ai_fast_track')
+   :await fetchReviewDecisions(token,String(locale.value),more?next.value??undefined:undefined,query.value||undefined);
   if(seq===sequence){items.value=more?[...items.value,...result.items]:result.items;next.value=result.nextCursor;}
  }catch(err){if(seq===sequence)error.value=err instanceof Error?err.message:t('state.loadFailed');}
  finally{if(seq===sequence)loading.value=false;}
@@ -49,10 +56,15 @@ onMounted(()=>{document.title=pageTitle(t('review.history.title'));void reviewer
 onBeforeUnmount(()=>clearTimeout(debounce));
 watch(locale,()=>void load());
 watch(query,(q)=>{if(q!==typed.value.trim())typed.value=q;void load();});
+watch(fastTrack,()=>void load());
 </script>
 <template>
  <section class="decisions">
   <header class="head"><ReviewListTabs active="history" :counts="null" /></header>
+  <div v-if="manager" class="seg history-scope" role="group" :aria-label="t('review.stampsList')">
+   <button type="button" class="seg__item" :class="{'seg__item--on':!fastTrack}" :aria-pressed="!fastTrack" @click="setSource(false)">{{t('review.history.title')}}</button>
+   <button type="button" class="seg__item" :class="{'seg__item--on':fastTrack}" :aria-pressed="fastTrack" data-scope="ai_fast_track" @click="setSource(true)">{{t('reviewAi.two.source.ai_fast_track')}}</button>
+  </div>
   <form class="history-search" role="search" @submit.prevent="submitSearch">
    <input v-model="typed" class="input history-search__input" type="search" enterkeyhint="search" autocomplete="off" :placeholder="t('review.history.search.placeholder')" :aria-label="t('review.history.search.placeholder')" @input="onInput" />
   </form>
@@ -63,13 +75,14 @@ watch(query,(q)=>{if(q!==typed.value.trim())typed.value=q;void load();});
    <h3>{{t('review.history.search.emptyTitle')}}</h3><p class="muted">{{t('review.history.search.emptyHint')}}</p>
    <button class="btn" @click="clearSearch">{{t('review.history.search.clear')}}</button>
   </div>
+  <div v-else-if="!items.length&&!error&&fastTrack" class="panel empty" data-fast-track-empty><h3>{{t('review.history.fastTrackEmpty')}}</h3></div>
   <div v-else-if="!items.length&&!error" class="panel empty"><h3>{{t('review.history.empty')}}</h3><p class="muted">{{t('review.history.emptyHint')}}</p></div>
   <ul v-else class="list">
    <li v-for="item in items" :key="item.id" class="panel row">
     <div class="row__body">
      <p class="row__title"><RouterLink v-if="stageAvailable" class="row__name" :to="lp(`/review/${item.id}`)">{{item.card.name}}</RouterLink><span v-else class="row__name">{{item.card.name}}</span> <span class="subtle num">#{{item.card.id}}</span></p>
      <p>{{t('review.confirm.version')}} · {{dateTime(item.submittedAt)}}</p>
-     <p>{{t('review.history.myDecision')}} · {{t(`review.action.${item.verdict}`)}}</p>
+     <p>{{item.finalSource==='ai_fast_track'?t('reviewAi.two.source.ai_fast_track'):t('review.history.myDecision')}} · {{t(`review.action.${item.verdict}`)}}</p>
      <p>{{t('review.history.currentResult')}} · {{currentResult(item)}}</p>
      <p class="subtle">{{t('review.history.reviewedAt')}} · {{dateTime(item.at)}}</p>
     </div>
@@ -87,6 +100,7 @@ watch(query,(q)=>{if(q!==typed.value.trim())typed.value=q;void load();});
 <style scoped>
 .decisions{display:grid;gap:var(--s-4)}.head,.row{display:flex;gap:var(--s-4);align-items:center;justify-content:space-between}.list{list-style:none;margin:0;padding:0;display:grid;gap:var(--s-3)}.row{padding:var(--s-4)}.row__body{min-width:0;overflow-wrap:anywhere;display:grid;gap:var(--s-2)}.row__body p{margin:0}.row__name{font-weight:600;color:var(--text);font-size:16px}.num{font-variant-numeric:tabular-nums}.empty{padding:var(--s-5);display:grid;gap:var(--s-2);justify-items:start}.placeholder{height:132px;border-radius:var(--r-md)}
 .history-search__input{width:100%;min-height:var(--h-lg)}
+.history-scope{justify-self:start}
 .row__acts{display:flex;gap:var(--s-2);flex-wrap:wrap;justify-content:flex-end}
 @media(max-width:640px){.head,.row{align-items:flex-start;flex-wrap:wrap}.row__acts{justify-content:flex-start}.row__acts>.btn{min-height:var(--h-lg)}}
 </style>

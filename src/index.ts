@@ -136,6 +136,7 @@ import { reviewAiRoutes } from "./review-ai-routes";
 import { finalize as finalizeTwoStage } from "./review-two-stage";
 import { authorActivity } from "./review-ai";
 import { ratingFloorOf } from "./rating-correction";
+import { FAST_TRACK_ACTOR, FAST_TRACK_SOURCE } from "./review-fast-track";
 import { blogRoutes } from "./blog-routes";
 import { sitemapXml } from "./sitemap";
 import { campaignRoutes } from "./campaign-routes";
@@ -1859,7 +1860,10 @@ app.get('/v1/review/decisions',async(c)=>{
  const before=raw===undefined?undefined:Number(raw);
  if(before!==undefined&&(!Number.isSafeInteger(before)||before<=0))throw new HttpError(400,'invalid cursor');
  const q=(c.req.query('q')??'').trim().slice(0,100);
- return c.json(await listReviewDecisions(c.env.DB,member.id,Date.now(),lang(c),before,q||undefined),200,{'Cache-Control':'private, no-store'});
+ // source=ai_fast_track：AI 快速通道核准的單（限管理員，見 review-fast-track.ts）
+ const source=c.req.query('source');
+ if(source!==undefined&&source!=='ai_fast_track')throw new HttpError(400,'invalid_arguments',undefined,{field:'source'});
+ return c.json(await listReviewDecisions(c.env.DB,member.id,Date.now(),lang(c),before,q||undefined,source),200,{'Cache-Control':'private, no-store'});
 });
 
 app.get('/v1/mine/reviews/:id',async(c)=>{
@@ -2390,8 +2394,9 @@ app.get("/v1/review/:id/detail", async (c) => {
         ...history,
         type: submissionType({ reopen_of: s.reopen_of, kind: s.kind, previous: history.previous?.status ?? null }),
         // mine：哪一章是我蓋的（結果卡顯示「你的決定」）；不帶審核員身分
+        // AI 快速通道（系統身分）蓋的章標出來源，審核員與管理員才認得出那一章不是人蓋的
         stamps: stamps.results.map((st) => ({ verdict: st.verdict, note: st.note, at: st.created_at, mine: st.member_id === member.id,
-          ...(st.member_id === member.id && myFinalSource ? { finalSource: myFinalSource } : {}) })),
+          ...(st.member_id === member.id && myFinalSource ? { finalSource: myFinalSource } : st.member_id === FAST_TRACK_ACTOR ? { finalSource: FAST_TRACK_SOURCE } : {}) })),
         correction:await c.env.DB.prepare("SELECT note,created_at AS at,state,operation_id AS operationId,public_state AS publicState,actor_member_id=? AS canResume FROM review_corrections WHERE submission_id=? ORDER BY rowid DESC LIMIT 1").bind(member.id,s.id).first(),
         ...(await correctionEligibility(c.env.DB,s.id,member.id,Date.now())),
         // 駁回改判為通過：這張是改判單就帶改判說明；是駁回單就帶能不能改判、作者有沒有改稿重送

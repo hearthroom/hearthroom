@@ -34,6 +34,10 @@ import { applyBatchMarks, authorProfiles, deviceSignals, type AuthorTier } from 
 export const CLAIM_TTL_MS = 45 * 60 * 1000;
 /** 給作者的說明上限（字元，與審核頁輸入框的 maxlength 同一個數） */
 export const REVIEW_NOTE_MAX = 2000;
+/**
+ * 定案要幾章通過。更新已上架的卡是 kind re。AI 快速通道（review-fast-track.ts）蓋的那一章本身就足額，
+ * 不看這裡（stamp 的 final.system）：之後這裡調成兩章，快速通道照樣一章定案。
+ */
 export const STAMPS_REQUIRED: Record<SubmissionKind, number> = { first: 1, re: 1 };
 
 export type SubmissionKind = "first" | "re";
@@ -438,7 +442,14 @@ export interface StampResult {
  */
 export interface DecisionInput { submissionId: string; memberId: string; verdict: "approve" | "reject"; note: string; now: number; generation?: string; reasons?: unknown; coaching?: boolean; marks?: unknown; suggestions?: unknown }
 /** 兩段式定案附帶的資訊（review-two-stage.ts 組）：寫進同一筆蓋章事件，並決定快照保留多久 */
-export interface FinalizeInfo { source: string; aiSuggestionId: string | null; aiNoteTypes: string[]; aiNote: string; retainMs: number }
+export interface FinalizeInfo {
+  source: string; aiSuggestionId: string | null; aiNoteTypes: string[]; aiNote: string; retainMs: number;
+  /**
+   * 系統定案（AI 快速通道，review-fast-track.ts）：事件記成系統（不算審核員的工作量）、這一章本身就足額，
+   * writes 跟蓋章同一批寫（稽核）。領取與資料庫守衛照常：系統身分要先領取才能蓋。
+   */
+  system?: { writes: D1PreparedStatement[] };
+}
 /** 定案後快照預設保留 7 天（給審核員複核與仲裁）；與 AI 不一致的由兩段式定案改成 14 天 */
 export const RETAIN_MS = 7 * 86_400_000;
 const retainStatement = (db: D1Database, submissionId: string, now: number, retainMs: number) =>
@@ -506,7 +517,8 @@ export async function stamp(
   // 改判單只有通過或撤回改判兩條路；撤回走 /flip/withdraw（不通知作者、維持原本的駁回）
   if (row.flip_of && input.verdict === "reject") throw new HttpError(409, "review_flip_use_withdraw");
   const { note, rejection, marks, suggestions, coaching } = await normalizeDecision(db, row, input);
-  const required = STAMPS_REQUIRED[row.kind];
+  const system = !!input.final?.system;
+  const required = system ? 1 : STAMPS_REQUIRED[row.kind];
   const writes: D1PreparedStatement[] = [
     db
       .prepare("INSERT INTO review_stamps (submission_id, member_id, verdict, note, created_at, claim_generation) VALUES (?, ?, ?, ?, ?, ?)")
@@ -515,12 +527,13 @@ export async function stamp(
     // 審卡 V2：每一章都是一筆事件（理由代碼、領取後經過時間、當下同作者／同裝置還有幾張在等）
     reviewEventStatement(db, {
       key: `stamp:${row.id}:${input.memberId}`, submissionId: row.id, cardId: row.card_id, at: input.now, action: input.verdict,
-      from: "pending", actorKind: "reviewer", actorMemberId: input.memberId, source: rejection?.legacy ? "legacy_note" : null,
+      from: "pending", actorKind: system ? "system" : "reviewer", actorMemberId: input.memberId, source: rejection?.legacy ? "legacy_note" : null,
       reasons: rejection?.reasons ?? null, reasonVersion: rejection ? REVIEW_REASON_VERSION : null, coaching: rejection ? coaching : null,
       claimElapsedMs: row.claimed_at === null ? null : Math.max(0, input.now - row.claimed_at), ctx: await queueContext(db, row.id), marks,
       finalSource: input.final?.source ?? null, aiSuggestionId: input.final?.aiSuggestionId ?? null, aiNoteTypes: input.final?.aiNoteTypes ?? null, aiNote: input.final?.aiNote ?? null,
       ...(suggestions.length ? { reasons: suggestions, reasonVersion: REVIEW_REASON_VERSION, source: "suggestions" } : {}),
     }),
+    ...(input.final?.system?.writes ?? []),
     // 改進建議與給作者的補充說明要在狀態變成通過之前寫好：通知的 trigger 在那一刻讀它（託管作品要等同步完成才變），
     // 作者結果頁讀單上的說明。沒附建議的通過不寫單上的說明（通知的 trigger 會把它帶給作者）
     ...(suggestions.length ? [db.prepare("UPDATE review_submissions SET approve_suggestions = ?, note = ? WHERE id = ? AND status = 'pending'").bind(JSON.stringify(suggestions), note, row.id)] : []),

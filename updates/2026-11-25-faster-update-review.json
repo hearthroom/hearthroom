@@ -1,0 +1,13 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/mine",
+  "draft": true,
+  "title": {
+    "zh-Hant": "已上架卡片的更新，分級不變時有機會更快通過審核。",
+    "zh-Hans": "已上架卡片的更新，分级不变时有机会更快通过审核。",
+    "en": "Updates to published cards that keep the same rating can now pass review faster.",
+    "ja": "公開中のカードの更新は、レーティングが同じなら審査が早く終わることがあります。",
+    "ko": "공개 중인 카드의 업데이트는 레이팅이 같으면 더 빨리 심사를 통과할 수 있어요."
+  }
+}

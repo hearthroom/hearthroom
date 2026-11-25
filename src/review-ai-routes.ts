@@ -14,6 +14,8 @@ import { operationOf } from "./moderation";
 import { HttpError, type Env } from "./types";
 import type { ProviderId } from "./providers";
 import { upstream } from "./upstream";
+import { fastTrackStats, tryFastTrack } from "./review-fast-track";
+import { queuePush } from "./community/push";
 import { agentAuthorCardList, agentAuthorProfile, agentLiveCard, agentOriginality, getAuthorNote, putAuthorNote } from "./review-ai-evidence";
 
 /**
@@ -205,7 +207,7 @@ reviewAiRoutes.put("/v1/review-ai/submissions/:id/author-note", (c) => counted(c
   return c.json(await putAuthorNote(c.env.DB, s.id, body?.note, agent.id, Date.now()), 200, NO_STORE);
 }));
 
-/** 寫建議（覆蓋同版本的上一筆）。只記錄，不改送審狀態。 */
+/** 寫建議（覆蓋同版本的上一筆）。建議本身不改送審狀態；已上架卡的更新符合快速通道時由系統核准（review-fast-track.ts）。 */
 reviewAiRoutes.put("/v1/review-ai/submissions/:id/suggestion", (c) => counted(c, "suggest", async () => write(c, false)));
 /** 只打審核標記（不下結論）；已下的結論保留。 */
 reviewAiRoutes.put("/v1/review-ai/submissions/:id/tags", (c) => counted(c, "tag", async () => write(c, true)));
@@ -222,6 +224,10 @@ async function write(c: Ctx, tagsOnly: boolean) {
   const input = parseSuggestion(body, { tagsOnly });
   const row = await saveSuggestion(c.env.DB, { ...input, submissionId: s.id, cardId: Number(s.card_id), agentId: agent.id, phase, now }, { tagsOnly });
   if (!tagsOnly && input.verdict) await bumpOp(c.env.DB, "review_ai_verdict", input.verdict, phase);
+  // AI 快速通道（review-fast-track.ts）：待審單寫下結論後判一次；不符合就留在人工佇列。結果不回給審卡員
+  if (!tagsOnly && input.verdict && phase === "shadow") {
+    if (await tryFastTrack(c.env, s.id, { suggestionId: row.id, at: row.updated_at }) === "approved") queuePush(c);
+  }
   return c.json({ id: row.id, verdict: row.verdict, phase: row.phase, criteriaVersion: input.criteriaVersion }, 200, NO_STORE);
 }
 
@@ -260,8 +266,10 @@ reviewAiRoutes.get("/v1/review-ai/report", (c) => counted(c, "report", async () 
   if (!Number.isFinite(from) || !Number.isFinite(to) || from >= to || to - from > 120 * 86_400_000) throw new HttpError(400, "invalid_arguments", undefined, { field: "from" });
   const criteria = c.req.query("criteria") ?? null;
   if (criteria !== null && !/^v\d{1,4}$/.test(criteria)) throw new HttpError(400, "invalid_arguments", undefined, { field: "criteria" });
-  const [versions, arbitration, persuasion] = await Promise.all([aiReport(c.env.DB, { from, to, criteria }), arbitrationStats(c.env.DB, { from, to, criteria }), persuasionStats(c.env.DB, { from, to, criteria })]);
-  return c.json({ from, to, versions: versions.map((v) => ({ ...v, arbitration: arbitration[v.criteriaVersion] ?? null, persuasion: persuasion[v.criteriaVersion] ?? { convinced: 0, rated: 0 } })) }, 200, NO_STORE);
+  const [versions, arbitration, persuasion, fastTrack] = await Promise.all([aiReport(c.env.DB, { from, to, criteria }), arbitrationStats(c.env.DB, { from, to, criteria }), persuasionStats(c.env.DB, { from, to, criteria }), fastTrackStats(c.env.DB, { from, to, criteria })]);
+  // fastTrack：AI 快速通道核准件數、符合結構條件的件數（自動通過率的分母）、核准後被撤回的件數
+  return c.json({ from, to, versions: versions.map((v) => ({ ...v, arbitration: arbitration[v.criteriaVersion] ?? null, persuasion: persuasion[v.criteriaVersion] ?? { convinced: 0, rated: 0 },
+    fastTrack: fastTrack[v.criteriaVersion] ?? { approved: 0, eligible: 0, rate: null, revoked: 0 } })) }, 200, NO_STORE);
 }));
 
 const criteriaOf = (c: Ctx) => {

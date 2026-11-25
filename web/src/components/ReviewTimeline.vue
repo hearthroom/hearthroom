@@ -50,7 +50,7 @@ const rounds = computed(() => {
 const latest = computed(() => {
   const list = items.value ?? [];
   const i = list[list.length - 1];
-  return i ? t("reviewV2.timeline.latest", { result: label(i), who: i.actor ?? "—", time: dateTime(i.at) }) : "";
+  return i ? t("reviewV2.timeline.latest", { result: label(i), who: i.system ? t(`reviewAi.two.source.${i.system}`) : i.actor ?? "—", time: dateTime(i.at) }) : "";
 });
 </script>
 
@@ -69,7 +69,7 @@ const latest = computed(() => {
             <div class="event__head">
               <span class="chip" :class="{ 'chip--reject': i.action === 'reject', 'chip--warn': i.action === 'drop' || i.action === 'hold' }">{{ label(i) }}</span>
               <span v-if="i.source" class="chip chip--quiet">{{ $t(`reviewV2.dropped.source.${i.source === 'single' ? 'single' : i.source === 'auto_same_content' ? 'auto' : 'batch'}`) }}</span>
-              <span class="subtle">{{ i.mine ? $t("reviewV2.timeline.you") : i.actor ?? "" }}</span>
+              <span class="subtle">{{ i.mine ? $t("reviewV2.timeline.you") : i.system ? $t(`reviewAi.two.source.${i.system}`) : i.actor ?? "" }}</span>
               <time class="subtle event__time" :datetime="new Date(i.at).toISOString()">{{ dateTime(i.at) }}</time>
             </div>
             <ul v-if="i.marks?.length" class="event__reasons" data-timeline-marks>

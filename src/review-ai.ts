@@ -8,7 +8,8 @@ import { HttpError } from "./types";
  * AI 審卡影子模式（任務 2026-11-23-ai-card-review）。
  *
  * 審卡員是一個 AI 審核帳號（reviewers＋review_agents），由 Agent 員工透過 CLI 操作：讀卡、寫建議、打審核標記。
- * 建議只記錄，絕不改送審狀態；它不能蓋章、不受理、冷凍（那些路由對 AI 帳號一律 403）。
+ * 建議本身不改送審狀態；它不能蓋章、不受理、冷凍（那些路由對 AI 帳號一律 403）。
+ * 例外是 AI 快速通道（review-fast-track.ts）：已上架卡的更新、分級不變、AI 判通過且沒有標記時，由系統身分照一般核准蓋章。
  *
  * AI 讀卡時拿不到這張單的人工決定、審核章、不受理狀態與說明。審核員這邊是 AI 為主（owner 2026-11-24）：待審單一進審核頁就看得到 AI 的建議。
  * 試跑：近 7 天已定案的單也能讀（phase=backfill），同樣不帶人工決定，報表才能拿它和人工比。
@@ -409,10 +410,10 @@ export async function saveSuggestion(db: D1Database, input: SuggestionInput & { 
     ? "flags=excluded.flags,model=excluded.model"
     : "model=excluded.model,verdict=excluded.verdict,reasons=excluded.reasons,flags=excluded.flags,confidence=excluded.confidence,handoff_cause=excluded.handoff_cause,note=excluded.note,author_note=excluded.author_note,phase=excluded.phase,input_tokens=excluded.input_tokens,output_tokens=excluded.output_tokens,cost_usd=excluded.cost_usd,latency_ms=excluded.latency_ms,updated_at=excluded.updated_at";
   const row = await db.prepare(`INSERT INTO review_ai_suggestions (${cols}) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-    ON CONFLICT(submission_id,agent_member_id,criteria_version) DO UPDATE SET ${update} RETURNING id, verdict, phase`)
+    ON CONFLICT(submission_id,agent_member_id,criteria_version) DO UPDATE SET ${update} RETURNING id, verdict, phase, updated_at`)
     .bind(id, input.submissionId, input.cardId, input.agentId, input.criteriaVersion, input.model, input.verdict, JSON.stringify(input.reasons), JSON.stringify(input.flags),
       input.confidence, input.handoffCause, input.note, input.authorNote, input.phase, input.inputTokens, input.outputTokens, input.costUsd, input.latencyMs, input.now, input.now)
-    .first<{ id: string; verdict: string | null; phase: string }>();
+    .first<{ id: string; verdict: string | null; phase: string; updated_at: number }>();
   return row!;
 }
 
@@ -496,6 +497,8 @@ export async function aiReport(db: D1Database, input: { from: number; to: number
       // AI 為主（owner 2026-11-24）的主指標：改了 AI 的比例＝modified／(ai＋modified)；審核員標「AI 判斷不準確」的筆數
       if (r.final_note_types && (JSON.parse(r.final_note_types) as string[]).includes("ai_inaccurate")) g.inaccurate++;
     }
+    // AI 快速通道核准的單不是人的判斷：不進人機對照（否則等於 AI 跟自己比）
+    if (r.final_source === "ai_fast_track") continue;
     g.matrix[human as keyof typeof g.matrix][r.verdict as AiVerdict]++;
     if (human === "rejected") {
       const humanReasons = new Set<string>(JSON.parse(r.reject_reasons ?? "[]"));
@@ -536,7 +539,7 @@ export async function aiReport(db: D1Database, input: { from: number; to: number
       flags: g.flags,
       feedback: g.feedback,
       avgLatencyMs: g.latencyN ? Math.round(g.latencySum / g.latencyN) : null,
-      // 定案來源（ai 照 AI／modified 改了 AI／human_no_ai 無 AI 對照；歷史資料另有 blind＝舊雙盲「用我的」）
+      // 定案來源（ai 照 AI／modified 改了 AI／human_no_ai 無 AI 對照／ai_fast_track AI 快速通道自動核准；歷史資料另有 blind＝舊雙盲「用我的」）
       finalSource: g.finalSource,
       inaccurate: g.inaccurate,
       costUsd: Math.round(g.costUsd * 10_000) / 10_000,

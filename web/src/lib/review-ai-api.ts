@@ -99,6 +99,8 @@ export interface AiReportVersion {
   finalSource?: Partial<Record<ReviewFinalSource, number>>;
   /** 定案時或定案後標「AI 判斷不準確」的筆數（舊版伺服器不帶） */
   inaccurate?: number;
+  /** AI 快速通道：核准件數、符合條件的件數（自動通過率的分母）、通過率、事後被撤回件數（舊版伺服器不帶） */
+  fastTrack?: { approved: number; eligible: number; rate: number | null; revoked: number };
 }
 export async function fetchAiReport(token: string, days: number, now = Date.now()): Promise<{ from: number; to: number; versions: AiReportVersion[] }> {
   const p = new URLSearchParams({ from: String(now - days * 86_400_000), to: String(now) });
@@ -114,7 +116,7 @@ export async function fetchReferenceCandidates(token: string): Promise<{ items: 
 export const AI_NOTE_TYPES = ["card_content", "author_relation", "author_history", "criteria_issue", "other"] as const;
 export type AiNoteType = (typeof AI_NOTE_TYPES)[number];
 export const AI_NOTE_MAX = 500;
-export const FINAL_SOURCES: readonly ReviewFinalSource[] = ["blind", "ai", "modified", "human_no_ai"];
+export const FINAL_SOURCES: readonly ReviewFinalSource[] = ["blind", "ai", "modified", "human_no_ai", "ai_fast_track"];
 
 /** kind=final：定案時寫的（finalSource 是定案來源）；kind=arbitration：仲裁時寫的（arbitration 是仲裁結果） */
 export interface AiNoteItem {

@@ -818,7 +818,7 @@ export async function fetchReviewQueue(token: string, lang?: string, tab?: "new"
 
 export interface ReviewTimelineItem {
   at: number; action: "submit" | "approve" | "reject" | "reopen" | "reopen_withdraw" | "drop" | "restore" | "hold" | "unhold" | "superseded" | "flip" | "flip_withdraw";
-  round: number; actor: string | null; mine: boolean; source?: string | null; reasons?: string[]; note?: string; marks?: string[]; suggestions?: string[]; current: boolean;
+  round: number; actor: string | null; mine: boolean; source?: string | null; system?: "ai_fast_track"; reasons?: string[]; note?: string; marks?: string[]; suggestions?: string[]; current: boolean;
 }
 /** 單卡審核紀錄；coverageFrom＝事件紀錄的起點（之前的冷凍與不受理沒有紀錄） */
 export async function fetchReviewTimeline(id: string, token: string): Promise<{ items: ReviewTimelineItem[]; coverageFrom: number | null }> {
@@ -884,7 +884,8 @@ export const withdrawReopen = (id: string, token: string, reason: string) => rev
 /** 審核決定的內容（蓋章與改了 AI 的定案共用同一組欄位） */
 export interface ReviewDecisionBody { verdict: "approve" | "reject"; note?: string; reasons?: string[]; coaching?: boolean; marks?: string[]; suggestions?: string[] }
 /** 定案的來源：照 AI、改了 AI、無 AI 對照；blind（舊雙盲「用我的」）只會出現在舊的定案上 */
-export type ReviewFinalSource = "blind" | "ai" | "modified" | "human_no_ai";
+/** ai_fast_track：AI 快速通道（已上架卡的更新，分級不變、AI 通過無標記，由系統核准）；只會出現在系統那一章，審核員不能送 */
+export type ReviewFinalSource = "blind" | "ai" | "modified" | "human_no_ai" | "ai_fast_track";
 /** 這張單目前判準版本的 AI 判斷：已判、交人，或還沒判 */
 export type ReviewAiState = { state: "ready" | "handoff"; suggestion: ReviewAiSuggestion } | { state: "pending"; suggestion: null };
 export interface ReviewAiSuggestion {
@@ -902,10 +903,10 @@ export interface ReviewAiSuggestion {
 export const stampReview = (id: string, token: string, body: Partial<ReviewDecisionBody> & { generation?: string; finalSource?: ReviewFinalSource; aiNoteTypes?: string[]; aiNote?: string; aiSuggestionId?: string; aiSuggestionAt?: number; authorNote?: string; aiInaccurate?: boolean }) =>
   reviewAction<{ id: string; status: string; cardStatus: CardStatus; stamps: { approve: number; required: number }; finalSource?: ReviewFinalSource }>(id, "stamp", token, body);
 
-export interface ReviewDecision {id:string;status:string;kind:string;verdict:'approve'|'reject';note:string;at:number;submittedAt:number;decidedAt:number|null;versionId:string|null;card:{id:string;name:string};canCorrect:boolean;corrected?:boolean;flip?:ReviewFlipState}
-/** q：純數字＝卡號精確比對，其他＝卡名包含；伺服器搜全部紀錄 */
-export async function fetchReviewDecisions(token:string,lang:string,before?:number,q?:string):Promise<{items:ReviewDecision[];nextCursor:number|null}>{
- const query=new URLSearchParams({lang});if(before)query.set('before',String(before));if(q)query.set('q',q);
+export interface ReviewDecision {id:string;status:string;kind:string;verdict:'approve'|'reject';note:string;at:number;submittedAt:number;decidedAt:number|null;versionId:string|null;card:{id:string;name:string};canCorrect:boolean;corrected?:boolean;flip?:ReviewFlipState;finalSource?:'ai_fast_track'}
+/** q：純數字＝卡號精確比對，其他＝卡名包含；伺服器搜全部紀錄。source=ai_fast_track（限管理員）：改列 AI 快速通道核准的單 */
+export async function fetchReviewDecisions(token:string,lang:string,before?:number,q?:string,source?:'ai_fast_track'):Promise<{items:ReviewDecision[];nextCursor:number|null}>{
+ const query=new URLSearchParams({lang});if(before)query.set('before',String(before));if(q)query.set('q',q);if(source)query.set('source',source);
  return json(await fetch(`${COMMUNITY_API}/review/decisions?${query}`,{headers:{...from(),...authHeaders(token)}}));
 }
 /** 駁回改判為通過（限管理員）：用同一個送審版本建一張改判單，由自己領著。同一個 operationId 重送回同一張單 */

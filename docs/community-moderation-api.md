@@ -229,7 +229,7 @@ A batch reports per-item failures as `{ contentId, error: "<code>" }` with the s
 
 ## Card review shadow suggestions (AI account)
 
-A dedicated card-review identity can read card submissions and record an advisory suggestion. A suggestion never changes the submission, and the identity cannot claim, stamp, hold or drop.
+A dedicated card-review identity can read card submissions and record an advisory suggestion. A suggestion by itself never changes the submission, and the identity cannot claim, stamp, hold or drop. The one exception is the AI fast track (below): a qualifying update of a live card is approved by a separate system identity right after the verdict is written.
 
 The `/v1/review-ai/queue`, `/v1/review-ai/submissions/*` and `/v1/review-ai/cards/*` routes take only `X-Review-Agent-Key: <64 hex>` (no Harbor sign-in, no expiry). The server keeps only the key's SHA-256 in the `REVIEW_AGENT_CONFIG` secret (`{"memberId","keySha256"}`); requests carrying an `Origin` header are refused. A wrong key, a missing or empty config, or a revoked `review_agents` row gives 403 `review_agent_key_invalid`; a signed-in reviewer or other AI account without the key gives 403 `review_agent_only`. Revoke by clearing the secret or revoking the identity's `review_agents` row. The key works on no other route.
 
@@ -273,6 +273,24 @@ The same evidence a human reviewer has on the review page, for the AI key only (
 ### `PUT /v1/review-ai/submissions/:id/suggestion` and `PUT /v1/review-ai/submissions/:id/tags`
 
 Body: `{ criteriaVersion: "v<n>", model, verdict: "pass"|"reject"|"handoff", reasons?: string[], flags?: string[], confidence?: 0..1, note?: string (≤400), handoffCause?, inputTokens?, outputTokens?, costUsd?, latencyMs? }`. Codes must come from `allowed`; `reject` needs at least one reason or flag; `pass` takes no reasons; `handoff` defaults its cause to `unsure`. One record per account, criteria version and submission: sending again overwrites it. The `tags` route takes `{ criteriaVersion, model, flags }` and keeps any verdict already written. Response: `{ id, verdict, phase, criteriaVersion }`.
+
+### AI fast track (2026-11-25)
+
+After a `suggestion` write on a pending submission (`phase: "shadow"`; never on `tags` writes or `backfill`), the server checks the fast track once. When every condition holds the submission is approved through the ordinary stamp path; otherwise nothing happens and it stays in the human queue (an AI error, timeout or missing verdict leaves it there too). The agent's response does not change. Conditions, checked in this order:
+
+1. Nobody has handled it: still `pending`, no stamp, no recorded managed-work decision, no live human claim (else `skipped_decided`).
+2. Live-card update (else `ineligible_status`): not a correction review (`flip_of`) or re-review (`reopen_of`); no hold; not dropped, no open not-accepted case for the card, not a resubmission after a drop; the card's previous decided author submission was approved (a resubmission after a rejected update goes to humans); the card is `approved` with a published version whose submission is still approved and version state `approved`; not delisted, blocked or suspended (`board_hidden`, `public_blocked`, `moderation_blocked_versions`, an open `moderation_cases` row, managed-work access not `public`/restriction not `none`/sync not complete); no correction in flight on the published submission.
+3. Same rating (else `ineligible_rating`): the submission's `rating` equals the card's current rating (manager corrections and the rating floor included) and its `rating_descriptors` equal the card's as a set.
+4. AI verdict `pass` under the current criteria version, which must be set or derivable (else `ineligible_verdict`; `reject`, `handoff` and older criteria versions included).
+5. No review flags (`ai_unedited`, `copied_text`, `mass_produced`; else `ineligible_flags`).
+
+Approval: the system identity `system:ai-fast-track` (not a member or reviewer row, cannot sign in) claims the submission like a reviewer, then stamps `approve` with that claim, so the claim, hold and drop guards apply in the same write; a human claim taken in between makes it skip. This one stamp is enough whatever `STAMPS_REQUIRED` says. Publication, the author's approval notification, follower update notices, card rewards and the rating floor run exactly as for a human approval. The stamp's review event has `actor_kind = 'system'` (not counted as reviewer work), `final_source = 'ai_fast_track'` and the suggestion id; an `audit_log` row (`subject_kind = 'review_submission'`, `actor_kind = 'ai'`, action `review_fast_track_approve`) carries `criteriaVersion`, `reasons`, `flags`, `suggestionId` and `model`. Every check also writes a `fast_track_check` review event whose `source` is the outcome. Human reviewers cannot send `finalSource: "ai_fast_track"` (400 `invalid_arguments`).
+
+Revoke: a manager uses the ordinary correction, `POST /v1/review/:id/correction` with `{ operationId, note }` (the note is the rejection explanation the author sees). The update becomes rejected, the public version falls back to the previous approved version, and the author gets the correction's rejection notice ("corrected from approved to rejected", with the note). Only managers can correct a fast-track approval, since no reviewer stamped it.
+
+Records: `GET /v1/review/decisions?source=ai_fast_track` (managers; 403 otherwise, any other `source` is 400) lists fast-track stamps instead of the caller's own, with `finalSource: "ai_fast_track"` and `canCorrect` (no 24-hour limit). `GET /v1/review/:id/detail` marks the system stamp with `finalSource: "ai_fast_track"`. The report adds `fastTrack: { approved, eligible, rate, revoked }` per criteria version (`eligible` = submissions with at least one check that passed conditions 1–3, `rate = approved / eligible`, `revoked` = fast-track approvals later corrected) and counts `ai_fast_track` under `finalSource`; fast-track decisions are left out of the human-versus-AI matrix.
+
+Metrics: `hearthroom_review_fast_track_total{operation="evaluate",outcome="approved|ineligible_status|ineligible_rating|ineligible_flags|ineligible_verdict|skipped_decided|error"}` and `hearthroom_review_fast_track_revokes_total{operation="revoke",outcome="success"}` (counted in the correction's completing write). Example: `sum by (outcome) (increase(hearthroom_review_fast_track_total[1d]))`.
 
 ### Finalizing with the AI suggestion (human reviewers)
 

@@ -735,7 +735,7 @@ it('report: the arbitration table gains a convinced column, suppressed on its ow
 it('report: suppresses figures under ten samples and exports the reference draft', async () => {
   routes['/v1/review-ai/report'] = () => [200, { from: 0, to: 1, versions: [
     { criteriaVersion: 'v1', total: 4, ai: { pass: 2, reject: 2, handoff: 0 }, matrix: { approved: { pass: 2, reject: 1, handoff: 0 }, rejected: { pass: 0, reject: 1, handoff: 0 }, dropped: { pass: 0, reject: 0, handoff: 0 } }, agreement: 0.75, comparable: 4, aiStricter: 1, humanStricter: 0, handoffRate: 0, refusalRate: 0, costUsd: 0.01, arbitration: { values: { human_right: 1, ai_right: 0, both_ok: 0, both_wrong: 0 }, reasons: { 'opening.no_reply_hook': { humanWrong: 0, aiWrong: 1 } } } },
-    { criteriaVersion: 'v2', total: 40, finalSource: { blind: 20, ai: 6, modified: 2, human_no_ai: 3 }, inaccurate: 1, ai: { pass: 20, reject: 18, handoff: 2 }, matrix: { approved: { pass: 18, reject: 4, handoff: 1 }, rejected: { pass: 3, reject: 13, handoff: 1 }, dropped: { pass: 0, reject: 0, handoff: 0 } }, agreement: 0.815, comparable: 38, aiStricter: 4, humanStricter: 3, handoffRate: 0.05, refusalRate: 0, costUsd: 0.1234, arbitration: { values: { human_right: 6, ai_right: 4, both_ok: 1, both_wrong: 1 }, reasons: { 'opening.no_reply_hook': { humanWrong: 4, aiWrong: 6 }, 'character.setting_thin': { humanWrong: 1, aiWrong: 2 } } } },
+    { criteriaVersion: 'v2', total: 40, finalSource: { blind: 20, ai: 6, modified: 2, human_no_ai: 3, ai_fast_track: 2 }, inaccurate: 1, fastTrack: { approved: 2, eligible: 3, rate: 2 / 3, revoked: 1 }, ai: { pass: 20, reject: 18, handoff: 2 }, matrix: { approved: { pass: 18, reject: 4, handoff: 1 }, rejected: { pass: 3, reject: 13, handoff: 1 }, dropped: { pass: 0, reject: 0, handoff: 0 } }, agreement: 0.815, comparable: 38, aiStricter: 4, humanStricter: 3, handoffRate: 0.05, refusalRate: 0, costUsd: 0.1234, arbitration: { values: { human_right: 6, ai_right: 4, both_ok: 1, both_wrong: 1 }, reasons: { 'opening.no_reply_hook': { humanWrong: 4, aiWrong: 6 }, 'character.setting_thin': { humanWrong: 1, aiWrong: 2 } } } },
   ] }];
   routes['/v1/review-ai/reference-candidates'] = () => [200, { items: [{ id: 'c1', verdict: 'pass' }, { id: 'c2', verdict: 'reject' }, { id: 'c3', verdict: 'reject' }], skipped: 1 }];
   routes['/v1/review-ai/notes'] = (c) => [200, { from: 0, to: 1, items: c.url.includes('type=author_relation')
@@ -767,6 +767,15 @@ it('report: suppresses figures under ten samples and exports the reference draft
   expect($('[data-version=v2] [data-final-cell=modified-rate]')!.textContent).toBe('25%');
   expect($('[data-version=v2] [data-final-cell=inaccurate]')!.textContent).toBe('1');
   expect($('[data-version=v1] [data-table=final]')).toBeNull();
+  // AI 快速通道：定案來源多一欄；另有件數、符合條件、自動通過率、事後撤回（舊版伺服器不帶就不畫）
+  expect($('[data-version=v2] [data-final-cell=ai_fast_track]')!.textContent).toBe('2');
+  expect([...host.querySelectorAll('[data-version=v2] [data-table=fast-track] th')].map((th) => th.textContent!.trim()))
+    .toEqual(['approved', 'eligible', 'rate', 'revoked'].map((k) => t(`reviewAi.fastTrack.col.${k}`)));
+  expect($('[data-version=v2] [data-fast-cell=approved]')!.textContent).toBe('2');
+  expect($('[data-version=v2] [data-fast-cell=eligible]')!.textContent).toBe('3');
+  expect($('[data-version=v2] [data-fast-cell=rate]')!.textContent).toBe('67%');
+  expect($('[data-version=v2] [data-fast-cell=revoked]')!.textContent).toBe('1');
+  expect($('[data-version=v1] [data-table=fast-track]')).toBeNull();
   // 給 AI 的說明：新的在前、全文；只選了類型的寫明沒有說明；可依類型篩
   await vi.waitFor(() => expect($('[data-notes]')).not.toBeNull());
   const items = () => [...host.querySelectorAll<HTMLElement>('[data-notes] [data-note-kind]')];

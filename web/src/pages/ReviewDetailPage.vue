@@ -1428,6 +1428,7 @@ onMounted(() => { void load(); });
               <li v-for="(s, i) in otherStamps" :key="i" class="record">
                 <span class="record__head">
                   <span class="chip" :class="{ 'chip--reject': s.verdict === 'reject' }">{{ $t(`review.action.${s.verdict}`) }}</span>
+                  <span v-if="s.finalSource === 'ai_fast_track'" class="chip" data-final-source="ai_fast_track">{{ $t("reviewAi.two.source.ai_fast_track") }}</span>
                   <span class="subtle">{{ dateTime(s.at) }}</span>
                 </span>
                 <p v-if="s.note" class="text record__note">{{ s.note }}</p>
@@ -1512,6 +1513,7 @@ onMounted(() => { void load(); });
               <li v-for="(s, i) in otherStamps" :key="i" class="record">
                 <span class="record__head">
                   <span class="chip" :class="{ 'chip--reject': s.verdict === 'reject' }">{{ $t(`review.action.${s.verdict}`) }}</span>
+                  <span v-if="s.finalSource === 'ai_fast_track'" class="chip" data-final-source="ai_fast_track">{{ $t("reviewAi.two.source.ai_fast_track") }}</span>
                   <span class="subtle">{{ dateTime(s.at) }}</span>
                 </span>
                 <p v-if="s.note" class="text record__note">{{ s.note }}</p>
