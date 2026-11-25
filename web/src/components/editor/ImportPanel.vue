@@ -19,7 +19,8 @@ import { isPng } from "@/lib/png-chunks";
 import { fengyueToDraft, readFengyueFile } from "@/lib/fengyue";
 import { readRiliFile, readRiliLorebookFile, riliToDraft } from "@/lib/rili";
 import { classifyMmdFile, mergeMmdFiles, MMD_PARTS, type MmdFile, type MmdImportResult, type MmdPart } from "@/lib/mmd";
-import { formatKiB, OPENING_PAGE_MAX_BYTES, ruleSetWarnings, selectCardImportRules, utf8Bytes, validateRuleSetLimits } from "@/lib/regex-rules";
+import { OPENING_PAGE_INLINE_BYTES, openingPageMaxBytes, pageLimitMB, utf8Length } from "@/lib/opening-page";
+import { formatKiB, ruleSetWarnings, selectCardImportRules, utf8Bytes, validateRuleSetLimits } from "@/lib/regex-rules";
 import { CARD_CSS_MAX_BYTES } from "@/lib/card-appearance";
 import { stateLeafCount, stateValues } from "@/lib/card-state";
 import RegexIssueList from "./RegexIssueList.vue";
@@ -222,8 +223,21 @@ const acceptedAsset = computed(() => {
 const regexWarnings = computed(() => acceptedAsset.value ? ruleSetWarnings(acceptedAsset.value) : []);
 const regexIssues = computed(() => acceptedAsset.value && ruleSelection.value ? validateRuleSetLimits(acceptedAsset.value, ruleSelection.value.totalBytes) : []);
 const omittedRules = computed(() => ruleSelection.value?.omitted ?? []);
-const openingBytes = computed(() => utf8Bytes(current.value?.regex?.openingPage ?? ""));
-const openingOver = computed(() => openingBytes.value > OPENING_PAGE_MAX_BYTES);
+const openingBytes = computed(() => utf8Length(current.value?.regex?.openingPage ?? ""));
+const openingOver = computed(() => openingBytes.value > openingPageMaxBytes());
+/** 超過 512 KB 的頁面連大小一起講（存檔走檔案上傳，作者會在開局看到檔案卡或計數器）。 */
+const openingSized = computed(() => openingBytes.value > OPENING_PAGE_INLINE_BYTES);
+/** 字數照字元算；不展開成陣列（大頁面幾十 MB）。 */
+const openingChars = computed(() => {
+  const page = current.value?.regex?.openingPage ?? "";
+  let n = 0;
+  for (let i = 0; i < page.length; i++) {
+    const c = page.charCodeAt(i);
+    if (c >= 0xd800 && c <= 0xdbff && i + 1 < page.length) { const d = page.charCodeAt(i + 1); if (d >= 0xdc00 && d <= 0xdfff) i++; }
+    n++;
+  }
+  return n;
+});
 const cssBytes = computed(() => utf8Bytes(current.value?.regex?.cardCss ?? ""));
 const cssOver = computed(() => cssBytes.value > CARD_CSS_MAX_BYTES);
 const assetSize = (bytes: number) => bytes <= 1024 * 1024
@@ -326,9 +340,9 @@ onBeforeUnmount(() => { if (thumb.value) URL.revokeObjectURL(thumb.value); });
         <li v-if="current.draft.jailbreak">{{ $t("import.landed.custom", { n: [...current.draft.jailbreak].length }) }}</li>
         <li v-if="current.draft.prologue.length">{{ $t("import.landed.prologue", { n: current.draft.prologue.length }) }}</li>
         <li v-if="current.regex?.openingPage">
-          {{ openingOver
-            ? $t("import.landed.openingPageSized", { n: [...current.regex.openingPage].length.toLocaleString(String(locale)), size: assetSize(openingBytes) })
-            : $t("import.landed.openingPage", { n: [...current.regex.openingPage].length }) }}
+          {{ openingSized || openingOver
+            ? $t("import.landed.openingPageSized", { n: openingChars.toLocaleString(String(locale)), size: assetSize(openingBytes) })
+            : $t("import.landed.openingPage", { n: openingChars }) }}
         </li>
         <li v-if="current.regex?.cardCss" data-import-card-css>{{ $t("editor.cardCss.title") }}</li>
         <li v-if="current.spec !== 'mmd' && current.spec !== 'fengyue' && current.spec !== 'rili'">{{ $t("import.landed.examples", { n: current.draft.talkExample.length }) }}</li>
@@ -354,7 +368,7 @@ onBeforeUnmount(() => { if (thumb.value) URL.revokeObjectURL(thumb.value); });
       <div v-if="openingOver || cssOver" class="notice notice--error" role="alert">
         {{ $t("import.presentation.invalid") }}
         <ul class="import__block">
-          <li v-if="openingOver">{{ $t("import.presentation.openingPage", { size: assetSize(openingBytes), max: OPENING_PAGE_MAX_BYTES / 1024 }) }}</li>
+          <li v-if="openingOver">{{ $t("import.presentation.openingPage", { size: assetSize(openingBytes), max: pageLimitMB(openingPageMaxBytes(), String(locale)) }) }}</li>
           <li v-if="cssOver">{{ $t("import.presentation.cardCss", { size: assetSize(cssBytes), max: CARD_CSS_MAX_BYTES / 1024 }) }}</li>
         </ul>
       </div>

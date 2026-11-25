@@ -151,7 +151,7 @@ export const REGEX_LIMITS = {
   total: 32 * 1024 * 1024,
 } as const;
 
-export const OPENING_PAGE_MAX_BYTES = 512 * 1024;
+// 開場網頁的上限與大小規則在 opening-page.ts（讀公開沙盒契約）。
 export const utf8Bytes = (s: string): number => new TextEncoder().encode(s).length;
 
 /** Round up so a file over the limit by a few bytes still reads as over the limit. */

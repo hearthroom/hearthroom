@@ -45,6 +45,7 @@ import RatingMark from "@/components/RatingMark.vue";
 import WorkshopIcon from "../WorkshopIcon.vue";
 import PublishPane from "./PublishPane.vue";
 import TrialPanel, { type TrialOption } from "./TrialPanel.vue";
+import { workshopOpeningPageMaxBytes } from "@/lib/opening-page";
 
 const props = defineProps<{ workshopId: string }>();
 const route = useRoute();
@@ -678,7 +679,7 @@ watch(error, async (text) => {
             <OpeningEditor v-model:mode="draft.opening.mode" v-model:welcome="draft.opening.welcome" v-model:alternates="draft.opening.alternates"
                            v-model:prologue="draft.opening.prologue" v-model:opening-page="draft.opening.openingPage"
                            :saved-mode="savedOpening" page-available :rules="draft.rules.rules" :card-format="draft.rules.format"
-                           :role-name="draft.card.name" :welcome-max="welcomeMax" :missing="false" @edit-rules="go('regex')" />
+                           :role-name="draft.card.name" :welcome-max="welcomeMax" :missing="false" :max-bytes="workshopOpeningPageMaxBytes()" @edit-rules="go('regex')" />
           </section>
 
           <!-- 發布 -->
