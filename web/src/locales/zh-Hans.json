@@ -4723,6 +4723,7 @@
   "moderation.ratingCorrection.change": "分级：{from} → {to}",
   "moderation.ratingCorrection.reasonLine": "理由：{reason}",
   "moderation.ratingCorrection.effect.hideMinors": "没有开启成人内容的玩家会看不到这张卡",
+  "moderation.ratingCorrection.effect.showMore": "没有开启成人内容的玩家也会看到这张卡",
   "moderation.ratingCorrection.effect.floor": "上架版本的分级一起改，分级下限锁在{to}：之后作者送审不能低于{to}",
   "moderation.ratingCorrection.effect.noNotice": "不会通知作者",
   "moderation.ratingCorrection.history": "处理记录会留下这次更正，可以再更正一次。",

@@ -56,8 +56,10 @@ onBeforeUnmount(() => { alive = false; if (ownConfirmation) settleConfirm(false)
 
 function effects(to: Rating): string[] {
   const list = [t("moderation.ratingCorrection.effect.floor", { to: name(to) }), t("moderation.ratingCorrection.effect.noNotice")];
-  // 只有限制級擋未成年人：改成限制級時這條最重要，放第一。其他分級沒有年齡門檻，降級也不另寫誰看得到（稿 v18，PM 2026-11-24）
-  if (to === "R") list.unshift(t("moderation.ratingCorrection.effect.hideMinors"));
+  // 只有限制級擋未成年人：進出限制級時「誰看得到」會變，這條最重要，放第一。其他分級之間沒有年齡門檻，
+  // 降級不另寫誰看得到（稿 v18，PM 2026-11-24）；限制級改成非限制級才寫（PM 2026-11-26）
+  if (to === "R" && current.value !== "R") list.unshift(t("moderation.ratingCorrection.effect.hideMinors"));
+  else if (current.value === "R" && to !== "R") list.unshift(t("moderation.ratingCorrection.effect.showMore"));
   return list;
 }
 

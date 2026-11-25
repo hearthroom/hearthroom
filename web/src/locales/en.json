@@ -4723,6 +4723,7 @@
   "moderation.ratingCorrection.change": "Rating: {from} → {to}",
   "moderation.ratingCorrection.reasonLine": "Reason: {reason}",
   "moderation.ratingCorrection.effect.hideMinors": "Players without adult content turned on won't see this card",
+  "moderation.ratingCorrection.effect.showMore": "Players without adult content turned on will also see this card",
   "moderation.ratingCorrection.effect.floor": "The published version changes too, and the rating floor is locked at {to}: later submissions can't be rated below {to}",
   "moderation.ratingCorrection.effect.noNotice": "The author isn't notified",
   "moderation.ratingCorrection.history": "The correction stays in the history, and you can correct it again.",

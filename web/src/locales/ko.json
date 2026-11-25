@@ -4723,6 +4723,7 @@
   "moderation.ratingCorrection.change": "등급: {from} → {to}",
   "moderation.ratingCorrection.reasonLine": "이유: {reason}",
   "moderation.ratingCorrection.effect.hideMinors": "성인 콘텐츠를 켜지 않은 플레이어는 이 카드를 볼 수 없어요",
+  "moderation.ratingCorrection.effect.showMore": "성인 콘텐츠를 켜지 않은 플레이어도 이 카드를 볼 수 있어요",
   "moderation.ratingCorrection.effect.floor": "공개 중인 버전도 함께 바뀌고 최저 등급이 '{to}' 등급으로 고정돼요. 이후 제출은 이 등급보다 낮아지지 않아요",
   "moderation.ratingCorrection.effect.noNotice": "작성자에게 알리지 않아요",
   "moderation.ratingCorrection.history": "이번 정정은 처리 기록에 남고, 다시 정정할 수 있어요.",

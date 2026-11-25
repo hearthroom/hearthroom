@@ -204,7 +204,7 @@ it('switches back to a normal correction when another rating is picked',async()=
  expect($<HTMLButtonElement>('[data-rating-submit]')!.textContent).toBe('更正分級');
 });
 
-it('lists no visibility line when leaving adults-only, and uses the page danger button',async()=>{
+it('says players without adult content will see it when leaving adults-only, and uses the page danger button',async()=>{
  rating='R';floor='R';
  await open();await chooseRating();
  const submit=$<HTMLButtonElement>('[data-rating-submit]')!;
@@ -213,6 +213,18 @@ it('lists no visibility line when leaving adults-only, and uses the page danger 
  submit.click();
  await vi.waitFor(()=>expect(posts()).toHaveLength(1));
  const opts=mock.confirm.mock.calls[0]![0] as {consequences:string[];danger:boolean};
- expect(opts.consequences).toEqual(['上架版本的分級一起改，分級下限鎖在輔15級：之後作者送審不能低於輔15級','不會通知作者']);
+ // 限制級改成非限制級：沒開啟成人內容的玩家從此看得到，這條放第一（PM 2026-11-26，取代稿 v18 的不寫）
+ expect(opts.consequences).toEqual(['沒有開啟成人內容的玩家也會看到這張卡','上架版本的分級一起改，分級下限鎖在輔15級：之後作者送審不能低於輔15級','不會通知作者']);
  expect(opts.danger).toBe(true);
+});
+
+it('adds no visibility line when lowering between ratings without an age gate',async()=>{
+ rating='PG15';floor=null;
+ await open();await chooseRating();
+ input('[data-rating-next]','PG12');input('[data-rating-reason]','Milder than declared');await flush();
+ $<HTMLButtonElement>('[data-rating-submit]')!.click();
+ await vi.waitFor(()=>expect(posts()).toHaveLength(1));
+ const down=(mock.confirm.mock.calls[0]![0] as {consequences:string[]}).consequences;
+ expect(down).toHaveLength(2);
+ expect(down.join('\n')).not.toContain('成人內容');
 });

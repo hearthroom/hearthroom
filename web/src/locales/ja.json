@@ -4723,6 +4723,7 @@
   "moderation.ratingCorrection.change": "レーティング：{from} → {to}",
   "moderation.ratingCorrection.reasonLine": "理由：{reason}",
   "moderation.ratingCorrection.effect.hideMinors": "成人向けコンテンツをオンにしていないプレイヤーには表示されなくなります",
+  "moderation.ratingCorrection.effect.showMore": "成人向けコンテンツをオンにしていないプレイヤーにも表示されるようになります",
   "moderation.ratingCorrection.effect.floor": "公開中のバージョンも変わり、レーティング下限が「{to}」に固定されます。今後の提出はこの下限より低くなりません",
   "moderation.ratingCorrection.effect.noNotice": "作者には通知されません",
   "moderation.ratingCorrection.history": "この訂正は対応履歴に残り、もう一度訂正できます。",
