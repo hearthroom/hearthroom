@@ -25,7 +25,7 @@ export const OPENING_PAGE_INLINE_BYTES = 512 * 1024;
 export const OPENING_PAGE_EDIT_MAX_BYTES = 1024 * 1024;
 
 /** 超過這個大小在檔案卡下方多一行中性提醒（不擋存檔）。 */
-export const OPENING_PAGE_LARGE_HINT_BYTES = 10 * 1024 * 1024;
+export const OPENING_PAGE_LARGE_HINT_BYTES = 10 * 1000 * 1000;
 
 type Limits = { openingPageMaxBytes?: number; workshopOpeningPageMaxBytes?: number };
 const declared = contractLimits as Limits;
@@ -69,19 +69,20 @@ export function utf8Length(s: string): number {
 }
 
 /**
- * 給人看的大小：1 MB 以下用 KB，以上用 MB。無條件進位到一位小數，超過上限幾個位元組的檔案
+ * 給人看的大小：1 MB 以下用 KB，以上用 MB，都是十進位（1 MB＝1,000,000 位元組），
+ * 跟上游的上限「100000000 位元組（100 MB）」同一把尺。無條件進位到一位小數，超過上限幾個位元組的檔案
  * 不會被印成剛好等於上限。整數不帶小數（512 KB、100 MB）。
  */
 export function formatPageSize(bytes: number, locale: string): string {
-  const mb = bytes >= 1024 * 1024;
-  const value = Math.ceil((bytes / (mb ? 1024 * 1024 : 1024)) * 10) / 10;
+  const mb = bytes >= 1000 * 1000;
+  const value = Math.ceil((bytes / (mb ? 1000 * 1000 : 1000)) * 10) / 10;
   return `${value.toLocaleString(locale, { maximumFractionDigits: 1 })} ${mb ? "MB" : "KB"}`;
 }
 
-/** 上限印成 MB 的數字（字串裡自帶「MB」）：10 MB 以上取整，以下留一位小數，512 KB 印成 0.5。 */
+/** 上限印成 MB 的數字（字串裡自帶「MB」，十進位）：10 MB 以上取整，以下留一位小數，524288 印成 0.5。 */
 export function pageLimitMB(bytes: number, locale: string): string {
-  const mb = bytes / 1024 / 1024;
-  return (bytes >= 10 * 1024 * 1024 ? Math.round(mb) : Math.round(mb * 10) / 10).toLocaleString(locale, { maximumFractionDigits: 1 });
+  const mb = bytes / 1000 / 1000;
+  return (bytes >= 10 * 1000 * 1000 ? Math.round(mb) : Math.round(mb * 10) / 10).toLocaleString(locale, { maximumFractionDigits: 1 });
 }
 
 /** 只收網頁檔：副檔名 .html／.htm，或瀏覽器認得的 text/html。 */
