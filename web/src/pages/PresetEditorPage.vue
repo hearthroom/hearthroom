@@ -264,6 +264,8 @@ async function save() {
   } catch (err) {
     if (consentNeeded(err)) return;
     if (err instanceof ApiError && err.reason === "preset_revision_conflict") conflict.value = true;
+    // 已公開為「只供使用」的預設，每次存檔上游都會比對；被拒時舊內容留著，說明怎麼才能存
+    else if (err instanceof ApiError && err.reason === "preset_hidden_overlap") saveError.value = t("preset.editor.error.hiddenOverlap");
     else saveError.value = resultUnknown(err) ? t("preset.error.unknown") : err instanceof Error ? err.message : t("preset.error.unavailable");
   } finally {
     unconfirmed.value = false;

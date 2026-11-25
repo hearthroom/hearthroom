@@ -212,6 +212,21 @@ describe("預設編輯器", () => {
     expect(mocks.revise.mock.calls[1]![2].expectedVersion).toBe(4);
     expect(mocks.revise.mock.calls[1]![3]).not.toBe(mocks.revise.mock.calls[0]![3]);
   });
+  it("已公開為只供使用、存檔被比對擋下：用編輯器的說法（不是公開彈層那句），草稿留著", async () => {
+    await open();
+    $<HTMLInputElement>("[data-testid=preset-title]").value = "新名字";
+    $("[data-testid=preset-title]").dispatchEvent(new Event("input"));
+    toggleOf("腳本").click();
+    toggleOf("回應玩家").click();
+    await waitAnalyze();
+    mocks.revise.mockRejectedValueOnce(new ApiError(422, "x", "preset_invalid", undefined, "preset_hidden_overlap"));
+    $("[data-testid=preset-save]").click();
+    await flush();
+    const alert = [...root.querySelectorAll(".notice--error")].map((e) => e.textContent);
+    expect(alert).toContain(t("preset.editor.error.hiddenOverlap"));
+    expect(alert).not.toContain(t("preset.share.contentVisibility.disabledOverlap"));
+    expect($<HTMLInputElement>("[data-testid=preset-title]").value).toBe("新名字");
+  });
   it("送出後沒收到回應：顯示正在確認，用同一把鍵再送，拿回原本那一版", async () => {
     await open();
     toggleOf("腳本").click();

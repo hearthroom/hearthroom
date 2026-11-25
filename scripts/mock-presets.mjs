@@ -26,6 +26,7 @@
  *
  * 只供使用（2026-11-26-preset-private-share）：預設庫的「夜讀筆記」是只供使用，別人讀詳情拿到空內容與 contentHidden。
  * 公開時 contentVisibility=hidden：匯入的回 422 preset_hidden_imported；名稱含「撞」的當成比對到他人內容，回 422 preset_hidden_overlap。
+ *   hiddenOff 「只供使用」開關關著：清單 contentHiddenEnabled=false，每份 contentHiddenAvailable=false，公開 hidden 回 422 preset_hidden_disabled
  */
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -134,7 +135,7 @@ export function validateNative(doc) {
 
 function summary(p) {
   const head = revisions.get(p.headRevisionId);
-  return { purpose: "", visibility: "private", contentVisibility: "open", publishedAt: null, attribution: "", removed: false, ...p, allowedActions: p.bindingCount > 0 ? ["archive"] : ["delete"], recommendedModels: head?.recommendedModels ?? [] };
+  return { purpose: "", visibility: "private", contentVisibility: "open", publishedAt: null, attribution: "", removed: false, ...p, contentHiddenAvailable: scenario !== "hiddenOff" && p.sourceKind !== "imported", allowedActions: p.bindingCount > 0 ? ["archive"] : ["delete"], recommendedModels: head?.recommendedModels ?? [] };
 }
 function addRevision(preset, title, document, recommendedModels) {
   const revisionId = uuid();
@@ -256,7 +257,7 @@ export async function handlePresets({ m, path, url, body, raw, req, json, res })
   if (scenario === "scope" && (path.startsWith("/open/v1/preset") || path.includes("/preset"))) return json(res, 403, { error: "insufficient_scope", required_scope: "preset.read" }), true;
   if (m === "GET" && path === "/open/v1/presets") {
     if (scenario !== "empty") seedPresets();
-    return json(res, 200, { items: [...presets.values()].map(summary), nextCursor: "", quota: scenario === "full" ? { used: 50, limit: 50, archived: 2 } : quota(), declarationVersion: DECLARATION }), true;
+    return json(res, 200, { items: [...presets.values()].map(summary), nextCursor: "", quota: scenario === "full" ? { used: 50, limit: 50, archived: 2 } : quota(), declarationVersion: DECLARATION, contentHiddenEnabled: scenario !== "hiddenOff" }), true;
   }
   if (m === "POST" && path === "/open/v1/presets/analyze") return json(res, 200, { compatibility: analyze(body.document) }), true;
   if (m === "POST" && path === "/open/v1/presets") {
@@ -276,6 +277,7 @@ export async function handlePresets({ m, path, url, body, raw, req, json, res })
       if (!["general", "specific"].includes(body.purpose) || (body.purpose === "specific" && !models.length)) return json(res, 422, { error: "preset_invalid", reason: "preset_invalid_input" }), true;
       const content = body.contentVisibility ?? p.contentVisibility ?? "open";
       if (!["open", "hidden"].includes(content)) return json(res, 400, { error: "invalid_request" }), true;
+      if (content === "hidden" && p.contentVisibility !== "hidden" && scenario === "hiddenOff") return json(res, 422, { error: "preset_invalid", reason: "preset_hidden_disabled" }), true;
       if (content === "hidden" && p.sourceKind === "imported") return json(res, 422, { error: "preset_invalid", reason: "preset_hidden_imported" }), true;
       if (content === "hidden" && p.title.includes("撞")) return json(res, 422, { error: "preset_invalid", reason: "preset_hidden_overlap" }), true;
       Object.assign(p, { purpose: body.purpose, visibility: "public", contentVisibility: content, publishedAt: p.publishedAt ?? now(), attribution: body.attribution ?? "" });

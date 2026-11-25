@@ -4398,6 +4398,7 @@
   "preset.share.switchToOpen.confirm": "내용 공개하기",
   "preset.share.switchToOpen.keep": "사용만 허용 유지",
   "preset.share.switchToOpen.toast": "'내용 공개'로 변경했습니다.",
+  "preset.editor.error.hiddenOverlap": "이번 수정 내용 중 일부 항목이 기존 공개 프리셋이나 가져온 프리셋과 같아 '사용만 허용' 상태로는 저장할 수 없습니다. '내용 공개' 또는 '비공개로 전환'으로 바꾼 뒤 저장할 수 있습니다.",
   "preset.share.library.name": "프리셋 라이브러리",
   "preset.share.hot.title": "인기",
   "preset.share.hot.note": "최근 7일간의 사용 수와 즐겨찾기 수 순입니다.",

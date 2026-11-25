@@ -4398,6 +4398,7 @@
   "preset.share.switchToOpen.confirm": "公開內容",
   "preset.share.switchToOpen.keep": "維持只供使用",
   "preset.share.switchToOpen.toast": "已改為「公開內容」。",
+  "preset.editor.error.hiddenOverlap": "這次修改有部分條目與既有的公開或匯入預設相同，「只供使用」的預設無法儲存；可先改為「公開內容」或「改回私人」後再儲存。",
   "preset.share.library.name": "預設庫",
   "preset.share.hot.title": "熱門",
   "preset.share.hot.note": "依近 7 天的使用與喜愛排序。",

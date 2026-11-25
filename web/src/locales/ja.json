@@ -4398,6 +4398,7 @@
   "preset.share.switchToOpen.confirm": "内容を公開する",
   "preset.share.switchToOpen.keep": "「使用のみ」のままにする",
   "preset.share.switchToOpen.toast": "「内容を公開」に変更しました。",
+  "preset.editor.error.hiddenOverlap": "今回の変更には既存の公開プリセットまたは読み込み済みプリセットと一致するエントリーがあるため、「使用のみ」のままでは保存できません。「内容を公開」または「非公開にする」に切り替えると保存できます。",
   "preset.share.library.name": "プリセットライブラリ",
   "preset.share.hot.title": "人気",
   "preset.share.hot.note": "直近7日間の使用数とお気に入り数の順です。",
