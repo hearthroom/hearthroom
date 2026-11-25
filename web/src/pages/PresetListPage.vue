@@ -150,11 +150,6 @@ const canSwitch = (p: PresetSummary) => p.visibility === "public" && !p.removed 
 async function switchContent(p: PresetSummary, to: ContentVisibility) {
   menu.value = "";
   const key = to === "hidden" ? "switchToHidden" : "switchToOpen";
-  const input = {
-    purpose: p.purpose || (p.recommendedModels.length ? "specific" as const : "general" as const),
-    expectedVersion: p.version, declaration: declaration.value, attribution: p.attribution ?? "", contentVisibility: to,
-  };
-  const action = `content:${p.id}:${to}:${p.version}`;
   const ok = await confirmDialog({
     title: t(`preset.share.${key}.confirmTitle`), message: t(`preset.share.${key}.warning`), phraseWrap: true,
     confirmText: t(`preset.share.${key}.confirm`), cancelText: t(`preset.share.${key}.keep`),
@@ -162,6 +157,13 @@ async function switchContent(p: PresetSummary, to: ContentVisibility) {
     // 斷線送不到：同一把冪等鍵再按一次就拿回原本的結果
     pendingText: t("preset.error.unknown"), pendingConfirmText: t(`preset.share.${key}.confirm`),
     onConfirm: async () => {
+      // 每次按都用清單上最新的那一列：版本衝突或聲明換版重讀後，再按一次就送新的版本與聲明
+      const cur = items.value.find((x) => x.id === p.id) ?? p;
+      const input = {
+        purpose: cur.purpose || (cur.recommendedModels.length ? "specific" as const : "general" as const),
+        expectedVersion: cur.version, declaration: declaration.value, attribution: cur.attribution ?? "", contentVisibility: to,
+      };
+      const action = `content:${cur.id}:${to}:${cur.version}:${declaration.value}`;
       busy.value = p.id;
       try {
         await publishPreset(await token(), p.id, input, ops.key(action));

@@ -69,3 +69,34 @@ test("deleted owned publications disappear from the mock library", async () => {
  assert.equal((await request(`/open/v1/presets/${id}/delete`,"POST",{expectedVersion:pub.body.version})).status,200);
  assert.ok(!(await request("/open/v1/preset-library")).body.items.some(p=>p.presetId===id));
 });
+
+test("use-only publishing: imported and overlapping presets are refused, others read an empty detail", async () => {
+  await request("/__presets/reset");
+  const declaration = "preset-publish-2026-10-30";
+  const imported = (await request("/open/v1/presets")).body.items[0];
+  assert.equal(imported.sourceKind, "imported");
+  assert.equal(imported.contentVisibility, "open");
+  const refused = await request(`/open/v1/presets/${imported.id}/publish`, "POST", { expectedVersion: imported.version, declaration, purpose: "general", contentVisibility: "hidden" });
+  assert.deepEqual(refused, { status: 422, body: { error: "preset_invalid", reason: "preset_hidden_imported" } });
+  const document = { schemaVersion: "hearthroom.st-preset.v1", st: { prompts: [] }, selection: { profileId: 1 } };
+  const copied = await request("/open/v1/presets", "POST", { title: "撞到的預設", document, purpose: "general", recommendedModels: [] });
+  const overlap = await request(`/open/v1/presets/${copied.body.presetId}/publish`, "POST", { expectedVersion: 1, declaration, purpose: "general", contentVisibility: "hidden" });
+  assert.equal(overlap.body.reason, "preset_hidden_overlap");
+  const own = await request("/open/v1/presets", "POST", { title: "自己寫的", document, purpose: "general", recommendedModels: [] });
+  const ok = await request(`/open/v1/presets/${own.body.presetId}/publish`, "POST", { expectedVersion: 1, declaration, purpose: "general", contentVisibility: "hidden" });
+  assert.equal(ok.status, 200);
+  assert.equal((await request(`/open/v1/presets/${own.body.presetId}`)).body.contentVisibility, "hidden");
+  const mine = await request(`/open/v1/preset-library/${own.body.presetId}`);
+  assert.equal(mine.body.contentHidden, false);
+  assert.equal(mine.body.item.contentVisibility, "hidden");
+  const back = await request(`/open/v1/presets/${own.body.presetId}/publish`, "POST", { expectedVersion: ok.body.version, declaration, purpose: "general", contentVisibility: "open" });
+  assert.equal(back.status, 200);
+  assert.equal((await request(`/open/v1/presets/${own.body.presetId}`)).body.contentVisibility, "open");
+  const other = (await request("/open/v1/preset-library")).body.items.find((x) => x.title === "夜讀筆記");
+  assert.equal(other.contentVisibility, "hidden");
+  const hidden = await request(`/open/v1/preset-library/${other.presetId}`);
+  assert.equal(hidden.body.contentHidden, true);
+  assert.deepEqual(hidden.body.revision.document.st.prompts, []);
+  assert.deepEqual(hidden.body.parameters, {});
+  assert.ok(hidden.body.item.enabledEntryCount > 0);
+});

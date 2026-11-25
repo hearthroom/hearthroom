@@ -294,6 +294,20 @@ describe("我的預設：顯示與切換模式", () => {
     expect($("[data-testid=preset-toast]").textContent).toBe("");
   });
 
+  it("別處先改過（409）：框內說明、清單重讀，再按一次送新的版本", async () => {
+    mocks.list.mockResolvedValueOnce(mineList([summary({ visibility: "public" })])).mockResolvedValue(mineList([summary({ visibility: "public", version: 5 })]));
+    mocks.publish.mockRejectedValueOnce(new ApiError(409, "x", "preset_conflict", undefined, "preset_revision_conflict")).mockResolvedValueOnce({ presetId: "p1", revisionId: "r2", version: 6 });
+    await mount("/me/presets");
+    await openMenu();
+    $("[data-testid=preset-to-hidden]").click(); await flush();
+    dialogButton("[data-confirm]").click(); await flush();
+    expect(dialog().querySelector("[role=alert]")!.textContent?.trim()).toBe(t("preset.share.error.conflict"));
+    dialogButton("[data-confirm]").click(); await flush();
+    expect(mocks.publish.mock.calls[0]![2]).toMatchObject({ expectedVersion: 2 });
+    expect(mocks.publish.mock.calls[1]![2]).toMatchObject({ expectedVersion: 5, contentVisibility: "hidden" });
+    expect(dialog()).toBeNull();
+  });
+
   it("只供使用 → 公開內容：也先確認，確認後送 open", async () => {
     mocks.list.mockResolvedValue(mineList([summary({ visibility: "public", contentVisibility: "hidden" })]));
     mocks.publish.mockResolvedValue({ presetId: "p1", revisionId: "r2", version: 3 });
