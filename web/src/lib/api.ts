@@ -111,6 +111,8 @@ function describeLimit(code: string, detail: LimitDetail | undefined): string | 
   if (!i18n.global.te(key)) return null;
   const bytes = detail.actual ?? 0;
   const max = detail.max ?? 0;
+  // 上限剛好是十進位 MB（開場網頁的 100000000）就照十進位講，不然照二進位（規則總量的 33554432＝32 MB）
+  const mbUnit = max > 0 && max % 1_000_000 === 0 ? 1_000_000 : 1024 * 1024;
   return i18n.global.t(key, {
     index: (detail.index ?? -1) + 1,
     name: detail.name ?? "",
@@ -118,9 +120,9 @@ function describeLimit(code: string, detail: LimitDetail | undefined): string | 
     max,
     sizeKB: Math.ceil(bytes / 1024),
     maxKB: Math.round(max / 1024),
-    sizeMB: (bytes / 1024 / 1024).toFixed(bytes >= 10 * 1024 * 1024 ? 0 : 1),
+    sizeMB: (bytes / mbUnit).toFixed(bytes >= 10 * mbUnit ? 0 : 1),
     // 1 MB 以下的上限（例如開場網頁的 512 KB）印成 0.5，不印成 0。
-    maxMB: max >= 10 * 1024 * 1024 ? Math.round(max / 1024 / 1024) : Number((max / 1024 / 1024).toFixed(1)),
+    maxMB: max >= 10 * mbUnit ? Math.round(max / mbUnit) : Number((max / mbUnit).toFixed(1)),
   });
 }
 /** 本站自己的 API 回的碼（不是供應商契約的一部分，所以不進 docs/provider-protocol.md）。 */

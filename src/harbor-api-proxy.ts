@@ -14,9 +14,10 @@ const FORWARDED_HEADERS = [
 
 // 開場網頁的原始上傳（PUT /open/v1/role/{roleId}/opening-page）：上游要 Content-Length，沒有就回 411。
 // 串流本體轉送時 Worker 不會帶長度，所以照客戶端宣告的長度用 FixedLengthStream 轉一手（仍是串流，不整份讀進來）。
-// 上限照公開沙盒契約的 openingPageMaxBytes（100 MiB）加一點餘裕，超過的在這裡就擋，不佔上游的頻寬。
+// 上限照上游的開場網頁上限（100000000 位元組，十進位 100 MB）加一點餘裕，超過的在這裡就擋，不佔上游的頻寬。
 const OPENING_PAGE_UPLOAD = /^\/open\/v1\/role\/[^/]+\/opening-page$/;
-export const OPENING_PAGE_UPLOAD_MAX_BYTES = 100 * 1024 * 1024 + 64 * 1024;
+export const OPENING_PAGE_MAX_BYTES = 100_000_000;
+export const OPENING_PAGE_UPLOAD_MAX_BYTES = OPENING_PAGE_MAX_BYTES + 64 * 1024;
 
 /**
  * 有宣告長度的原始上傳本體；回 Response 時是本地就拒絕。
