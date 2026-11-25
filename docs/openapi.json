@@ -9714,7 +9714,7 @@
           "Author assets"
         ],
         "summary": "Replace the display rules of an owned role",
-        "description": "Full replacement of the author asset (there is no partial update). Optimistic locking: `version` must equal the version last read (`0` when no asset exists yet); a mismatch returns 409 `version_conflict`. `mountLayer` is required and must be `under`, `over` or `cover`; `pageMode` may be omitted (treated as `classic`), `immersive` or `sandbox`. Every rule needs a non-blank `find`; each `replace` is limited to 524288 bytes and the sum of `id`+`name`+`find`+`replace` across all rules to 33554432 bytes (`validate_reject`, with `message` and `detail` `{reason: emptyFind|ruleReplace|rulesTotal|ruleTargets|ruleCssDialect|sharedState, index, name, max, actual, unit: bytes}`). Saving sets `status` to `passed` immediately and increments `version`. Rules act on the rendering layer only and never enter the prompt. Exception: `sharedState` is kept when omitted or `null`, and `{}` clears it; an invalid declaration is rejected with `reason: sharedState`.",
+        "description": "Full replacement of the author asset (there is no partial update). Optimistic locking: `version` must equal the version last read (`0` when no asset exists yet); a mismatch returns 409 `version_conflict`. `mountLayer` is required and must be `under`, `over` or `cover`; `pageMode` may be omitted (treated as `classic`), `immersive` or `sandbox`. Every rule needs a non-blank `find`; each `replace` is limited to 524288 bytes and the sum of `id`+`name`+`find`+`replace` across all rules to 33554432 bytes (`validate_reject`, with `message` and `detail` `{reason: emptyFind|ruleReplace|rulesTotal|ruleTargets|ruleCssDialect|sharedState|openingPage|cardCss, index, name, max, actual, unit: bytes}`). `openingPage` and `cardCss` are limited separately from the rules, each to 524288 UTF-8 bytes; over that, `detail.reason` is `openingPage` or `cardCss` with `index: -1`. Saving sets `status` to `passed` immediately and increments `version`. Rules act on the rendering layer only and never enter the prompt. Exception: `sharedState` is kept when omitted or `null`, and `{}` clears it; an invalid declaration is rejected with `reason: sharedState`.",
         "security": [
           {
             "userToken": []
@@ -9753,7 +9753,7 @@
             }
           },
           "400": {
-            "description": "`invalid_param` (bad JSON) or `validate_reject` (unknown mountLayer/pageMode, empty `find`, rule or total size over limit). Body `{\"error\": \"<code>\"}`; for empty `find` and size limits also `message` (English sentence) and `detail` `{reason, index (0-based, -1 for the whole set), name, max, actual, unit: \"bytes\"}`.",
+            "description": "`invalid_param` (bad JSON) or `validate_reject` (unknown mountLayer/pageMode, empty `find`, rule or total size over limit, `openingPage` or `cardCss` over 524288 bytes). Body `{\"error\": \"<code>\"}`; for empty `find` and size limits also `message` (English sentence) and `detail` `{reason, index (0-based, -1 for the whole set), name, max, actual, unit: \"bytes\"}`.",
             "content": {
               "application/json": {
                 "schema": {
