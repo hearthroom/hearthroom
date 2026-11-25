@@ -6288,6 +6288,6 @@
   "reviewAi.first.confirm.body": "The author will be told it was approved, and the card will be published.",
   "reviewAi.first.confirm.submit": "Approve and publish",
   "reviewAi.note.type.ai_inaccurate": "AI judgment inaccurate",
-  "reviewAi.arb.report.col.modifiedRate": "Changed from AI",
+  "reviewAi.arb.report.col.modifiedRate": "Changed from AI rate",
   "reviewAi.arb.report.col.inaccurate": "Marked inaccurate"
 }

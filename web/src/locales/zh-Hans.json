@@ -6289,5 +6289,5 @@
   "reviewAi.first.confirm.submit": "通过并上架",
   "reviewAi.note.type.ai_inaccurate": "AI 判断不准确",
   "reviewAi.arb.report.col.modifiedRate": "改了 AI 的比例",
-  "reviewAi.arb.report.col.inaccurate": "标不准确"
+  "reviewAi.arb.report.col.inaccurate": "标记不准确"
 }

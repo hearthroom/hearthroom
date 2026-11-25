@@ -6289,5 +6289,5 @@
   "reviewAi.first.confirm.submit": "承認して公開",
   "reviewAi.note.type.ai_inaccurate": "AIの判断が不正確",
   "reviewAi.arb.report.col.modifiedRate": "AIを変更した割合",
-  "reviewAi.arb.report.col.inaccurate": "不正確の印"
+  "reviewAi.arb.report.col.inaccurate": "不正確と記録"
 }
