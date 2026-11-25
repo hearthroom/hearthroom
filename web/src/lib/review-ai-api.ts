@@ -97,7 +97,6 @@ export interface AiReportVersion {
   persuasion?: { convinced: number; rated: number };
   /** 兩段式定案來源的筆數，與其中改用 AI 結論的筆數（舊版伺服器不帶） */
   finalSource?: Partial<Record<ReviewFinalSource, number>>;
-  corrected?: number;
   /** 定案時或定案後標「AI 判斷不準確」的筆數（舊版伺服器不帶） */
   inaccurate?: number;
 }

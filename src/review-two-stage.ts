@@ -116,8 +116,8 @@ export async function setAiInaccurate(db: D1Database, input: { submissionId: str
   const s = await getSubmission(db, input.submissionId);
   // 定案前照舊跟著定案一起送（審核頁的切換鈕），這條路只給已定案的單
   if (s.status !== "approved" && s.status !== "rejected") throw new HttpError(409, "review_not_decided");
-  const manager = input.role === "manager" || input.role === "owner";
-  if (!manager && !(await hasStamped(db, s.id, input.memberId))) throw new HttpError(403, "ai_inaccurate_not_allowed");
+  // 只給做這個決定的審核員：管理員看別人的定案是唯讀（UI/UX、PM 2026-11-25）
+  if (!(await hasStamped(db, s.id, input.memberId))) throw new HttpError(403, "ai_inaccurate_not_allowed");
   const ev = await finalEventOf(db, s.id);
   if (!ev || (ev.ai_verdict !== "pass" && ev.ai_verdict !== "reject")) throw new HttpError(409, "ai_inaccurate_unavailable");
   const before = typesOf(ev.ai_note_types);

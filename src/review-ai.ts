@@ -493,8 +493,6 @@ export async function aiReport(db: D1Database, input: { from: number; to: number
     const human = r.dropped ? "dropped" : r.status;
     if (r.final_source) {
       g.finalSource[r.final_source] = (g.finalSource[r.final_source] ?? 0) + 1;
-      // 照 AI 定案的筆數（雙盲時代是「盲審跟 AI 不同、最後改用 AI 的」；AI 為主之後就等於 finalSource.ai）
-      if (r.final_source === "ai") g.corrected++;
       // AI 為主（owner 2026-11-24）的主指標：改了 AI 的比例＝modified／(ai＋modified)；審核員標「AI 判斷不準確」的筆數
       if (r.final_note_types && (JSON.parse(r.final_note_types) as string[]).includes("ai_inaccurate")) g.inaccurate++;
     }
@@ -541,7 +539,6 @@ export async function aiReport(db: D1Database, input: { from: number; to: number
       // 定案來源（ai 照 AI／modified 改了 AI／human_no_ai 無 AI 對照；歷史資料另有 blind＝舊雙盲「用我的」）
       finalSource: g.finalSource,
       inaccurate: g.inaccurate,
-      corrected: g.corrected,
       costUsd: Math.round(g.costUsd * 10_000) / 10_000,
     };
   });
@@ -550,7 +547,7 @@ export async function aiReport(db: D1Database, input: { from: number; to: number
 function emptyGroup() {
   const cell = () => ({ pass: 0, reject: 0, handoff: 0 });
   return {
-    total: 0, ai: cell(), latencySum: 0, latencyN: 0, costUsd: 0, corrected: 0, inaccurate: 0, finalSource: {} as Record<string, number>,
+    total: 0, ai: cell(), latencySum: 0, latencyN: 0, costUsd: 0, inaccurate: 0, finalSource: {} as Record<string, number>,
     matrix: { approved: cell(), rejected: cell(), dropped: cell() },
     handoffCauses: {} as Record<string, number>, flags: {} as Record<string, number>,
     reasonAgreement: {} as Record<string, { human: number; ai: number; both: number }>,

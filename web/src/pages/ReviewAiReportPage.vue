@@ -211,11 +211,10 @@ const MATRIX_COLS = ['pass', 'reject', 'handoff'] as const;
           <p v-else-if="!enough(finalTotal(v))" class="muted ai-rep__note" data-final-small>{{ t('reviewAi.arb.report.finalSmall', { n: int(finalTotal(v)) }) }}</p>
           <div v-else class="ai-rep__scroll">
             <table class="ai-rep__table" data-table="final">
-              <thead><tr><th scope="col">{{ t('reviewAi.arb.report.col.finals') }}</th><th v-for="k in FINAL_SOURCES" :key="k" scope="col">{{ t(`reviewAi.two.source.${k}`) }}</th><th scope="col">{{ t('reviewAi.arb.report.corrected') }}</th><th scope="col">{{ t('reviewAi.arb.report.col.modifiedRate') }}</th><th scope="col">{{ t('reviewAi.arb.report.col.inaccurate') }}</th></tr></thead>
-              <tbody><tr><td>{{ int(finalTotal(v)) }}</td><td v-for="k in FINAL_SOURCES" :key="k" :data-final-cell="k">{{ int(v.finalSource[k] ?? 0) }}</td><td data-final-cell="corrected">{{ int(v.corrected ?? 0) }}</td><td data-final-cell="modified-rate">{{ modifiedRate(v) === null ? '—' : `${Math.round(modifiedRate(v)! * 100)}%` }}</td><td data-final-cell="inaccurate">{{ int(v.inaccurate ?? 0) }}</td></tr></tbody>
+              <thead><tr><th scope="col">{{ t('reviewAi.arb.report.col.finals') }}</th><th v-for="k in FINAL_SOURCES" :key="k" scope="col">{{ t(`reviewAi.two.source.${k}`) }}</th><th scope="col">{{ t('reviewAi.arb.report.col.modifiedRate') }}</th><th scope="col">{{ t('reviewAi.arb.report.col.inaccurate') }}</th></tr></thead>
+              <tbody><tr><td>{{ int(finalTotal(v)) }}</td><td v-for="k in FINAL_SOURCES" :key="k" :data-final-cell="k">{{ int(v.finalSource[k] ?? 0) }}</td><td data-final-cell="modified-rate">{{ modifiedRate(v) === null ? '—' : `${Math.round(modifiedRate(v)! * 100)}%` }}</td><td data-final-cell="inaccurate">{{ int(v.inaccurate ?? 0) }}</td></tr></tbody>
             </table>
           </div>
-          <p v-if="enough(finalTotal(v))" class="subtle ai-rep__note">{{ t('reviewAi.arb.report.correctedNote') }}</p>
         </template>
 
         <template v-if="reasonRows(v).length">

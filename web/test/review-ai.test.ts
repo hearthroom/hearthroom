@@ -147,6 +147,8 @@ it('the decision defaults to the AI rejection; unchanged it finalizes as the AI 
   // 說明欄是 AI 草稿帶進來的：說明句先講可以直接改
   expect($('#review-note-hint')!.textContent).toBe(t('reviewAi.two.authorNote.prefilledHint'));
   expect($('#review-note-hint')!.hasAttribute('data-note-prefilled')).toBe(true);
+  // 字數計數：右下，跟著欄位內容走
+  expect($('[data-note-count]')!.textContent).toBe(t('reviewAi.two.authorNote.count', { n: 'Give the player something to answer.'.length, max: 2000 }));
   expect($('[data-ai-modified]')).toBeNull();
   const submit = $('[data-submit-reject]') as HTMLButtonElement;
   expect(submit.classList.contains('btn--danger')).toBe(true);
@@ -733,7 +735,7 @@ it('report: the arbitration table gains a convinced column, suppressed on its ow
 it('report: suppresses figures under ten samples and exports the reference draft', async () => {
   routes['/v1/review-ai/report'] = () => [200, { from: 0, to: 1, versions: [
     { criteriaVersion: 'v1', total: 4, ai: { pass: 2, reject: 2, handoff: 0 }, matrix: { approved: { pass: 2, reject: 1, handoff: 0 }, rejected: { pass: 0, reject: 1, handoff: 0 }, dropped: { pass: 0, reject: 0, handoff: 0 } }, agreement: 0.75, comparable: 4, aiStricter: 1, humanStricter: 0, handoffRate: 0, refusalRate: 0, costUsd: 0.01, arbitration: { values: { human_right: 1, ai_right: 0, both_ok: 0, both_wrong: 0 }, reasons: { 'opening.no_reply_hook': { humanWrong: 0, aiWrong: 1 } } } },
-    { criteriaVersion: 'v2', total: 40, finalSource: { blind: 20, ai: 6, modified: 2, human_no_ai: 3 }, corrected: 6, inaccurate: 1, ai: { pass: 20, reject: 18, handoff: 2 }, matrix: { approved: { pass: 18, reject: 4, handoff: 1 }, rejected: { pass: 3, reject: 13, handoff: 1 }, dropped: { pass: 0, reject: 0, handoff: 0 } }, agreement: 0.815, comparable: 38, aiStricter: 4, humanStricter: 3, handoffRate: 0.05, refusalRate: 0, costUsd: 0.1234, arbitration: { values: { human_right: 6, ai_right: 4, both_ok: 1, both_wrong: 1 }, reasons: { 'opening.no_reply_hook': { humanWrong: 4, aiWrong: 6 }, 'character.setting_thin': { humanWrong: 1, aiWrong: 2 } } } },
+    { criteriaVersion: 'v2', total: 40, finalSource: { blind: 20, ai: 6, modified: 2, human_no_ai: 3 }, inaccurate: 1, ai: { pass: 20, reject: 18, handoff: 2 }, matrix: { approved: { pass: 18, reject: 4, handoff: 1 }, rejected: { pass: 3, reject: 13, handoff: 1 }, dropped: { pass: 0, reject: 0, handoff: 0 } }, agreement: 0.815, comparable: 38, aiStricter: 4, humanStricter: 3, handoffRate: 0.05, refusalRate: 0, costUsd: 0.1234, arbitration: { values: { human_right: 6, ai_right: 4, both_ok: 1, both_wrong: 1 }, reasons: { 'opening.no_reply_hook': { humanWrong: 4, aiWrong: 6 }, 'character.setting_thin': { humanWrong: 1, aiWrong: 2 } } } },
   ] }];
   routes['/v1/review-ai/reference-candidates'] = () => [200, { items: [{ id: 'c1', verdict: 'pass' }, { id: 'c2', verdict: 'reject' }, { id: 'c3', verdict: 'reject' }], skipped: 1 }];
   routes['/v1/review-ai/notes'] = (c) => [200, { from: 0, to: 1, items: c.url.includes('type=author_relation')
@@ -759,7 +761,8 @@ it('report: suppresses figures under ten samples and exports the reference draft
 
   // 定案來源與改用 AI 結論的筆數（少於 10 筆的版本沒有這一段資料就不畫）
   expect($('[data-version=v2] [data-final-cell=ai]')!.textContent).toBe('6');
-  expect($('[data-version=v2] [data-final-cell=corrected]')!.textContent).toBe('6');
+  // 「改用 AI 的結論」等於「照 AI」，已拿掉（UI/UX、PM 11-25）
+  expect($('[data-version=v2] [data-final-cell=corrected]')).toBeNull();
   // AI 為主的主指標：改了 AI ÷（照 AI＋改了 AI）＝ 2／8；標不準確 1 筆
   expect($('[data-version=v2] [data-final-cell=modified-rate]')!.textContent).toBe('25%');
   expect($('[data-version=v2] [data-final-cell=inaccurate]')!.textContent).toBe('1');

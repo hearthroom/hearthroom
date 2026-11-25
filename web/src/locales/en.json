@@ -6208,8 +6208,6 @@
   "reviewAi.arb.report.finalNone": "No two-step finals for this version yet.",
   "reviewAi.arb.report.finalSmall": "{n} two-step finals; not enough samples.",
   "reviewAi.arb.report.col.finals": "Finals",
-  "reviewAi.arb.report.corrected": "Switched to the AI's call",
-  "reviewAi.arb.report.correctedNote": "“Switched to the AI's call” counts finals adopted directly from the AI suggestion without edits (same as “As AI suggested”); the edit rate is “Changed from AI ÷ (As AI suggested + Changed from AI)”.",
   "reviewAi.arb.notes.title": "Notes for the AI",
   "reviewAi.arb.notes.filter": "Reason type",
   "reviewAi.arb.notes.filterAll": "All types",
@@ -6289,5 +6287,6 @@
   "reviewAi.first.confirm.submit": "Approve and publish",
   "reviewAi.note.type.ai_inaccurate": "AI judgment inaccurate",
   "reviewAi.arb.report.col.modifiedRate": "Changed from AI rate",
-  "reviewAi.arb.report.col.inaccurate": "Marked inaccurate"
+  "reviewAi.arb.report.col.inaccurate": "Marked inaccurate",
+  "reviewAi.two.authorNote.count": "{n} / {max}"
 }

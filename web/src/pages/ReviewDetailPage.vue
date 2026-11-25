@@ -1577,6 +1577,7 @@ onMounted(() => { void load(); });
               </div>
               <p v-if="!reopen" id="review-note-hint" class="subtle note-hint" :data-note-prefilled="noteFromAi ? '' : undefined">{{ $t(noteFromAi ? "reviewAi.two.authorNote.prefilledHint" : "reviewAi.two.authorNote.editHint") }}</p>
               <textarea ref="noteField" autocomplete="off" id="review-note" v-model="note" class="input" rows="4" :maxlength="NOTE_MAX" :placeholder="$t('review.note.placeholder')" :disabled="decided||busy||!!hold" :aria-required="noteRequired" :aria-describedby="reopen ? undefined : 'review-note-hint'" :aria-invalid="noteGuard?.at === 'note' ? 'true' : undefined" @focus="noteFocused = true" @blur="noteFocused = false" />
+              <p v-if="!reopen" class="subtle note-count" data-note-count>{{ $t("reviewAi.two.authorNote.count", { n: note.length, max: NOTE_MAX }) }}</p>
             </div>
           </template>
           <div v-else-if="choice === 'drop'" class="drop-info" data-drop-info>
@@ -1862,4 +1863,5 @@ onMounted(() => { void load(); });
 .source__open { flex: none; font-size: 13px; }
 .marked { display: block; }
 .hit { display: inline; background: color-mix(in srgb, var(--accent) 30%, transparent); color: inherit; border-radius: 2px; }
+.note-count { margin: 4px 0 0; text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; }
 </style>

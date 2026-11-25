@@ -946,8 +946,12 @@ describe('定案後標「AI 判斷不準確」（ui-ai-first.md：可在定案�
     expect(await types(id)).toEqual(['card_content', 'ai_inaccurate']);
     expect((await json(await get(`/v1/review/${id}/ai`, 'human'))).inaccurate).toBe(true);
     expect(await inaccurate()).toBe(1);
-    // 管理員也能改（例如複核時覺得其實準）
-    expect(await json(await mark(id, false, 'mgr'))).toEqual({ inaccurate: false });
+    // 補標只給做這個決定的審核員；管理員看別人的定案是唯讀（UI/UX、PM 11-25）
+    const byMgr = await mark(id, false, 'mgr');
+    expect(byMgr.status).toBe(403);
+    expect(await json(byMgr)).toMatchObject({ error: 'ai_inaccurate_not_allowed' });
+    expect(await types(id)).toEqual(['card_content', 'ai_inaccurate']);
+    expect(await json(await mark(id, false))).toEqual({ inaccurate: false });
     expect(await types(id)).toEqual(['card_content']);
     expect(await inaccurate()).toBe(0);
     expect((await json(await get(`/v1/review/${id}/ai`, 'mgr'))).inaccurate).toBe(false);

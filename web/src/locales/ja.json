@@ -6208,8 +6208,6 @@
   "reviewAi.arb.report.finalNone": "このバージョンはまだ二段階の確定がありません。",
   "reviewAi.arb.report.finalSmall": "二段階の確定 {n} 件、サンプル不足です。",
   "reviewAi.arb.report.col.finals": "確定",
-  "reviewAi.arb.report.corrected": "AIの判定に切り替え",
-  "reviewAi.arb.report.correctedNote": "「AIの判定に切り替え」は、変更せずAIの提案どおりに確定した件数（「AIどおり」と同数）です。AIの提案を変更した割合は「AIを変更 ÷（AIどおり ＋ AIを変更）」で算出します。",
   "reviewAi.arb.notes.title": "AIへのメモ",
   "reviewAi.arb.notes.filter": "理由の種類",
   "reviewAi.arb.notes.filterAll": "すべての種類",
@@ -6289,5 +6287,6 @@
   "reviewAi.first.confirm.submit": "承認して公開",
   "reviewAi.note.type.ai_inaccurate": "AIの判断が不正確",
   "reviewAi.arb.report.col.modifiedRate": "AIを変更した割合",
-  "reviewAi.arb.report.col.inaccurate": "不正確と記録"
+  "reviewAi.arb.report.col.inaccurate": "不正確と記録",
+  "reviewAi.two.authorNote.count": "{n} / {max}"
 }

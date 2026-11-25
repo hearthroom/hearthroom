@@ -6208,8 +6208,6 @@
   "reviewAi.arb.report.finalNone": "這個版本還沒有兩段式定案。",
   "reviewAi.arb.report.finalSmall": "兩段式定案 {n} 筆，樣本不足。",
   "reviewAi.arb.report.col.finals": "定案",
-  "reviewAi.arb.report.corrected": "改用 AI 的結論",
-  "reviewAi.arb.report.correctedNote": "「改用 AI 的結論」統計未修改、直接照 AI 建議定案的筆數（等同「照 AI」）；修改 AI 建議的比例為「改了 AI ÷（照 AI ＋ 改了 AI）」。",
   "reviewAi.arb.notes.title": "給 AI 的說明",
   "reviewAi.arb.notes.filter": "原因類型",
   "reviewAi.arb.notes.filterAll": "全部類型",
@@ -6289,5 +6287,6 @@
   "reviewAi.first.confirm.submit": "通過並上架",
   "reviewAi.note.type.ai_inaccurate": "AI 判斷不準確",
   "reviewAi.arb.report.col.modifiedRate": "改了 AI 的比例",
-  "reviewAi.arb.report.col.inaccurate": "標記不準確"
+  "reviewAi.arb.report.col.inaccurate": "標記不準確",
+  "reviewAi.two.authorNote.count": "{n} / {max}"
 }
