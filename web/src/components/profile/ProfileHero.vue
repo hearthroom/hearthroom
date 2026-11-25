@@ -276,6 +276,7 @@ defineExpose({ begin });
           :following="profile.following ?? 0"
           following-open
           followers-open
+          own
           @open="openStat"
         />
         <p class="hero__visibility"><AccountIcon name="eye" />{{ $t(visibilityNote) }} <RouterLink :to="lp('/settings/profile')" class="hero__adjust">{{ $t('profile.visibility.editLink') }}</RouterLink></p>

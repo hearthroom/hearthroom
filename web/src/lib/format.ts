@@ -14,10 +14,20 @@ export function compact(n: number): string {
   return new Intl.NumberFormat(locale(), { notation: "compact", maximumFractionDigits: 1 }).format(n);
 }
 
-/** 主頁數據與作者列表的人數：未滿一萬寫全數（3,420），一萬以上才縮寫，跟名單彈層標題的寫法一致。 */
-export function statCount(n: number): string {
-  return Math.abs(n) < 10_000 ? new Intl.NumberFormat(locale()).format(n) : compact(n);
+/**
+ * 主頁數據與作者列表的人數：未滿一萬寫全數（3,420）；一萬以上縮寫，一律一位小數、截位不進位
+ * （19,999 寫 1.9萬，四捨五入會寫成 2萬、比實際多；999,999 寫 99.9萬，不會跳成 100.0萬）。
+ * own：本人看自己的主頁，99,999 以內也寫全數。確切值另由點按（ProfileStats）或名單標題給。
+ */
+export function statCount(n: number, opts: { own?: boolean } = {}): string {
+  const full = Math.abs(n) < (opts.own ? 100_000 : 10_000);
+  if (full) return new Intl.NumberFormat(locale()).format(n);
+  // roundingMode 是 ES2023；不支援的瀏覽器會忽略它改用四捨五入（多算一點，不會壞）
+  return new Intl.NumberFormat(locale(), { notation: "compact", minimumFractionDigits: 1, maximumFractionDigits: 1, roundingMode: "trunc" } as Intl.NumberFormatOptions).format(n);
 }
+
+/** statCount 有沒有縮寫：縮寫了才需要讓人點開看確切值 */
+export const statAbbreviated = (n: number, opts: { own?: boolean } = {}): boolean => Math.abs(n) >= (opts.own ? 100_000 : 10_000);
 
 /**
  * 卡片磚上的縮寫：跟 compact 一樣，但整數部分到三位數以上就不帶小數（1235萬、124万；1.2M 不變）。
