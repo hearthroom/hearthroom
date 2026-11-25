@@ -37,6 +37,7 @@ import {
   fetchApprovedDraft,
   saveApprovedDraft,
   type ApprovedDraft,
+  type AuthorAsset,
   fetchEditorCardReference,
   fetchFandomLookup,
   registerCardIdentity,
@@ -455,8 +456,10 @@ const openingPageText = computed({
 const openingFile = useOpeningFile({
   text: () => regexSet.value.openingPage ?? "",
   setText: (value, baseline) => {
-    if (value) regexSet.value.openingPage = value;
-    else delete regexSet.value.openingPage;
+    if (baseline !== "baselineOnly") {
+      if (value) regexSet.value.openingPage = value;
+      else delete regexSet.value.openingPage;
+    }
     if (!baseline) return;
     if (value) regexOriginal.value.openingPage = value;
     else delete regexOriginal.value.openingPage;
@@ -1505,7 +1508,11 @@ function applyEditorSnapshot(state:EditorSnapshot){
  for(const [i,c] of (draft.value.world?.characters??[]).entries()) if(state.members[i])Object.assign(memberBook(c),{format:undefined},copied(state.members[i]));
  settleDisclosures();
 }
-const pendingRevert=ref<{version:ApprovedDraft;before:EditorSnapshot;preview:EditorSnapshot;committed:boolean;saveAttempted:boolean}|null>(null);
+// revision：上架版的開場網頁（大頁面只有大小與網址），預覽與重新整理後還原都靠它顯示上架版那一份；
+// openingBefore：還原前的開場網頁檔案狀態，「復原」時放回去（不進本機草稿，重新整理後照上游讀）。
+type RevisionOpening = Pick<AuthorAsset, "openingPage" | "openingPageBytes" | "openingPageUrl" | "openingPageExpired">;
+const pendingRevert=ref<{version:ApprovedDraft;before:EditorSnapshot;preview:EditorSnapshot;committed:boolean;saveAttempted:boolean;revision?:RevisionOpening;openingBefore?:ReturnType<typeof openingFile.snapshot>}|null>(null);
+const revisionOpening=(asset:AuthorAsset):RevisionOpening=>({openingPage:asset.openingPage,openingPageBytes:asset.openingPageBytes,openingPageUrl:asset.openingPageUrl,openingPageExpired:asset.openingPageExpired});
 const recoveredRevert=ref(false);
 let approvedDraftTimer:ReturnType<typeof setTimeout>|undefined;
 function approvedLocalDraftKey(){
@@ -1520,21 +1527,24 @@ function storeApprovedLocalDraft(){
   // Once a save starts, reload must read server truth rather than replay an
   // unconfirmed operation or stage frozen dependencies as an ordinary draft.
   if(!pending||pending.saveAttempted){localStorage.removeItem(key);return;}
-  localStorage.setItem(key,JSON.stringify({version:pending.version,preview:pending.preview,state:editorSnapshot()}));
+  localStorage.setItem(key,JSON.stringify({version:pending.version,preview:pending.preview,state:editorSnapshot(),revision:pending.revision?{...pending.revision,openingPage:undefined}:undefined}));
  }catch{/* Match the existing draft cache when browser storage is unavailable. */}
 }
 function restoreApprovedLocalDraft(assetsReady:boolean){
  const key=approvedLocalDraftKey();if(!key)return;
  try{
   const raw=localStorage.getItem(key);if(!raw)return;
-  const stored=JSON.parse(raw) as {version:ApprovedDraft;preview:EditorSnapshot;state:EditorSnapshot};
+  const stored=JSON.parse(raw) as {version:ApprovedDraft;preview:EditorSnapshot;state:EditorSnapshot;revision?:RevisionOpening};
   if(!stored.version?.operationId||!stored.preview?.draft||!stored.state?.draft)throw new Error('Invalid draft cache');
   // Do not let cached success flags erase a failed source baseline. Preserve
   // the record for a full reload once the source and its dependencies recover.
   if(booksUnavailable.value||!assetsReady){approvedRecoveryBlocked.value=true;error.value=t('state.loadFailed');return;}
   const before=editorSnapshot();
+  const openingBefore=openingFile.snapshot();
   applyEditorSnapshot(stored.state);
-  pendingRevert.value={version:stored.version,before,preview:stored.preview,committed:false,saveAttempted:false};
+  pendingRevert.value={version:stored.version,before,preview:stored.preview,committed:false,saveAttempted:false,revision:stored.revision,openingBefore};
+  // 上架版的大頁面不在本機草稿裡：照記下的大小與網址再顯示一次（門檻內的已經在文字框裡）
+  if(stored.revision?.openingPageBytes&&!stored.state.rules.openingPage)void openingFile.showRevision(stored.revision);
   recoveredRevert.value=true;restoredDraft.value=true;
  }catch{try{localStorage.removeItem(key);}catch{/* Browser storage may be disabled. */}}
 }
@@ -1555,7 +1565,7 @@ async function readEditorSnapshot(source:string,token:string){
   if(member.loadFailed)throw new Error(t('state.loadFailed'));
   return bookSnapshot(member);
  }));
- return {state:{draft:next,tags:formatTags(next.roleTag),worldShown:Boolean(next.world),book:bookSnapshot(book),members,rules:ruleSetFromAuthorAsset(asset)} satisfies EditorSnapshot,assetVersion:asset.version};
+ return {state:{draft:next,tags:formatTags(next.roleTag),worldShown:Boolean(next.world),book:bookSnapshot(book),members,rules:ruleSetFromAuthorAsset(asset)} satisfies EditorSnapshot,assetVersion:asset.version,asset};
 }
 function revertReadError(err:unknown){
  const status=err instanceof ApiError?err.status:0;
@@ -1572,8 +1582,11 @@ async function revertPublished(){
    const latest=await fetchApprovedDraft(roleId.value,token);
    if(latest.approvalRevision!==version.approvalRevision||latest.policyRevision!==version.policyRevision)throw new ApiError(409,'');
    const before=editorSnapshot();
+   const openingBefore=openingFile.snapshot();
    applyEditorSnapshot(next.state);
-   pendingRevert.value={version,before,preview:editorSnapshot(),committed:false,saveAttempted:false};saved.value=false;
+   // 上架版的開場網頁照它自己的大小顯示（大的是檔案卡，門檻內沒內嵌的讀進文字框），不是留著草稿那份
+   try{await openingFile.showRevision(next.asset);}catch(err){applyEditorSnapshot(before);openingFile.restore(openingBefore);throw err;}
+   pendingRevert.value={version,before,preview:editorSnapshot(),committed:false,saveAttempted:false,revision:revisionOpening(next.asset),openingBefore};saved.value=false;
    recoveredRevert.value=false;storeApprovedLocalDraft();
   }catch(err){throw new Error(revertReadError(err));}finally{visibilityBusy.value=false;}
  }});
@@ -1582,7 +1595,7 @@ async function revertPublished(){
 async function undoPublished(){
  const pending=pendingRevert.value;if(!pending||recoveredRevert.value||pending.saveAttempted||saving.value)return;
  if(JSON.stringify(editorSnapshot())!==JSON.stringify(pending.preview)&&!(await confirmDialog({phraseWrap:true,title:t('editor.revertUndoTitle'),message:t('editor.revertUndoBody'),confirmText:t('editor.revertUndoConfirm'),cancelText:t('editor.revertUndoCancel'),focusCancel:true})))return;
- applyEditorSnapshot(pending.before);pendingRevert.value=null;
+ applyEditorSnapshot(pending.before);if(pending.openingBefore)openingFile.restore(pending.openingBefore);pendingRevert.value=null;
  storeApprovedLocalDraft();
  await nextTick();restoreButton.value?.focus();
 }
@@ -1597,6 +1610,8 @@ async function commitPendingRevert(token:string){
  const baseline=await readEditorSnapshot(roleId.value,token).catch(()=>{throw new Error(t('editor.revertSaveUnknown'));});
  const edited=editorSnapshot();
  applyEditorSnapshot(baseline.state);original.value=cloneDraft(draft.value);regexOriginal.value=copied(regexSet.value);regexVersion.value=baseline.assetVersion;savedOpening.value=openingModeOf(regexSet.value);
+ // 上游已整份還原（大開場網頁的物件也一起）：開場網頁照讀回來的這張卡重新認一次
+ openingFile.adopt(baseline.asset);
  for(const key of Object.keys(edited.draft) as (keyof RoleDraft)[]){
   if(JSON.stringify(edited.draft[key])!==JSON.stringify(pending.preview.draft[key]))Object.assign(draft.value,{[key]:copied(edited.draft[key])});
  }
