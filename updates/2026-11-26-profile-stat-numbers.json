@@ -1,0 +1,18 @@
+{
+  "tier": "fix",
+  "audience": "everyone",
+  "title": {
+    "zh-Hant": "主頁上一萬以上的數字不再進位多算，點一下就看得到確切數字。",
+    "zh-Hans": "主页上一万以上的数字不再进位多算，点一下就能看到确切数字。",
+    "en": "Profile numbers over 10,000 no longer round up, and tapping one shows the exact count.",
+    "ja": "プロフィールの1万以上の数字が切り上げで多く表示されなくなり、タップすると正確な数がわかります。",
+    "ko": "프로필의 1만 이상 숫자가 더 이상 올림되지 않고, 누르면 정확한 수를 볼 수 있어요."
+  },
+  "body": {
+    "zh-Hant": "自己的主頁在十萬以內直接寫出完整數字；關注與粉絲的確切人數寫在名單標題上。",
+    "zh-Hans": "自己的主页在十万以内直接写出完整数字；关注与粉丝的确切人数写在名单标题上。",
+    "en": "Your own profile shows full numbers up to 99,999, and the exact following and follower counts appear at the top of each list.",
+    "ja": "自分のプロフィールでは99,999まで数字をそのまま表示し、フォロー・フォロワーの正確な数は一覧の見出しに表示します。",
+    "ko": "내 프로필에서는 99,999까지 전체 숫자를 보여 주고, 팔로잉과 팔로워의 정확한 수는 목록 제목에 나와요."
+  }
+}
