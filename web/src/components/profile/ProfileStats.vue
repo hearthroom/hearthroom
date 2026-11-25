@@ -38,6 +38,7 @@ const cells = computed(() => [
 const label = (key: string) => t('profile.stat.' + key);
 const shown = (n: number) => statCount(n, { own: props.own });
 const exact = (n: number) => n.toLocaleString(locale.value);
+// 預覽只是看樣子，不能點（跟 › 一樣）；縮寫的值仍可滑過看 title
 const abbreviated = (n: number) => statAbbreviated(n, { own: props.own });
 
 /*
@@ -98,7 +99,7 @@ onBeforeUnmount(() => closeExact(false));
           </span>
           <span v-if="c.value === null" class="pstats__hidden" role="img" :aria-label="$t('profile.stat.followingHidden')" :title="$t('profile.stat.followingHidden')"><AccountIcon name="eyeOff" /></span>
           <button
-            v-else-if="abbreviated(c.value)"
+            v-else-if="abbreviated(c.value) && !preview"
             type="button"
             class="pstats__num"
             :title="exact(c.value)"
@@ -107,7 +108,7 @@ onBeforeUnmount(() => closeExact(false));
             :aria-controls="open?.key === c.key ? bubbleId : undefined"
             @click="toggleExact(c.key, c.value, $event)"
           ><strong>{{ shown(c.value) }}</strong></button>
-          <strong v-else>{{ shown(c.value) }}</strong>
+          <strong v-else :title="abbreviated(c.value) ? exact(c.value) : undefined">{{ shown(c.value) }}</strong>
         </div>
       </div>
     </div>
