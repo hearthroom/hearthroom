@@ -69,9 +69,15 @@ async function mount(path: string) {
 const summary = (over: Partial<PresetSummary> = {}): PresetSummary => ({
   id: "p1", title: "細膩第三人稱", version: 2, sourceKind: "native", purpose: "general",
   recommendedModels: [], createdAt: "2026-10-29T00:00:00Z", updatedAt: "2026-10-29T00:00:00Z", bindingCount: 0,
-  visibility: "private", contentVisibility: "open", publishedAt: null, attribution: "", removed: false, ...over,
+  visibility: "private", contentVisibility: "open", contentHiddenAvailable: true, publishedAt: null, attribution: "", removed: false, ...over,
 });
-const mineList = (items: PresetSummary[]) => ({ items, nextCursor: "", quota: { used: items.length, limit: 50 }, declarationVersion: "preset-publish-2026-10-30" });
+/** 預設是上游開關開著；switchOn=false 是開關關著，undefined 是舊上游（沒有這一項） */
+const mineList = (items: PresetSummary[], switchOn: boolean | undefined = true) => ({ items, nextCursor: "", quota: { used: items.length, limit: 50 }, declarationVersion: "preset-publish-2026-10-30", ...(switchOn === undefined ? {} : { contentHiddenEnabled: switchOn }) });
+/** 舊上游的一列：沒有 contentVisibility 與 contentHiddenAvailable */
+const oldSummary = (over: Partial<PresetSummary> = {}): PresetSummary => {
+  const { contentVisibility: _c, contentHiddenAvailable: _a, ...rest } = summary(over);
+  return rest;
+};
 const item = (over: Partial<PresetLibraryItem> = {}): PresetLibraryItem => ({
   presetId: "s1", title: "電影感長篇", authorName: "Aster", authorNumId: 12345, authorAvatar: "", attribution: "",
   recommendedModels: [], enabledEntryCount: 12, usesLast7d: 3, publishedAt: "2026-10-01T00:00:00Z", updatedAt: "2026-10-28T00:00:00Z",
@@ -133,7 +139,7 @@ describe("公開彈層：內容公開方式", () => {
   });
 
   it("匯入的預設：只供使用一打開就停用並寫原因，自動選公開內容", async () => {
-    mocks.list.mockResolvedValue(mineList([summary({ sourceKind: "imported" })]));
+    mocks.list.mockResolvedValue(mineList([summary({ sourceKind: "imported", contentHiddenAvailable: false })]));
     mocks.publish.mockResolvedValue({ presetId: "p1", revisionId: "r2", version: 3 });
     await mount("/me/presets");
     await openPublish();
@@ -164,6 +170,35 @@ describe("公開彈層：內容公開方式", () => {
     body$<HTMLButtonElement>("[data-testid=publish-confirm]").click(); await flush();
     expect(mocks.publish.mock.calls[1]![2]).toMatchObject({ contentVisibility: "open" });
     expect(body$("[data-testid=publish-sheet]")).toBeNull();
+  });
+
+  it("上游開關關著：不出現內容公開方式，照原本的流程公開，明送公開內容", async () => {
+    // 之前設過只供使用、改回私人的也一樣：開關關著不能再只供使用，要明送 open 才不會沿用
+    mocks.list.mockResolvedValue(mineList([summary({ contentHiddenAvailable: false, contentVisibility: "hidden" })], false));
+    mocks.publish.mockResolvedValue({ presetId: "p1", revisionId: "r2", version: 3 });
+    await mount("/me/presets");
+    await openPublish();
+    expect(body$("[data-testid=publish-content]")).toBeNull();
+    expect(radio("hidden")).toBeNull();
+    body$<HTMLButtonElement>("[data-testid=publish-confirm]").click(); await flush();
+    expect(mocks.publish.mock.calls[0]![2]).toMatchObject({ purpose: "general", contentVisibility: "open" });
+  });
+
+  it("開關關著時匯入的預設也不出現這一組", async () => {
+    mocks.list.mockResolvedValue(mineList([summary({ sourceKind: "imported", contentHiddenAvailable: false })], false));
+    await mount("/me/presets");
+    await openPublish();
+    expect(body$("[data-testid=publish-content]")).toBeNull();
+  });
+
+  it("舊上游（沒有開關與模式）：不出現這一組，也不送 contentVisibility", async () => {
+    mocks.list.mockResolvedValue(mineList([oldSummary()], undefined));
+    mocks.publish.mockResolvedValue({ presetId: "p1", revisionId: "r2", version: 3 });
+    await mount("/me/presets");
+    await openPublish();
+    expect(body$("[data-testid=publish-content]")).toBeNull();
+    body$<HTMLButtonElement>("[data-testid=publish-confirm]").click(); await flush();
+    expect(mocks.publish.mock.calls[0]![2]).not.toHaveProperty("contentVisibility");
   });
 
   it("只供使用尚未開放（preset_hidden_disabled）：一般的公開失敗句，選項不停用", async () => {
@@ -323,8 +358,30 @@ describe("我的預設：顯示與切換模式", () => {
     expect($("[data-testid=preset-toast]").textContent).toBe(t("preset.share.switchToOpen.toast"));
   });
 
+  it("開關關著：公開內容的不能改成只供使用，已經只供使用的仍能改回公開內容", async () => {
+    mocks.list.mockResolvedValue(mineList([summary({ visibility: "public", contentHiddenAvailable: false }), summary({ id: "p2", visibility: "public", contentVisibility: "hidden", contentHiddenAvailable: false })], false));
+    mocks.publish.mockResolvedValue({ presetId: "p2", revisionId: "r2", version: 3 });
+    await mount("/me/presets");
+    const [open, hidden] = $$("[data-testid=preset-row]");
+    open!.querySelector<HTMLElement>("[data-testid=preset-more]")!.click(); await flush();
+    expect($("[data-testid=preset-to-hidden]")).toBeNull();
+    expect($("[data-testid=preset-to-open]")).toBeNull();
+    hidden!.querySelector<HTMLElement>("[data-testid=preset-more]")!.click(); await flush();
+    $("[data-testid=preset-to-open]").click(); await flush();
+    dialogButton("[data-confirm]").click(); await flush();
+    expect(mocks.publish.mock.calls[0]![2]).toMatchObject({ contentVisibility: "open" });
+  });
+
+  it("舊上游（沒有開關與模式）：選單沒有切換", async () => {
+    mocks.list.mockResolvedValue(mineList([oldSummary({ visibility: "public" })], undefined));
+    await mount("/me/presets");
+    await openMenu();
+    expect($("[data-testid=preset-to-hidden]")).toBeNull();
+    expect($("[data-testid=preset-to-open]")).toBeNull();
+  });
+
   it("匯入的、被下架的、私人的都沒有切換這一項", async () => {
-    mocks.list.mockResolvedValue(mineList([summary({ visibility: "public", sourceKind: "imported" })]));
+    mocks.list.mockResolvedValue(mineList([summary({ visibility: "public", sourceKind: "imported", contentHiddenAvailable: false })]));
     await mount("/me/presets");
     await openMenu();
     expect($("[data-testid=preset-to-hidden]")).toBeNull();

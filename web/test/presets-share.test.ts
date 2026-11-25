@@ -307,8 +307,6 @@ describe("喜愛與用過", () => {
   });
 });
 
-// 內容公開方式是必選（只供使用，2026-11-26）：下面每個公開流程都先選「公開內容」。
-// 這些 fixture 沒有 contentVisibility（舊上游），選公開內容時不送這個欄位，送出的內容照舊。
 describe("我的：公開與改回私人", () => {
   async function openMenu() {
     $("[data-testid=preset-more]").click();
@@ -356,7 +354,6 @@ describe("我的：公開與改回私人", () => {
     await openMenu();
     $("[data-testid=preset-publish]").click();
     await flush();
-    body$<HTMLInputElement>("[data-testid=publish-content-open]").click(); await flush();
     const sheet = body$("[data-testid=publish-sheet]");
     expect(sheet.querySelector("h2")!.textContent).toBe(t("preset.share.publish.title", { name: "細膩第三人稱" }));
     const decl = sheet.querySelector("[data-testid=publish-declaration]")!;
@@ -391,7 +388,6 @@ describe("我的：公開與改回私人", () => {
     await openMenu();
     $("[data-testid=preset-publish]").click();
     await flush();
-    body$<HTMLInputElement>("[data-testid=publish-content-open]").click(); await flush();
     body$<HTMLButtonElement>("[data-testid=model-chip] button").click();
     await flush();
     body$<HTMLInputElement>("[data-testid=publish-purpose-general]").click(); await flush();
@@ -407,7 +403,6 @@ describe("我的：公開與改回私人", () => {
     await openMenu();
     $("[data-testid=preset-publish]").click();
     await flush();
-    body$<HTMLInputElement>("[data-testid=publish-content-open]").click(); await flush();
     const input = body$<HTMLInputElement>("#publish-models");
     input.focus(); input.dispatchEvent(new Event("focus")); await flush();
     const options = () => [...document.body.querySelectorAll<HTMLElement>("[role=option]")];
@@ -427,7 +422,6 @@ describe("我的：公開與改回私人", () => {
     await openMenu();
     $("[data-testid=preset-publish]").click();
     await flush();
-    body$<HTMLInputElement>("[data-testid=publish-content-open]").click(); await flush();
     body$<HTMLInputElement>("[data-testid=publish-purpose-general]").click(); await flush();
     body$<HTMLButtonElement>("[data-testid=publish-confirm]").click();
     await flush();
@@ -442,7 +436,6 @@ describe("我的：公開與改回私人", () => {
     await openMenu();
     $("[data-testid=preset-publish]").click();
     await flush();
-    body$<HTMLInputElement>("[data-testid=publish-content-open]").click(); await flush();
     body$<HTMLInputElement>("[data-testid=publish-purpose-general]").click(); await flush();
     body$<HTMLButtonElement>("[data-testid=publish-confirm]").click();
     await flush();
@@ -709,7 +702,7 @@ describe("用途與模型清單", () => {
  it("公開時必選用途，切換用途保留清單，特定模型不可留空", async () => {
   mocks.list.mockResolvedValue(mineList([summary()]));
   mocks.publish.mockResolvedValue({presetId:"p1", revisionId:"r3", version:3});
-  await mount("/me/presets"); $("[data-testid=preset-more]").click(); await flush(); $("[data-testid=preset-publish]").click(); await flush(); body$<HTMLInputElement>("[data-testid=publish-content-open]").click(); await flush();
+  await mount("/me/presets"); $("[data-testid=preset-more]").click(); await flush(); $("[data-testid=preset-publish]").click(); await flush();
   expect(document.querySelector('[name=publish-purpose]:checked')).toBeNull();
   body$<HTMLButtonElement>('[data-testid=publish-confirm]').click(); await flush();
   expect(mocks.publish).not.toHaveBeenCalled();
@@ -733,7 +726,7 @@ describe("用途與模型清單", () => {
 it("公開彈層沿用編輯器已設的用途，不必重新選", async () => {
  mocks.list.mockResolvedValue(mineList([summary({purpose:"general"})]));
  mocks.publish.mockResolvedValue({presetId:"p1",version:3});
- await mount("/me/presets"); $("[data-testid=preset-more]").click(); await flush(); $("[data-testid=preset-publish]").click(); await flush(); body$<HTMLInputElement>("[data-testid=publish-content-open]").click(); await flush();
+ await mount("/me/presets"); $("[data-testid=preset-more]").click(); await flush(); $("[data-testid=preset-publish]").click(); await flush();
  expect(body$<HTMLInputElement>("[data-testid=publish-purpose-general]").checked).toBe(true);
  body$<HTMLButtonElement>("[data-testid=publish-confirm]").click(); await flush();
  expect(mocks.publish.mock.calls[0]![2]).toMatchObject({purpose:"general"});

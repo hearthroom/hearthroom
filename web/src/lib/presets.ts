@@ -37,6 +37,8 @@ export interface PresetSummary {
   attribution?: string;
   /** 公開時的內容模式；私人預設也會帶（上次公開選的，沒公開過是 open），只在已公開時有意義 */
   contentVisibility?: ContentVisibility;
+  /** 這份現在能選「只供使用」：上游開關開著而且不是匯入的。舊上游沒有這一項，當不能選 */
+  contentHiddenAvailable?: boolean;
   /** 平台下架了：作者看得到這個標示，不能再公開 */
   removed?: boolean;
 }
@@ -45,6 +47,8 @@ export interface PresetList {
   items: PresetSummary[]; nextCursor: string; quota: { used: number; limit: number };
   /** 公開鈕旁那句聲明的版本；公開時原樣送回，上游據此記下作者看到的是哪一版 */
   declarationVersion?: string;
+  /** 上游的「只供使用」開關；關著（或舊上游沒有這一項）時發布彈層不出現這個選項 */
+  contentHiddenEnabled?: boolean;
 }
 
 export interface CompatibilityEntry {

@@ -14,7 +14,8 @@
  *
  * 只供使用（UI 小稿 2026-11-26）：已公開的列多一顆「只供使用」chip；選單可切換內容模式，兩個方向都先確認
  * （改成只供使用收不回已被看過的內容；改成公開內容後所有人看得到）。切換就是帶新模式再公開一次。
- * 上游因比對拒絕時留在確認框裡說原因。匯入的、被下架的不給切換；上游沒回模式（舊版）也不給。
+ * 上游因比對拒絕時留在確認框裡說原因。改成只供使用只在上游說這份可以時才給（開關開著、不是匯入的）；
+ * 已經是只供使用的，開關關了也能改回公開內容。被下架的不給切換。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
@@ -55,6 +56,8 @@ const copying = ref<PresetSummary | null>(null);
 const route = useRoute();
 const tab = computed<"mine" | "fav">(() => (route.query.tab === "fav" ? "fav" : "mine"));
 const declaration = ref("");
+/** 上游的「只供使用」開關（舊上游沒有：當關著） */
+const hiddenEnabled = ref(false);
 const publishing = ref<PresetSummary | null>(null);
 const toast = ref("");
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
@@ -74,7 +77,7 @@ async function load(more = false) {
     const page = await listPresets(await token(), more ? cursor.value : "");
     items.value = more ? [...items.value, ...page.items] : page.items;
     quota.value = page.quota;
-    if (!more) declaration.value = page.declarationVersion ?? "";
+    if (!more) { declaration.value = page.declarationVersion ?? ""; hiddenEnabled.value = page.contentHiddenEnabled === true; }
     cursor.value = page.nextCursor;
   } catch (err) {
     if (!consentNeeded(err)) loadFailed.value = true;
@@ -145,7 +148,7 @@ async function unpublish(p: PresetSummary) {
 }
 
 /** 已公開、本站寫的、沒被下架，而且上游有回目前的模式，才能切換 */
-const canSwitch = (p: PresetSummary) => p.visibility === "public" && !p.removed && p.contentVisibility !== undefined && p.sourceKind !== "imported";
+const canSwitch = (p: PresetSummary) => p.visibility === "public" && !p.removed && (p.contentVisibility === "hidden" || p.contentHiddenAvailable === true);
 
 async function switchContent(p: PresetSummary, to: ContentVisibility) {
   menu.value = "";
@@ -328,7 +331,7 @@ onBeforeUnmount(() => { document.removeEventListener("click", closeMenu); docume
 
     <PresetExportDialog v-if="exporting" :preset="exporting" :token="token" @close="exporting = null" />
     <PresetCopyDialog v-if="copying" :source="copying" :token="token" @close="copying = null" @done="copied" />
-    <PresetPublishSheet v-if="publishing" :preset="publishing" :declaration="declaration" :token="token" @close="publishing = null" @done="published(publishing!)" @stale="load()" />
+    <PresetPublishSheet v-if="publishing" :preset="publishing" :declaration="declaration" :hidden-enabled="hiddenEnabled" :token="token" @close="publishing = null" @done="published(publishing!)" @stale="load()" />
     <div class="toast" role="status" :hidden="!toast" data-testid="preset-toast">{{ toast }}</div>
   </div>
 </template>

@@ -100,3 +100,20 @@ test("use-only publishing: imported and overlapping presets are refused, others 
   assert.deepEqual(hidden.body.parameters, {});
   assert.ok(hidden.body.item.enabledEntryCount > 0);
 });
+
+test("use-only availability follows the switch and the source", async (t) => {
+  await request("/__presets/reset");
+  t.after(() => request("/__presets?scenario="));
+  const on = await request("/open/v1/presets");
+  assert.equal(on.body.contentHiddenEnabled, true);
+  assert.equal(on.body.items[0].contentHiddenAvailable, false); // 匯入的
+  const document = { schemaVersion: "hearthroom.st-preset.v1", st: { prompts: [] }, selection: { profileId: 1 } };
+  const own = await request("/open/v1/presets", "POST", { title: "自己寫的", document, purpose: "general", recommendedModels: [] });
+  assert.equal((await request(`/open/v1/presets/${own.body.presetId}`)).body.contentHiddenAvailable, true);
+  await request("/__presets?scenario=hiddenOff");
+  const off = await request("/open/v1/presets");
+  assert.equal(off.body.contentHiddenEnabled, false);
+  assert.ok(off.body.items.every((p) => p.contentHiddenAvailable === false));
+  const refused = await request(`/open/v1/presets/${own.body.presetId}/publish`, "POST", { expectedVersion: 1, declaration: "preset-publish-2026-10-30", purpose: "general", contentVisibility: "hidden" });
+  assert.equal(refused.body.reason, "preset_hidden_disabled");
+});

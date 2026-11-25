@@ -37434,6 +37434,10 @@
               "hidden"
             ],
             "description": "Content mode chosen at the last publication (`open` when never published); meaningful while `visibility` is `public`."
+          },
+          "contentHiddenAvailable": {
+            "description": "True when this preset can be published with `contentVisibility` `hidden`: use only is switched on and the preset is not imported. Content overlap is checked only on publish.",
+            "type": "boolean"
           }
         },
         "type": "object",
@@ -37454,7 +37458,8 @@
           "attribution",
           "removed",
           "purpose",
-          "contentVisibility"
+          "contentVisibility",
+          "contentHiddenAvailable"
         ]
       },
       "PresetWriteReceipt": {
@@ -37826,7 +37831,8 @@
           "items",
           "nextCursor",
           "quota",
-          "declarationVersion"
+          "declarationVersion",
+          "contentHiddenEnabled"
         ],
         "properties": {
           "quota": {
@@ -37859,6 +37865,10 @@
           "declarationVersion": {
             "description": "Version of the rights statement shown beside the publish button; send it with `POST /open/v1/presets/{presetId}/publish`.",
             "type": "string"
+          },
+          "contentHiddenEnabled": {
+            "description": "Whether publishing with `contentVisibility` `hidden` (use only) is switched on. While false, only `open` is accepted, and a hidden preset can still be switched back to `open`.",
+            "type": "boolean"
           }
         },
         "type": "object",

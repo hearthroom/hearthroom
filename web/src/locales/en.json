@@ -4398,6 +4398,7 @@
   "preset.share.switchToOpen.confirm": "Show contents",
   "preset.share.switchToOpen.keep": "Keep use only",
   "preset.share.switchToOpen.toast": "Contents are now shown.",
+  "preset.editor.error.hiddenOverlap": "Some entries in this edit match an existing public or imported preset, so a \"Use only\" preset can't be saved. Switch it to \"Show contents\" or \"Make private\" first, then save.",
   "preset.share.library.name": "Preset library",
   "preset.share.hot.title": "Popular",
   "preset.share.hot.note": "Ranked by use and favorites in the last 7 days.",
