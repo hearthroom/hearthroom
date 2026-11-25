@@ -29,7 +29,7 @@ async function mountEditor(page: string, maxBytes?: number) {
 }
 
 it("工坊：沒有上傳與檔案卡，上限照工坊的 512 KB，契約放寬一般卡也不變", async () => {
-  setOpeningPageLimitsForTest({ max: 100 * 1024 * 1024 });
+  setOpeningPageLimitsForTest({ max: 100_000_000 });
   expect(workshopOpeningPageMaxBytes()).toBe(524288);
   const big = "<p>" + "a".repeat(600 * 1024) + "</p>";
   await mountEditor(big, workshopOpeningPageMaxBytes());
@@ -47,7 +47,7 @@ it("64 KB 以下不顯示計數器；以上以 KB／MB 顯示", async () => {
   await mountEditor("<p>小</p>");
   expect(root.querySelector("#f-opening-page-usage")).toBeNull();
   app?.unmount(); root.remove();
-  await mountEditor("<p>" + "a".repeat(100 * 1024) + "</p>", 100 * 1024 * 1024);
-  expect(root.querySelector("#f-opening-page-usage")!.textContent).toContain("100.1 KB / 100 MB");
+  await mountEditor("<p>" + "a".repeat(100 * 1024) + "</p>", 100_000_000);
+  expect(root.querySelector("#f-opening-page-usage")!.textContent).toContain("102.5 KB / 100 MB");
   expect(root.querySelector('[role="alert"]')).toBeNull();
 });

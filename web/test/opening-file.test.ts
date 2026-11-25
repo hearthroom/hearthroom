@@ -20,7 +20,7 @@ import { useOpeningFile } from "../src/lib/opening-file";
 import { downloadBlob } from "../src/lib/save-file";
 
 const KB = 1024;
-const MB = 1024 * 1024;
+const MB = 1000 * 1000;
 const html = (bytes: number) => "<p>" + "a".repeat(Math.max(0, bytes - 7)) + "</p>";
 const asset = (extra: Partial<AuthorAsset>): AuthorAsset => ({
   rules: [], mountTrigger: "", mountLayer: "over", pageMode: "sandbox", cardFormat: "", openingPage: "", status: "passed", version: 4, ...extra,
@@ -52,8 +52,8 @@ describe("大小規則", () => {
     setOpeningPageLimitsForTest({ max: null });
     expect(openingPageMaxBytes()).toBe(524288);
     expect(workshopOpeningPageMaxBytes()).toBe(524288);
-    setOpeningPageLimitsForTest({ max: 104857600, workshop: 524288 });
-    expect(openingPageMaxBytes()).toBe(104857600);
+    setOpeningPageLimitsForTest({ max: 100000000, workshop: 524288 });
+    expect(openingPageMaxBytes()).toBe(100000000);
     expect(workshopOpeningPageMaxBytes()).toBe(524288);
   });
 
@@ -61,13 +61,15 @@ describe("大小規則", () => {
     for (const s of ["abc", "開場網頁", "😀x", "a\ud800b", "\udc00"]) expect(utf8Length(s)).toBe(new TextEncoder().encode(s).length);
   });
 
-  it("大小 1 MB 以下印 KB、以上印 MB，無條件進位；上限印成 MB 數字", () => {
-    expect(formatPageSize(512 * KB, "en")).toBe("512 KB");
-    expect(formatPageSize(512 * KB + 1, "en")).toBe("512.1 KB");
-    expect(formatPageSize(1536 * KB, "en")).toBe("1.5 MB");
-    expect(formatPageSize(100 * MB, "en")).toBe("100 MB");
+  it("大小 1 MB 以下印 KB、以上印 MB（十進位，跟上游的 100 MB 同一把尺），無條件進位；上限印成 MB 數字", () => {
+    expect(formatPageSize(512_000, "en")).toBe("512 KB");
+    expect(formatPageSize(512_001, "en")).toBe("512.1 KB");
+    expect(formatPageSize(512 * KB, "en")).toBe("524.3 KB");
+    expect(formatPageSize(1_500_000, "en")).toBe("1.5 MB");
+    expect(formatPageSize(100_000_000, "en")).toBe("100 MB");
+    expect(formatPageSize(100_000_001, "en")).toBe("100.1 MB");
     expect(pageLimitMB(512 * KB, "en")).toBe("0.5");
-    expect(pageLimitMB(100 * MB, "en")).toBe("100");
+    expect(pageLimitMB(100_000_000, "en")).toBe("100");
   });
 
   it("只收 .html／.htm；取消不是錯誤", () => {

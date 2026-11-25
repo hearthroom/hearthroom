@@ -1,7 +1,7 @@
 import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import worker from '../src/index';
-import { proxyHarborApi } from '../src/harbor-api-proxy';
+import { OPENING_PAGE_UPLOAD_MAX_BYTES, proxyHarborApi } from '../src/harbor-api-proxy';
 import { bumpHarborProxy, opsMetrics } from '../src/ops-metrics';
 
 afterEach(() => vi.restoreAllMocks());
@@ -223,8 +223,9 @@ describe('opening page raw upload', () => {
   });
 
   it('answers 413 above the contract limit without calling upstream', async () => {
+    expect(OPENING_PAGE_UPLOAD_MAX_BYTES).toBe(100_000_000 + 64 * 1024);
     const upstream = vi.spyOn(globalThis, 'fetch');
-    const res = await proxyHarborApi(request(path, { method: 'PUT', body: 'x', headers: { 'Content-Length': String(105 * 1024 * 1024) } }), options);
+    const res = await proxyHarborApi(request(path, { method: 'PUT', body: 'x', headers: { 'Content-Length': String(OPENING_PAGE_UPLOAD_MAX_BYTES + 1) } }), options);
     expect(res.status).toBe(413);
     expect(await res.json()).toEqual({ error: 'file_too_large' });
     expect(upstream).not.toHaveBeenCalled();
