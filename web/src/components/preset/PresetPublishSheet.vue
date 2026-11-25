@@ -61,7 +61,8 @@ async function submit() {
     purpose: purpose.value, expectedVersion: props.preset.version, declaration: props.declaration, attribution: attribution.value.trim().slice(0, ATTRIBUTION_MAX),
     ...(changedModels.value ? { recommendedModels: tested.value } : {}),
     // 上游有回模式就一律明送（沒給選時是公開內容，之前只供使用、改回私人的也照公開內容）；舊上游不收這個欄位，不送
-    ...(offerHidden || props.preset.contentVisibility !== undefined ? { contentVisibility: content.value } : {}),
+    // 沒有提供二選一時，原本只供使用的不送模式：伺服器維持只供使用（開關關著就拒絕），不會在作者不知情下公開內容。
+    ...(offerHidden || props.preset.contentVisibility === "open" ? { contentVisibility: content.value } : {}),
   };
   const action = `publish:${props.preset.id}:${JSON.stringify(input)}`;
   try {
