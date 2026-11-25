@@ -19,7 +19,12 @@ import { scopeCardHtml } from "stage-canvas/style-scope";
 import { openingSrcdoc } from "stage-common/opening-page";
 import FieldText from "@/components/editor/FieldText.vue";
 import ListEditor from "@/components/editor/ListEditor.vue";
-import { formatKiB, OPENING_PAGE_MAX_BYTES, utf8Bytes, type OpeningMode, type RegexRule } from "@/lib/regex-rules";
+import type { OpeningMode, RegexRule } from "@/lib/regex-rules";
+import type { OpeningFileControl } from "@/lib/opening-file";
+import {
+  formatPageSize, OPENING_PAGE_EDIT_MAX_BYTES, OPENING_PAGE_FILENAME, OPENING_PAGE_INLINE_BYTES,
+  OPENING_PAGE_LARGE_HINT_BYTES, pageLimitMB, utf8Length,
+} from "@/lib/opening-page";
 
 const props = defineProps<{
   mode: OpeningMode;
@@ -37,6 +42,12 @@ const props = defineProps<{
   welcomeMax: number;
   /** 必填缺了：開場白或第一句選項的標籤旁標紅。 */
   missing: boolean;
+  /** 網頁內容的上限（UTF-8 位元組）；沒給照 512 KB（工坊）。 */
+  maxBytes?: number;
+  /**
+   * 大頁面那一半（上傳、下載、清除、超過編輯門檻的檔案卡）。沒給就只有文字框（工坊開場仍存在 JSON 裡）。
+   */
+  fileControl?: OpeningFileControl;
 }>();
 const emit = defineEmits<{
   "update:mode": [OpeningMode];
@@ -55,7 +66,10 @@ const MODES: OpeningMode[] = ["greeting", "page"];
 const modes = computed(() => (props.pageAvailable ? MODES : MODES.filter((m) => m === "greeting" || props.mode === m)));
 
 const hasGreeting = computed(() => Boolean(props.welcome.trim()) || props.alternates.some((a) => a.trim()));
-const hasPage = computed(() => Boolean(props.openingPage.trim()));
+const pageFile = computed(() => props.fileControl?.file.value ?? null);
+/** 文字框有沒有字：/\S/ 找到第一個字就停，不像 trim() 會在頁尾有換行時複製整份。 */
+const pageHasText = computed(() => /\S/.test(props.openingPage));
+const hasPage = computed(() => !!pageFile.value || pageHasText.value);
 const alternateCount = computed(() => props.alternates.filter((a) => a.trim()).length);
 
 /** 切換了、而且另一邊真的有東西會在存檔時移除：說清楚，給一顆切回去。 */
@@ -79,7 +93,11 @@ function removeLeftover() {
   if (leftover.value === "greeting") {
     emit("update:welcome", "");
     emit("update:alternates", []);
-  } else if (leftover.value === "page") emit("update:openingPage", "");
+  } else if (leftover.value === "page") {
+    // 檔案卡的內容清掉就救不回來：走同一個確認
+    if (pageFile.value && props.fileControl) void props.fileControl.clear();
+    else emit("update:openingPage", "");
+  }
 }
 
 // ── 開場白：撰寫／玩家看到的 ──────────────────────────────────────────
@@ -87,10 +105,100 @@ const welcomeTab = ref<"write" | "player">("write");
 const pageTab = ref<"write" | "preview">("write");
 const pageInput = ref<HTMLTextAreaElement>();
 const modeChoices = ref<HTMLElement>();
-const pageBytes = computed(() => utf8Bytes(props.openingPage));
-const pageOver = computed(() => pageBytes.value > OPENING_PAGE_MAX_BYTES);
-const pageUsage = computed(() => pageBytes.value > 64 * 1024);
-const pageMaxKB = OPENING_PAGE_MAX_BYTES / 1024;
+const pageMax = computed(() => props.maxBytes ?? OPENING_PAGE_INLINE_BYTES);
+/**
+ * 文字框的位元組數。大頁面每按一鍵整份重算會拖慢打字：超過 64 KB 的頁面逐字打字時停手 150ms 再算
+ * （計數器與上限提示晚一點更新，存檔時另外照實際大小檢查）；貼上、匯入、讀進來這種一次變很多的立刻算。
+ */
+const textBytes = ref(utf8Length(props.openingPage));
+let bytesTimer: ReturnType<typeof setTimeout> | undefined;
+watch(() => props.openingPage, (page, before) => {
+  clearTimeout(bytesTimer);
+  const typing = Math.abs(page.length - (before?.length ?? 0)) <= 64;
+  if (page.length <= 64 * 1024 || !typing) textBytes.value = utf8Length(page);
+  else bytesTimer = setTimeout(() => { textBytes.value = utf8Length(props.openingPage); }, 150);
+});
+onBeforeUnmount(() => clearTimeout(bytesTimer));
+const pageBytes = computed(() => (pageFile.value ? pageFile.value.bytes : textBytes.value));
+const pageOver = computed(() => pageBytes.value > pageMax.value);
+const pageUsage = computed(() => !!pageFile.value || pageBytes.value > 64 * 1024);
+/** 上限印成 MB（512 KB 印成 0.5）。 */
+const pageMaxMB = computed(() => pageLimitMB(pageMax.value, String(locale.value)));
+const pageLarge = computed(() => pageBytes.value > OPENING_PAGE_LARGE_HINT_BYTES);
+const pageCard = ref<HTMLElement>();
+const pageFileInput = ref<HTMLInputElement>();
+const pageUploadButton = ref<HTMLButtonElement>();
+const fileError = computed(() => {
+  const code = props.fileControl?.error.value;
+  if (!code) return "";
+  return code === "errTooBig" ? t("editor.openingPage.errTooBig", { max: formatPageSize(pageMax.value, String(locale.value)) }) : t(`editor.openingPage.${code}`);
+});
+const fileNotice = computed(() => {
+  const code = props.fileControl?.notice.value;
+  if (code === "pasted") return t("editor.openingPage.pasted", { limit: formatPageSize(OPENING_PAGE_EDIT_MAX_BYTES, String(locale.value)) });
+  if (code === "picked") return t("editor.openingPage.pickedHint");
+  if (code === "cleared") return t("editor.openingPage.clearedHint");
+  return "";
+});
+const pageUnsaved = computed(() => !!props.fileControl && (props.fileControl.dirty() || !!props.fileControl.notice.value));
+const transfer = computed(() => props.fileControl?.transfer.value ?? null);
+const transferLabel = computed(() => {
+  const now = transfer.value;
+  if (!now) return "";
+  return t(now.kind === "upload" ? "editor.openingPage.uploading" : "editor.openingPage.downloading", { percent: now.percent ?? 0 });
+});
+
+/**
+ * 一次貼上就超過編輯門檻：整份收成檔案（文字框換成檔案卡）。逐字打字跨過門檻不切換，游標不會跳走。
+ */
+function onPagePaste(event: ClipboardEvent) {
+  const control = props.fileControl;
+  const area = event.target as HTMLTextAreaElement | null;
+  const pasted = event.clipboardData?.getData("text/plain") ?? "";
+  if (!control || !area || !pasted) return;
+  const next = area.value.slice(0, area.selectionStart ?? area.value.length) + pasted + area.value.slice(area.selectionEnd ?? area.value.length);
+  if (utf8Length(next) <= OPENING_PAGE_EDIT_MAX_BYTES) return;
+  event.preventDefault();
+  control.paste(next);
+  void nextTick(() => pageCard.value?.focus());
+}
+
+async function onPagePick(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const picked = input.files?.[0];
+  input.value = "";
+  if (!picked || !props.fileControl) return;
+  const replaced = await props.fileControl.pick(picked);
+  await nextTick();
+  if (!replaced) pageUploadButton.value?.focus();
+  else (pageFile.value ? pageCard.value : pageInput.value)?.focus();
+}
+
+async function clearPageFile(event: Event) {
+  const trigger = event.currentTarget as HTMLElement | null;
+  const done = await props.fileControl?.clear();
+  await nextTick();
+  if (done) pageInput.value?.focus();
+  else trigger?.focus();
+}
+
+/** 檔案卡的預覽：不自動讀，按了才讀；讀到的頁面用 Blob 網址掛進預覽框（不轉成字串）。 */
+const filePreviewUrl = ref("");
+function dropFilePreview() {
+  if (filePreviewUrl.value) URL.revokeObjectURL(filePreviewUrl.value);
+  filePreviewUrl.value = "";
+}
+async function loadFilePreview() {
+  const control = props.fileControl;
+  if (!control) return;
+  const target = pageFile.value;
+  const blob = await control.previewContent();
+  if (!blob || pageFile.value !== target) return;
+  dropFilePreview();
+  filePreviewUrl.value = URL.createObjectURL(new Blob([openingSrcdoc(""), blob], { type: "text/html" }));
+}
+watch(pageFile, dropFilePreview);
+onBeforeUnmount(dropFilePreview);
 
 async function focusPage() {
   pageTab.value = "write";
@@ -226,30 +334,87 @@ const pageDoc = computed(() => openingSrcdoc(props.openingPage));
     <template v-else>
       <div class="field">
         <div class="opening__head">
-          <label for="f-opening-page">{{ $t("editor.openingPage") }}</label>
-          <div class="seg seg--sm" role="tablist" :aria-label="$t('editor.openingPage')">
-            <button type="button" class="seg__item" :class="{ 'seg__item--on': pageTab === 'write' }" role="tab"
-                    :aria-selected="pageTab === 'write'" @click="pageTab = 'write'">{{ $t("editor.readme.write") }}</button>
-            <button type="button" class="seg__item" :class="{ 'seg__item--on': pageTab === 'preview' }" role="tab"
-                    :aria-selected="pageTab === 'preview'" @click="pageTab = 'preview'">{{ $t("editor.readme.preview") }}</button>
+          <span class="opening__title">
+            <label :for="pageFile ? undefined : 'f-opening-page'" :id="pageFile ? 'f-opening-page-label' : undefined">{{ $t("editor.openingPage") }}</label>
+            <span v-if="pageUnsaved" class="opening__unsaved" data-opening-unsaved>{{ $t("editor.openingPage.unsaved") }}</span>
+          </span>
+          <div class="opening__tools">
+            <template v-if="fileControl">
+              <button ref="pageUploadButton" type="button" class="btn btn--sm btn--ghost" data-opening-upload
+                      :disabled="!!transfer" @click="pageFileInput?.click()">{{ $t("editor.openingPage.upload") }}</button>
+              <button v-if="!pageFile && pageHasText" type="button" class="btn btn--sm btn--ghost" data-opening-download
+                      @click="fileControl.download()">{{ $t("editor.openingPage.download") }}</button>
+              <input ref="pageFileInput" type="file" accept=".html,.htm,text/html" hidden data-opening-file-input @change="onPagePick" />
+            </template>
+            <div class="seg seg--sm" role="tablist" :aria-label="$t('editor.openingPage')">
+              <button type="button" class="seg__item" :class="{ 'seg__item--on': pageTab === 'write' }" role="tab"
+                      :aria-selected="pageTab === 'write'" @click="pageTab = 'write'">{{ $t("editor.readme.write") }}</button>
+              <button type="button" class="seg__item" :class="{ 'seg__item--on': pageTab === 'preview' }" role="tab"
+                      :aria-selected="pageTab === 'preview'" @click="pageTab = 'preview'">{{ $t("editor.readme.preview") }}</button>
+            </div>
           </div>
         </div>
+        <p v-if="fileNotice" class="subtle opening__file-notice" role="status" data-opening-file-notice>{{ fileNotice }}</p>
         <div v-show="pageTab === 'write'" class="opening__page-write">
-          <textarea id="f-opening-page" ref="pageInput" v-model="pageModel" class="input opening__page-input" rows="8"
+          <div v-if="pageFile" ref="pageCard" class="ofile" role="group" tabindex="-1" data-opening-file
+               aria-labelledby="f-opening-file-name" aria-describedby="f-opening-file-desc f-opening-page-usage">
+            <div class="ofile__head">
+              <svg class="ofile__icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+                <path d="M14 3v5h5M9.5 13.5 8 15l1.5 1.5M14.5 13.5 16 15l-1.5 1.5" />
+              </svg>
+              <span id="f-opening-file-name" class="ofile__name">{{ OPENING_PAGE_FILENAME }}</span>
+              <span class="ofile__size">{{ formatPageSize(pageFile.bytes, String(locale)) }}</span>
+            </div>
+            <p id="f-opening-file-desc" class="ofile__desc">{{ $t("editor.openingPage.fileDesc") }}</p>
+            <div v-if="transfer && transfer.kind !== 'preview'" class="ofile__progress" data-opening-progress>
+              <div class="ofile__track" role="progressbar" aria-valuemin="0" aria-valuemax="100"
+                   :aria-valuenow="transfer.percent ?? undefined" :aria-label="transferLabel">
+                <div class="ofile__bar" :style="{ width: `${transfer.percent ?? 0}%` }" />
+              </div>
+              <span class="ofile__progress-text">{{ transferLabel }}</span>
+              <button type="button" class="btn btn--sm btn--ghost" data-opening-cancel @click="fileControl?.cancel()">{{ $t("editor.openingPage.cancel") }}</button>
+            </div>
+            <div class="ofile__acts">
+              <button type="button" class="btn btn--sm btn--ghost" data-opening-download :disabled="!!transfer"
+                      @click="fileControl?.download()">{{ $t("editor.openingPage.download") }}</button>
+              <button type="button" class="btn btn--sm btn--danger" data-opening-clear :disabled="!!transfer"
+                      @click="clearPageFile">{{ $t("editor.openingPage.clear") }}</button>
+            </div>
+          </div>
+          <textarea v-else id="f-opening-page" ref="pageInput" v-model="pageModel" class="input opening__page-input" rows="8"
                     autocomplete="off" :aria-invalid="pageOver || undefined"
-                    :aria-describedby="`f-opening-page-hint${pageUsage ? ' f-opening-page-usage' : ''}${pageOver ? ' f-opening-page-limit' : ''}`" />
+                    :aria-describedby="`f-opening-page-hint${pageUsage ? ' f-opening-page-usage' : ''}${pageOver ? ' f-opening-page-limit' : ''}`"
+                    @paste="onPagePaste" />
           <div class="opening__page-meta">
-            <span id="f-opening-page-hint" class="subtle">{{ $t("editor.openingPage.hint") }}</span>
+            <span v-if="!pageFile" id="f-opening-page-hint" class="subtle">{{ $t("editor.openingPage.hint") }}</span>
             <span v-if="pageUsage" id="f-opening-page-usage" class="subtle opening__page-usage" :class="{ 'opening__page-error': pageOver }">
-              {{ $t("editor.cardCss.usage", { size: formatKiB(pageBytes, String(locale)), max: pageMaxKB }) }}
+              {{ $t("editor.openingPage.usage", { size: formatPageSize(pageBytes, String(locale)), max: pageMaxMB }) }}
             </span>
           </div>
+          <p v-if="pageLarge" class="subtle opening__large" data-opening-large>{{ $t("editor.openingPage.largeHint") }}</p>
         </div>
+        <p v-if="fileError" class="opening__page-error" role="alert" data-opening-file-error>{{ fileError }}</p>
         <p v-if="pageOver" id="f-opening-page-limit" class="opening__page-error" role="alert">
-          {{ $t("editor.openingPage.tooLong", { max: pageMaxKB }) }}
+          {{ $t("editor.openingPage.tooLong", { max: pageMaxMB }) }}
         </p>
         <div v-if="pageTab === 'preview'" class="opening__preview">
-          <iframe v-if="openingPage.trim()" class="opening__frame opening__frame--page" sandbox="allow-scripts" :srcdoc="pageDoc"
+          <template v-if="pageFile">
+            <iframe v-if="filePreviewUrl" class="opening__frame opening__frame--page" sandbox="allow-scripts" :src="filePreviewUrl"
+                    :title="$t('editor.openingPage')" data-opening-file-preview />
+            <div v-else class="opening__preview-load">
+              <p class="subtle">{{ $t("editor.openingPage.previewHint", { size: formatPageSize(pageFile.bytes, String(locale)) }) }}</p>
+              <div v-if="transfer?.kind === 'preview'" class="ofile__progress">
+                <div class="ofile__track" role="progressbar" aria-valuemin="0" aria-valuemax="100"
+                     :aria-valuenow="transfer.percent ?? undefined" :aria-label="transferLabel">
+                  <div class="ofile__bar" :style="{ width: `${transfer.percent ?? 0}%` }" />
+                </div>
+                <span class="ofile__progress-text">{{ transferLabel }}</span>
+              </div>
+              <button v-else type="button" class="btn btn--sm btn--ghost" data-opening-preview-load @click="loadFilePreview">{{ $t("editor.openingPage.previewLoad") }}</button>
+            </div>
+          </template>
+          <iframe v-else-if="pageHasText" class="opening__frame opening__frame--page" sandbox="allow-scripts" :srcdoc="pageDoc"
                   :title="$t('editor.openingPage')" />
           <p v-else class="subtle">{{ $t("editor.opening.page.empty") }}</p>
         </div>
@@ -307,6 +472,43 @@ const pageDoc = computed(() => openingSrcdoc(props.openingPage));
 .opening__page-meta > :first-child { flex: 1 1 16em; }
 .opening__page-usage { margin-inline-start: auto; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .opening__page-error { margin: 0; color: var(--danger); font-size: 12.5px; }
+/* 標題列在手機上自然換行：標籤不被擠成一字一行，工具列整排換到下一行 */
+.opening__head:has(.opening__tools) { flex-wrap: wrap; row-gap: var(--s-2); }
+.opening__title { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); flex: 0 0 auto; max-width: 100%; }
+.opening__title label { font-size: 13px; font-weight: 600; line-height: 1.3; }
+.opening__unsaved {
+  display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: var(--r-pill);
+  background: var(--accent-tint); color: var(--accent-text); font-size: 12px; font-weight: 500; white-space: nowrap;
+}
+.opening__tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--s-2); }
+.opening__tools .btn { position: relative; }
+/* 30px 高的小按鈕，點擊區補到 44px */
+.opening__tools .btn::after, .ofile__acts .btn::after { content: ""; position: absolute; inset: -7px 0; }
+.opening__file-notice { margin: 0; }
+.opening__large { margin: 0; }
+.ofile {
+  display: grid; gap: var(--s-2); padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-md); background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line);
+}
+.ofile:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--accent), 0 0 0 3px var(--accent-soft); }
+.ofile__head { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
+.ofile__icon { width: 22px; height: 22px; flex: none; color: var(--text-2); }
+.ofile__name { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.ofile__size {
+  display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: var(--r-pill);
+  background: var(--surface); color: var(--text-2); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.ofile__desc { margin: 0; font-size: 13px; line-height: 1.55; color: var(--text-2); }
+.ofile__acts { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.ofile__acts .btn { position: relative; }
+.ofile__progress { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-3); }
+.ofile__track { flex: 1 1 10em; height: 6px; border-radius: var(--r-pill); background: var(--surface); overflow: hidden; box-shadow: inset 0 0 0 1px var(--line); }
+.ofile__bar { height: 100%; background: var(--accent); transition: width var(--dur) var(--ease); }
+.ofile__progress-text { font-size: 12px; color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.opening__preview-load { display: grid; gap: var(--s-3); align-content: start; justify-items: start; padding: var(--s-4); }
+.opening__preview-load > p { margin: 0; }
+.opening__preview-load .ofile__progress { width: 100%; }
+:lang(ko) .ofile__desc { word-break: keep-all; }
 .opening__rules { margin: 0; }
 .opening__link { background: transparent; border: 0; padding: 0; font: inherit; color: var(--accent-text); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 .opening__choices.is-missing :deep(.field > label) { color: var(--danger); }

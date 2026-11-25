@@ -1,0 +1,13 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/create",
+  "draft": true,
+  "title": {
+    "zh-Hant": "開場網頁可以直接上傳或下載 .html 檔，很大的開場網頁也能完整存下來。",
+    "zh-Hans": "开场网页可以直接上传或下载 .html 文件，很大的开场网页也能完整保存。",
+    "en": "Opening pages can now be uploaded or downloaded as an .html file, and much larger pages are saved in full.",
+    "ja": "最初のページを .html でアップロード・ダウンロードでき、大きなページもそのまま保存できます。",
+    "ko": "첫 페이지를 .html 파일로 업로드하거나 내려받을 수 있고, 큰 페이지도 그대로 저장돼요."
+  }
+}

@@ -28,6 +28,7 @@ import { makeDraft } from "../src/lib/role-draft";
 import { formatReviewLength } from "../src/lib/review-length";
 import { emptyRuleSet } from "../src/lib/regex-rules";
 import { ApiError } from "../src/lib/api";
+import { OPENING_PAGE_EDIT_MAX_BYTES, setOpeningPageLimitsForTest } from "../src/lib/opening-page";
 import { VisibilityError } from "../src/lib/work-visibility";
 
 const GENERAL = { version: 1, topics: {}, other: "other.none" };
@@ -79,6 +80,8 @@ const api = vi.hoisted(() => ({
   saveAuthorAsset: vi.fn(async (_roleId: string, body: { version: number }) => ({ ...body, status: "passed", version: body.version + 1 })),
   putRoleState: vi.fn(async (_roleId: string, _body: unknown, _token: string): Promise<{ state: unknown }> => ({ state: {} })),
   deleteRoleState: vi.fn(async () => ({ state: null })),
+  uploadOpeningPage: vi.fn(async (_roleId: string, page: Blob, version: number, _token: string, _opts?: unknown): Promise<any> => ({ rules: [], mountTrigger: "", mountLayer: "over", pageMode: "sandbox", cardFormat: "", openingPage: "", openingPageBytes: page.size, openingPageUrl: "/open/v1/role/author-asset/opening?roleId=r1", status: "passed", version: version + 1 })),
+  fetchOpeningPage: vi.fn(async (_url: string, _token: string, _opts?: unknown): Promise<Blob> => new Blob([""])),
 }));
 vi.mock("../src/lib/api", async original => ({...api, ApiError:(await original<typeof import("../src/lib/api")>()).ApiError}));
 vi.mock("../src/lib/session", async () => {
@@ -3391,4 +3394,259 @@ it('deep-links to a missing portrait without launching a file picker',async()=>{
  await mount('/cards/r1/edit?section=basic&focus=cover');
  expect(document.activeElement).toBe($('[data-cover-field] .frame'));
  expect($('[data-cover-field]').classList.contains('is-alert')).toBe(true);
+});
+
+
+// 開場網頁存成物件、上限放寬（任務 2026-11-25-opening-page-object-storage）。
+// 上限照契約：現在 512 KB，契約改成 100 MB 後同一份程式要都對，兩種都測。
+describe("開場網頁：大頁面", () => {
+  const KB = 1024;
+  const MB = 1024 * 1024;
+  const URL_PATH = "/open/v1/role/author-asset/opening?roleId=r1";
+  const page = (bytes: number) => "<p>" + "a".repeat(bytes - 7) + "</p>";
+  const pageAsset = (extra: Record<string, unknown> = {}) => ({ rules: [], mountTrigger: "", mountLayer: "over", pageMode: "sandbox", openingMode: "page", openingPage: "", status: "passed", version: 4, ...extra } as any);
+  const assetBody = (n = 0) => (api.saveAuthorAsset.mock.calls[n] as unknown as [string, Record<string, unknown>])[1];
+  async function openLarge(extra: Record<string, unknown>) {
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "大首屏", roleDetailDesc: "設定", roleWelcome: "", rolePrologue: ["出發"] });
+    api.fetchAuthorAsset.mockResolvedValueOnce(pageAsset(extra));
+    await mount("/cards/r1/edit");
+  }
+  async function confirm(ok = true) {
+    await flush();
+    expect(confirmState.current).not.toBeNull();
+    settleConfirm(ok);
+    await flush();
+  }
+  beforeEach(() => setOpeningPageLimitsForTest({ max: 100 * MB }));
+  afterEach(() => setOpeningPageLimitsForTest({ max: null }));
+
+  it("舊上游（沒有大小與網址）：照舊在 JSON 裡送，不走上傳、不帶 openingPageClear", async () => {
+    setOpeningPageLimitsForTest({ max: null });
+    await openLarge({ openingPage: "<div>首屏</div>" });
+    await type($("#f-opening-page"), "<div>改過</div>");
+    await submit();
+    expect(api.uploadOpeningPage).not.toHaveBeenCalled();
+    expect(assetBody()).toMatchObject({ openingPage: "<div>改過</div>", version: 4 });
+    expect(assetBody()).not.toHaveProperty("openingPageClear");
+    await type($("#f-opening-page"), "");
+    await submit();
+    expect(assetBody(1)).toMatchObject({ openingPage: "", version: 5 });
+    expect(assetBody(1)).not.toHaveProperty("openingPageClear");
+  });
+
+  it("上限 512 KB 時：超過的檔案在本機擋下，計數器與上限都以 MB 講", async () => {
+    setOpeningPageLimitsForTest({ max: null });
+    await openLarge({ openingPage: "<div>首屏</div>" });
+    await pickFile($("[data-opening-file-input]"), new File([page(600 * KB)], "big.html"));
+    expect($("[data-opening-file-error]").textContent).toContain(i18n.global.t("editor.openingPage.errTooBig", { max: "512 KB" }));
+    expect($<HTMLTextAreaElement>("#f-opening-page").value).toBe("<div>首屏</div>");
+    await type($("#f-opening-page"), page(600 * KB));
+    expect(root.textContent).toContain(i18n.global.t("editor.openingPage.tooLong", { max: "0.5" }));
+    expect($("#f-opening-page-usage").textContent).toContain("/ 0.5 MB");
+    await submit();
+    expect(api.saveAuthorAsset).not.toHaveBeenCalled();
+    expect(api.uploadOpeningPage).not.toHaveBeenCalled();
+  });
+
+  it("上游存著超過編輯門檻的頁面：顯示檔案卡、不讀內容；改其他欄位不碰開場網頁", async () => {
+    await openLarge({ openingPageBytes: 5 * MB, openingPageUrl: URL_PATH });
+    expect(root.querySelector("#f-opening-page")).toBeNull();
+    expect($("[data-opening-file]").textContent).toContain("opening.html");
+    expect($("[data-opening-file]").textContent).toContain("5 MB");
+    expect($("[data-opening-file]").textContent).toContain(i18n.global.t("editor.openingPage.fileDesc"));
+    expect($("#f-opening-page-usage").textContent).toContain("5 MB / 100 MB");
+    expect(api.fetchOpeningPage).not.toHaveBeenCalled();
+    // 有開場網頁：第一句選項以外不缺
+    expect(root.querySelector("[data-opening-unsaved]")).toBeNull();
+    await type($("#f-name"), "改名");
+    await submit();
+    expect(api.patchRoleDocument).toHaveBeenCalled();
+    expect(api.saveAuthorAsset).not.toHaveBeenCalled();
+    expect(api.uploadOpeningPage).not.toHaveBeenCalled();
+  });
+
+  it("超過 10 MB 多一行中性提醒，不擋存檔", async () => {
+    await openLarge({ openingPageBytes: 40 * MB, openingPageUrl: URL_PATH });
+    expect($("[data-opening-large]").textContent).toContain(i18n.global.t("editor.openingPage.largeHint"));
+    expect(root.querySelector('[role="alert"]#f-opening-page-limit')).toBeNull();
+  });
+
+  it("上游沒內嵌、在編輯門檻內：自動讀進文字框；改了之後先原始上傳、再帶新版本送 JSON（空字串＝不變）", async () => {
+    const stored = page(600 * KB);
+    api.fetchOpeningPage.mockResolvedValueOnce(new Blob([stored]));
+    await openLarge({ openingPageBytes: 600 * KB, openingPageUrl: URL_PATH });
+    await flush();
+    expect(api.fetchOpeningPage).toHaveBeenCalledWith(URL_PATH, "tok", expect.objectContaining({ total: 600 * KB }));
+    expect($<HTMLTextAreaElement>("#f-opening-page").value).toBe(stored);
+    // 讀進來的不算改動：只改名字就不送作者資產
+    await type($("#f-name"), "改名");
+    await submit();
+    expect(api.saveAuthorAsset).not.toHaveBeenCalled();
+    await type($("#f-opening-page"), stored + "!");
+    await submit();
+    expect(api.uploadOpeningPage).toHaveBeenCalledTimes(1);
+    const [roleId, sent, version] = api.uploadOpeningPage.mock.calls[0];
+    expect(roleId).toBe("r1");
+    expect(version).toBe(4);
+    expect(await (sent as Blob).text()).toBe(stored + "!");
+    expect(assetBody()).toMatchObject({ openingPage: "", version: 5 });
+    expect(assetBody()).not.toHaveProperty("openingPageClear");
+    expect(api.uploadOpeningPage.mock.invocationCallOrder[0]).toBeLessThan(api.saveAuthorAsset.mock.invocationCallOrder[0]);
+    // 存完不再是未存狀態；再存一次不重傳
+    await type($("#f-name"), "再改名");
+    await submit();
+    expect(api.uploadOpeningPage).toHaveBeenCalledTimes(1);
+  });
+
+  it("上傳超過門檻的檔案：已有內容先確認取代，標「待儲存」；儲存先傳頁面、再送其餘的", async () => {
+    await openLarge({ openingPage: "<div>首屏</div>" });
+    const big = new File([page(OPENING_PAGE_EDIT_MAX_BYTES + 100)], "Big Page.HTML");
+    Object.defineProperty($("[data-opening-file-input]"), "files", { value: [big], configurable: true });
+    $("[data-opening-file-input]").dispatchEvent(new Event("change"));
+    await confirm(true);
+    expect(root.querySelector("#f-opening-page")).toBeNull();
+    expect($("[data-opening-file]").textContent).toContain("opening.html");
+    expect($("[data-opening-unsaved]").textContent).toBe(i18n.global.t("editor.openingPage.unsaved"));
+    expect($("[data-opening-file-notice]").textContent).toBe(i18n.global.t("editor.openingPage.pickedHint"));
+    await type($("#f-name"), "改名");
+    await submit();
+    expect(api.uploadOpeningPage).toHaveBeenCalledWith("r1", big, 4, "tok", expect.anything());
+    expect(api.uploadOpeningPage.mock.invocationCallOrder[0]).toBeLessThan(api.patchRoleDocument.mock.invocationCallOrder[0]);
+    expect(assetBody()).toMatchObject({ openingPage: "", version: 5, openingMode: "page" });
+    expect(root.querySelector("[data-opening-unsaved]")).toBeNull();
+  });
+
+  it("不取代：原本的內容不變", async () => {
+    await openLarge({ openingPage: "<div>首屏</div>" });
+    await pickFile($("[data-opening-file-input]"), new File(["<p>新</p>"], "new.html"));
+    await confirm(false);
+    expect($<HTMLTextAreaElement>("#f-opening-page").value).toBe("<div>首屏</div>");
+    expect(root.querySelector("[data-opening-unsaved]")).toBeNull();
+  });
+
+  it("門檻內的檔案進文字框、可以繼續改", async () => {
+    await openLarge({});
+    await pickFile($("[data-opening-file-input]"), new File(["<p>新</p>"], "new.htm"));
+    expect(confirmState.current).toBeNull();
+    expect($<HTMLTextAreaElement>("#f-opening-page").value).toBe("<p>新</p>");
+    expect($("[data-opening-unsaved]")).not.toBeNull();
+    await submit();
+    expect(api.uploadOpeningPage).not.toHaveBeenCalled();
+    expect(assetBody()).toMatchObject({ openingPage: "<p>新</p>" });
+  });
+
+  it("上傳失敗：原本的頁面不變、檔案留著，卡上說沒完成；再按儲存重試", async () => {
+    await openLarge({});
+    const big = new File([page(OPENING_PAGE_EDIT_MAX_BYTES + 100)], "big.html");
+    await pickFile($("[data-opening-file-input]"), big);
+    api.uploadOpeningPage.mockRejectedValueOnce(new ApiError(503, "暫時無法存檔", "temporarily_unavailable"));
+    await submit();
+    expect($("[data-opening-file-error]").textContent).toBe(i18n.global.t("editor.openingPage.errFail"));
+    expect(api.saveAuthorAsset).not.toHaveBeenCalled();
+    expect(api.patchRoleWelcome).not.toHaveBeenCalled();
+    expect($("[data-opening-unsaved]")).not.toBeNull();
+    await submit();
+    expect(api.uploadOpeningPage).toHaveBeenCalledTimes(2);
+    expect(api.uploadOpeningPage.mock.calls[1][1]).toBe(big);
+    expect(root.querySelector("[data-opening-file-error]")).toBeNull();
+    expect(assetBody()).toMatchObject({ openingPage: "", version: 5 });
+  });
+
+  it("上傳可以取消：不算失敗、不存其餘的，檔案留著", async () => {
+    await openLarge({});
+    await pickFile($("[data-opening-file-input]"), new File([page(OPENING_PAGE_EDIT_MAX_BYTES + 100)], "big.html"));
+    api.uploadOpeningPage.mockImplementationOnce((_r, _p, _v, _t, opts) => new Promise((_, reject) => {
+      (opts as { signal: AbortSignal }).signal.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+    }));
+    const saving = submit();
+    await flush();
+    expect($("[data-opening-progress]").textContent).toContain(i18n.global.t("editor.openingPage.uploading", { percent: 0 }));
+    $<HTMLButtonElement>("[data-opening-cancel]").click();
+    await saving;
+    await flush();
+    expect(root.querySelector("[data-opening-progress]")).toBeNull();
+    expect(root.querySelector("[data-opening-file-error]")).toBeNull();
+    expect(root.querySelector(".body__scroll > .notice--error")).toBeNull();
+    expect(api.patchRoleDocument).not.toHaveBeenCalled();
+    expect(api.saveAuthorAsset).not.toHaveBeenCalled();
+    expect($("[data-opening-unsaved]")).not.toBeNull();
+  });
+
+  it("清除：先確認，回到空白文字框，存檔帶 openingPageClear", async () => {
+    await openLarge({ openingPageBytes: 5 * MB, openingPageUrl: URL_PATH });
+    $<HTMLButtonElement>("[data-opening-clear]").click();
+    await confirm(false);
+    expect($("[data-opening-file]")).not.toBeNull();
+    $<HTMLButtonElement>("[data-opening-clear]").click();
+    await confirm(true);
+    expect($<HTMLTextAreaElement>("#f-opening-page").value).toBe("");
+    expect($("[data-opening-file-notice]").textContent).toBe(i18n.global.t("editor.openingPage.clearedHint"));
+    expect(document.activeElement?.id).toBe("f-opening-page");
+    await submit();
+    expect(api.uploadOpeningPage).not.toHaveBeenCalled();
+    expect(assetBody()).toMatchObject({ openingPage: "", openingPageClear: true, version: 4 });
+  });
+
+  it("換成開場白時，上游存著的大頁面也要清掉", async () => {
+    await openLarge({ openingPageBytes: 5 * MB, openingPageUrl: URL_PATH });
+    $('[data-opening-mode="greeting"]').click();
+    await flush();
+    await type($("#f-welcome"), "門開了。");
+    await submit();
+    expect(assetBody()).toMatchObject({ openingMode: "greeting", openingPage: "", openingPageClear: true });
+  });
+
+  it("一次貼上超過門檻：換成檔案卡並說明；逐字打字不切換", async () => {
+    await openLarge({ openingPage: "<div>首屏</div>" });
+    const area = $<HTMLTextAreaElement>("#f-opening-page");
+    const typed = page(OPENING_PAGE_EDIT_MAX_BYTES + 10);
+    await type(area, typed);
+    expect($<HTMLTextAreaElement>("#f-opening-page").value).toBe(typed);
+    await type(area, "");
+    const big = page(OPENING_PAGE_EDIT_MAX_BYTES + 10);
+    const paste = new Event("paste", { cancelable: true, bubbles: true });
+    Object.defineProperty(paste, "clipboardData", { value: { getData: () => big } });
+    area.dispatchEvent(paste);
+    await flush();
+    expect(paste.defaultPrevented).toBe(true);
+    expect(root.querySelector("#f-opening-page")).toBeNull();
+    expect($("[data-opening-file-notice]").textContent).toBe(i18n.global.t("editor.openingPage.pasted", { limit: "1 MB" }));
+    await submit();
+    expect(await (api.uploadOpeningPage.mock.calls[0][1] as Blob).text()).toBe(big);
+  });
+
+  it("預覽：檔案卡不自動讀，按「載入預覽」才讀並掛成 Blob 網址", async () => {
+    const created: Blob[] = [];
+    vi.spyOn(URL, "createObjectURL").mockImplementation((blob) => { created.push(blob as Blob); return "blob:preview"; });
+    api.fetchOpeningPage.mockResolvedValueOnce(new Blob(["<h1>大頁</h1>"]));
+    await openLarge({ openingPageBytes: 5 * MB, openingPageUrl: URL_PATH });
+    [...root.querySelectorAll<HTMLButtonElement>(".opening [role=tab]")].find((b) => b.textContent?.trim() === i18n.global.t("editor.readme.preview"))!.click();
+    await flush();
+    expect(api.fetchOpeningPage).not.toHaveBeenCalled();
+    expect(root.textContent).toContain(i18n.global.t("editor.openingPage.previewHint", { size: "5 MB" }));
+    $<HTMLButtonElement>("[data-opening-preview-load]").click();
+    await flush();
+    expect(api.fetchOpeningPage).toHaveBeenCalledTimes(1);
+    expect($<HTMLIFrameElement>("[data-opening-file-preview]").getAttribute("src")).toBe("blob:preview");
+    expect(await created.at(-1)!.text()).toContain("<h1>大頁</h1>");
+  });
+
+  it("匯入的卡帶著超過門檻的開場網頁：變成待存檔案，建立時走原始上傳", async () => {
+    const fixture = (await import("./fixtures/fengyue-cases.json")).default.cases.find((c: { name: string }) => c.name.startsWith("real export, opening-choice mode"))!;
+    const big = page(OPENING_PAGE_EDIT_MAX_BYTES + 100);
+    const input = JSON.parse(JSON.stringify(fixture.input).split("<div>TEST-INTRO-HTML</div>").join(big));
+    await mount("/create");
+    await pickFile($("input[type=file]"), new File([JSON.stringify(input)], "export.json", { type: "application/json" }));
+    byText("套用到表單").click();
+    await flush();
+    expect(root.querySelector("#f-opening-page")).toBeNull();
+    expect($("[data-opening-file]")).not.toBeNull();
+    expect($("[data-opening-unsaved]")).not.toBeNull();
+    await submit();
+    expect(api.uploadOpeningPage).toHaveBeenCalledTimes(1);
+    const [, sent, version] = api.uploadOpeningPage.mock.calls[0];
+    expect(version).toBe(0);
+    expect(await (sent as Blob).text()).toBe(big);
+    expect(assetBody()).toMatchObject({ openingPage: "", version: 1, openingMode: "page" });
+  });
 });
