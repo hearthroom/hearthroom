@@ -84,7 +84,7 @@ it('all configured targets are safe local landings with attribution', () => {
     const url = new URL(value, 'https://sukisuki.ai');
     expect(url.origin).toBe('https://sukisuki.ai');
     const authorRef = ['bh-fate-tm', 'bh-fate-fgo', 'bh-limbus'].includes(code) ? 'UVTEJ3N6'
-      : ['bh-trpg-dnd', 'bh-dnd-2206', 'bh-dnd-bg3', 'bh-dnd-indie', 'bh-dnd-trpg-actions-20261113', 'bh-dnd-ai-start-20261118', 'cabin-dnd-actions-20261113', 'vocus-dnd-actions-20261113'].includes(code) ? 'H2DG5Q6Y'
+      : ['bh-trpg-dnd', 'bh-dnd-2206', 'bh-dnd-bg3', 'bh-dnd-indie', 'bh-dnd-trpg-actions-20261113', 'bh-dnd-ai-start-20261118', 'bh-dnd-trpg-explore-20261126', 'cabin-dnd-actions-20261113', 'vocus-dnd-actions-20261113'].includes(code) ? 'H2DG5Q6Y'
       : MALIANG_CODES.includes(code) ? '6M9ZV5FS' : '94A9H94Z';
     if (NOREF_CODES.includes(code)) expect(url.searchParams.has('ref')).toBe(false);
     else expect(url.searchParams.get('ref')).toBe(authorRef);
