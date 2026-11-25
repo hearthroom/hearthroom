@@ -99,10 +99,17 @@ it('managers can switch the history to fast-track approvals; reviewers never see
  await vi.waitFor(()=>expect(router.currentRoute.value.query.source).toBeUndefined());
 });
 
-it('a reviewer never sees the scope switch and a forged source in the URL is ignored',async()=>{
+it('the scope in the URL opens fast-track approvals for a manager; a reviewer with the same URL gets their own history and no switch',async()=>{
+ api.fetchReviewDecisions.mockImplementation(async(_t:string,_l:string,_b?:number,_q?:string,source?:string)=>({items:source?[{...row('3','快車'),status:'approved',verdict:'approve',canCorrect:true,finalSource:'ai_fast_track'}]:[row('1','夜行')],nextCursor:null}));
+ api.fetchReviewMe.mockResolvedValue({reviewer:true,reviews:3,role:'manager'} as never);
+ await mount('/review/decisions?source=ai_fast_track');
+ await vi.waitFor(()=>expect(el.textContent).toContain('快車'));
+ expect(el.querySelector('[data-scope=ai_fast_track]')!.getAttribute('aria-pressed')).toBe('true');
+ app.unmount();el.remove();vi.clearAllMocks();
  api.fetchReviewMe.mockResolvedValue({reviewer:true,reviews:3,role:'reviewer'} as never);
  await mount('/review/decisions?source=ai_fast_track');
  await vi.waitFor(()=>expect(el.textContent).toContain('夜行'));
  expect(el.querySelector('[data-scope=ai_fast_track]')).toBeNull();
+ expect(el.textContent).not.toContain('快車');
  expect(api.fetchReviewDecisions).toHaveBeenLastCalledWith('tok',expect.any(String),undefined,undefined);
 });

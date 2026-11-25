@@ -122,6 +122,11 @@ describe('自動核准', () => {
     const res = await post(`/v1/review/${update}/stamp`, 'reviewer', { verdict: 'approve', note: '', generation, finalSource: 'ai_fast_track' });
     expect(res.status).toBe(400);
     expect(await statusOf(update)).toBe('pending');
+    // 被擋下的那一下沒留下任何章：審核員放回後，AI 通過照樣走快速通道
+    expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM review_stamps WHERE submission_id=?').bind(update).first()).toEqual({ n: 0 });
+    await post(`/v1/review/${update}/release`, 'reviewer', { generation });
+    await suggest(update);
+    expect(await statusOf(update)).toBe('approved');
   });
 });
 
@@ -167,6 +172,12 @@ describe('不走快速通道（留在人工佇列）', () => {
     await suggest(update, { verdict: undefined, flags: [] }, 'tags');
     expect(await statusOf(update)).toBe('pending');
     expect((await opsMetrics(env.DB)).match(/hearthroom_review_fast_track_total\{/g)).toBeNull();
+    // 寫結論才觸發
+    await suggest(update);
+    expect(await statusOf(update)).toBe('approved');
+    // 已定案的單（試跑）再寫結論不再判
+    expect((await json(await suggest(update, { model: 'deepseek/deepseek-v4.1-flash-2' }))).phase).toBe('backfill');
+    expect((await opsMetrics(env.DB)).match(/hearthroom_review_fast_track_total\{[^}]*\} \d+/g)).toEqual(['hearthroom_review_fast_track_total{operation="evaluate",outcome="approved"} 1']);
   });
 
   it('人工已經領著或定案', async () => {
@@ -239,7 +250,10 @@ describe('撤回、紀錄與報表', () => {
     const { update } = await liveCardWithUpdate();
     await humanDecide(update, 'approve');
     expect((await post(`/v1/review/${update}/correction`, 'mgr', { operationId: crypto.randomUUID(), note: '這次更新的開場還需要調整。' })).status).toBe(200);
-    expect(await opsMetrics(env.DB)).not.toContain('hearthroom_review_fast_track_revokes_total{operation="revoke",outcome="success"}');
+    const metrics = await opsMetrics(env.DB);
+    expect(metrics).toContain('# TYPE hearthroom_review_fast_track_revokes_total counter');
+    expect(metrics).not.toContain('hearthroom_review_fast_track_revokes_total{operation="revoke",outcome="success"}');
+    expect(metrics).toContain('hearthroom_review_corrections_total{operation="correct",outcome="success"} 1');
   });
 
   it('審核紀錄可以篩快速通道（限管理員）；詳情標出快速通道那一章；報表算件數、通過率、撤回數', async () => {
