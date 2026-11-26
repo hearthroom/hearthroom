@@ -510,17 +510,25 @@ const PRIOR_VOTES = MIN_SCORE_COUNT;
 const PRIOR_MEAN = 3;
 const BAYES_SCORE = `(SELECT CASE WHEN COUNT(*) >= ${MIN_SCORE_COUNT} THEN (${PRIOR_VOTES * PRIOR_MEAN} + COALESCE(SUM(s.score), 0)) * 1.0 / (${PRIOR_VOTES} + COUNT(*)) ELSE ${PRIOR_MEAN} END FROM card_scores s WHERE s.card_id = CAST(c.id AS TEXT) AND EXISTS(SELECT 1 FROM members m WHERE m.id=s.member_id AND m.account_class='normal'))`;
 
+const CARD_ID_COLUMN = 'CAST(c.id AS TEXT) AS id';
+const AUTHOR_CANDIDATES = `c.author_num_id IN (
+  SELECT external_id FROM member_connections WHERE owner_member_id = ? AND provider = 'harbor'
+  UNION
+  SELECT external_id FROM member_identities WHERE member_id = ? AND provider = 'harbor'
+)`;
+
 export async function listCards(db: D1Database, opts: ListOptions) {
   return listCardRows<CardRow>(db,opts,CARD_COLUMNS);
 }
 
 /** Same filters, ordering, fallback and counts; no discarded presentation work. */
 export async function listCardIds(db:D1Database,opts:ListOptions){
-  return listCardRows<Pick<CardRow,'id'>>(db,opts,'CAST(c.id AS TEXT) AS id');
+  return listCardRows<Pick<CardRow,'id'>>(db,opts,CARD_ID_COLUMN);
 }
 
 async function listCardRows<T>(db:D1Database,opts:ListOptions,columns:string){
   const where: string[] = opts.anyStatus ? ["1=1"] : [listed(!!opts.allowNsfw), NOT_A_COPY("c"), "c.provider = 'harbor'"];
+  const publicClauseCount = where.length;
   if(opts.submittedOnly)where.push(SUBMITTED_CARD);
   const binds: unknown[] = [];
   if (opts.provider) {
@@ -627,7 +635,12 @@ async function listCardRows<T>(db:D1Database,opts:ListOptions,columns:string){
   // 舊的 hot_score（同步窗口增量）不當排序鍵，只留在 API 的 trending 欄位。
   const run = async (mode: "and" | "any") => {
     const search = searchClause(mode);
-    const whereSql = (search ? [...where, search.where] : where).join(" AND ");
+    const authorHeat = columns === CARD_ID_COLUMN && !opts.anyStatus && opts.allowNsfw === true &&
+      opts.sort === "hot" && opts.authorMemberId !== undefined && where.length === publicClauseCount + 1 && !search;
+    const from = authorHeat ? "cards c INDEXED BY idx_cards_author" : (search?.from ?? "cards c");
+    // Keep am.id as the ownership check. The index probe also finds identities
+    // now overridden by a connection and spellings that share INTEGER affinity.
+    const whereSql = [...where, ...(search ? [search.where] : []), ...(authorHeat ? [AUTHOR_CANDIDATES] : [])].join(" AND ");
     const orderBinds: unknown[] = [];
     let orderBy: string;
     if (opts.sort === "new") orderBy = "c.registered_at DESC, c.id DESC";
@@ -642,11 +655,16 @@ async function listCardRows<T>(db:D1Database,opts:ListOptions,columns:string){
     else if (opts.sort === "relevance" && search) {
       orderBy = `${search.relevance.sql}, c.talk_num DESC, c.follow_num DESC, c.registered_at DESC`;
       orderBinds.push(...search.relevance.binds);
-    } else orderBy = "c.heat DESC, c.talk_num DESC, c.registered_at DESC";
+    } else {
+      orderBy = "c.heat DESC, c.talk_num DESC, c.registered_at DESC";
+      // The previous production plan traversed uniq_cards_provider_role for
+      // this exact query. Keep its order for complete ties across old cursors.
+      if (authorHeat) orderBy += ", c.source_role_id ASC";
+    }
     // 多撈一筆就知道還有沒有下一頁，不必數完整組結果。
     return db
-      .prepare(`SELECT ${columns} FROM ${search?.from ?? "cards c"} ${AUTHOR_JOIN} WHERE ${whereSql} ORDER BY ${orderBy} LIMIT ? OFFSET ?`)
-      .bind(...binds, ...(search?.binds ?? []), ...orderBinds, opts.limit + 1, opts.offset)
+      .prepare(`SELECT ${columns} FROM ${from} ${AUTHOR_JOIN} WHERE ${whereSql} ORDER BY ${orderBy} LIMIT ? OFFSET ?`)
+      .bind(...binds, ...(search?.binds ?? []), ...(authorHeat ? [opts.authorMemberId, opts.authorMemberId] : []), ...orderBinds, opts.limit + 1, opts.offset)
       .all<T>();
   };
   let probe = await run("and");

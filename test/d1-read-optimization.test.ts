@@ -2,7 +2,7 @@ import { env, SELF } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import worker from "../src/index";
 import type { Env } from "../src/types";
-import { catalogTagCounts, ratingCounts, upsertCard } from "../src/cards";
+import { catalogTagCounts, listCardIds, ratingCounts, upsertCard } from "../src/cards";
 import { countTop, listTop, postComment, setLike, type CommentTarget } from "../src/comments";
 import { publicCandidatePage, publicCandidates } from "../src/work-pagination";
 import { filterPublicRows, provePublicAggregates } from "../src/work-read";
@@ -117,6 +117,41 @@ describe("D1 read optimization (Batch 2)", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     restoreUpstream();
+  });
+
+  it("narrows author heat candidates before checking linked ownership and preserves tied pages", async () => {
+    const author = await makeMember(11);
+    const linkedFrom = await makeMember(22);
+    const aliasMember = await makeMember(33);
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO member_connections VALUES ('harbor','22',?,1)").bind(author),
+      env.DB.prepare("UPDATE member_identities SET external_id='00011' WHERE member_id=?").bind(aliasMember),
+      env.DB.prepare(`WITH RECURSIVE seq(n) AS (VALUES(1) UNION ALL SELECT n+1 FROM seq WHERE n<3000)
+        INSERT INTO cards(id,provider,source_role_id,zone,author_num_id,author_name,heat,talk_num,registered_at,last_synced_at,status)
+        SELECT 200000+n,'harbor','unrelated-'||n,'zh',999,'Other',500+n,50,n,n,'approved' FROM seq`),
+      env.DB.prepare(`INSERT INTO cards(id,provider,source_role_id,zone,author_num_id,author_name,heat,talk_num,registered_at,last_synced_at,status,rating,board_hidden)
+        VALUES (100001,'harbor','z-tied','zh',11,'Alias',100,10,1000,1000,'approved','G',0),
+               (100002,'harbor','a-tied','en',22,'Linked',100,10,1000,1000,'approved','R',0),
+               (100003,'harbor','hidden','zh',22,'Linked',1000,20,2000,2000,'approved','G',0),
+               (100004,'harbor','unrelated-author','zh',44,'Other',1000,20,2000,2000,'approved','G',0)`),
+    ]);
+    await env.DB.prepare("UPDATE cards SET board_hidden=1 WHERE id=100003").run();
+    const { db, log } = instrumentReadsWrites(env.DB, true);
+    const opts = { authorMemberId: author, allowNsfw: true, sort: "hot", offset: 0, limit: 1 } as const;
+    const first = await listCardIds(db, opts);
+    const [candidate] = log;
+    const legacy = await listCardIds(db, { ...opts, provider: "harbor" });
+    const oldReads = log[1].reads;
+    console.log("author heat candidate reads", { baseline: oldReads, candidate: candidate.reads });
+    expect(candidate.reads).toBeLessThanOrEqual(oldReads / 4);
+    expect(candidate.plan).toContainEqual(expect.stringContaining("idx_cards_author (author_num_id=?)"));
+    expect(first).toEqual(legacy);
+    expect(first.rows.map(row => row.id)).toEqual(["100002"]);
+    expect(first.hasNext).toBe(true);
+    expect(await listCardIds(db, { ...opts, offset: 1 })).toMatchObject({ rows: [{ id: "100001" }], hasNext: false });
+    for (const member of [linkedFrom, aliasMember, "unknown-author"]) {
+      expect((await listCardIds(db, { ...opts, authorMemberId: member })).rows).toEqual([]);
+    }
   });
 
   it("#2 comments index: eliminates full table scan for COUNT and newest pagination on normal and hot cards while preserving removed-with-replies and pinned semantics", async () => {

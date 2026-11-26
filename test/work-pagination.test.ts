@@ -3,19 +3,19 @@ import {beforeEach,afterEach,it,expect,vi} from 'vitest';
 import worker from '../src/index';
 import {sealAuth} from '../src/account-auth';
 import {ADULT_CONSENT_VERSION} from '../shared/adult-consent';
-import {publicCandidates,publicCandidatePage} from '../src/work-pagination';
+import {publicCandidates,publicCandidatePage,publicPosition} from '../src/work-pagination';
 import {getCard,upsertCard} from '../src/cards';
 import {buildSearchBody,buildSearchName,buildSearchText} from '../src/upstream';
 import {identities,makeMember,resetDb,restoreUpstream,role} from './helpers';
 beforeEach(resetDb);afterEach(()=>{vi.restoreAllMocks();restoreUpstream();});
-async function fixture(count=5){
+async function fixture(count=5, sourceIds: readonly string[] = []){
  const member=await makeMember(11),ids:string[]=[],denied=new Set<string>();
  // Pagination exercises reads, not publication. Keep the same rows as upsertCard,
  // including allocated card numbers and FTS fields, but avoid eight D1 RPCs per card.
  // Bound each batch to 25 cards (100 statements); ordering and FK checks stay intact.
  const statements:D1PreparedStatement[]=[];
  for(let i=0;i<count;i++){
-  const source=crypto.randomUUID(),target=crypto.randomUUID(),work=crypto.randomUUID();ids.push(source);
+  const source=sourceIds[i] ?? crypto.randomUUID(),target=crypto.randomUUID(),work=crypto.randomUUID();ids.push(source);
   const card=role({roleId:source,authorNumId:11,name:'Card '+i}),now=count-i;
   statements.push(
    env.DB.prepare("INSERT INTO card_numbers(provider,source_role_id) VALUES ('harbor',?)").bind(source),
@@ -100,6 +100,50 @@ it('continues a cookie-derived first page when the client adds the redundant nsf
  expect(third.response.status).toBe(200);expect(third.body.hasNext).toBe(false);
  const ids=[...first.body.items,...next.body.items,...third.body.items].map((r:any)=>r.id);
  expect(ids).toHaveLength(5);expect(new Set(ids).size).toBe(5);
+});
+
+it('keeps an author heat cursor issued in the old index order across a complete tie', async () => {
+ const { ids } = await fixture(5, ['heat-e','heat-d','heat-c','heat-b','heat-a']);
+ await env.DB.prepare('UPDATE cards SET heat=7,talk_num=5,registered_at=1000').run();
+ const authorMemberId = 'member-11';
+ const author = await env.DB.prepare('SELECT handle FROM members WHERE id=?').bind(authorMemberId).first<string>('handle');
+ const url = 'https://c.test/v1/cards?sort=hot&limit=2&author=' + author;
+ const source = { authorMemberId, allowNsfw: true, sort: 'hot' as const, limit: 2, offset: 0 };
+ const cookie = '__Host-hr-adult=' + await sealAuth(testEnv(), 'guest-adult', {
+  show: true, verifiedAt: Date.now(), consentVersion: ADULT_CONSENT_VERSION,
+ });
+ // Seed a cursor using the old production query plan's full-tie order.
+ const legacyDb = new Proxy(env.DB, {
+  get(target, key) {
+   if (key === 'prepare') return (sql: string) => target.prepare(
+    sql.replace('FROM cards c LEFT JOIN', 'FROM cards c INDEXED BY uniq_cards_provider_role LEFT JOIN'),
+   );
+   const value = Reflect.get(target, key);
+   return typeof value === 'function' ? value.bind(target) : value;
+  },
+ });
+ const legacyCandidates = await publicCandidates({ ...testEnv(), DB: legacyDb }, { ...source, provider: 'harbor' }, 0);
+ const legacy = await publicCandidatePage(testEnv(), legacyCandidates, await publicPosition(testEnv(), url, 0, true),
+  { limit: 2, offset: 0, lang: 'zh', allowNsfw: true }, source);
+ const ordered = ids.slice().sort();
+ expect(legacy.items.map(row => row.sourceRoleId)).toEqual(ordered.slice(0, 2));
+ expect(legacy.nextCursor).toEqual(expect.any(String));
+ async function read(query: string) {
+  const ctx = createExecutionContext();
+  const res = await worker.fetch(new Request(url + query, { headers: { Cookie: cookie } }), testEnv(), ctx);
+  await waitOnExecutionContext(ctx);
+  expect(res.status).toBe(200);
+  expect(res.headers.get('X-Adult-Content')).toBe('1');
+  return res.json<{ items: { sourceRoleId: string }[]; hasNext: boolean; previousCursor: string }>();
+ }
+ const first = await read('');
+ expect(first.items.map(row => row.sourceRoleId)).toEqual(ordered.slice(0, 2));
+ expect(first.hasNext).toBe(true);
+ const next = await read('&offset=2&cursor=' + encodeURIComponent(legacy.nextCursor!));
+ expect(next.items.map(row => row.sourceRoleId)).toEqual(ordered.slice(2, 4));
+ expect(next.hasNext).toBe(true);
+ const previous = await read('&cursor=' + encodeURIComponent(next.previousCursor));
+ expect(previous.items.map(row => row.sourceRoleId)).toEqual(ordered.slice(0, 2));
 });
 
 it('keeps effective adult permission and real filters bound even when nsfw syntax changes',async()=>{
