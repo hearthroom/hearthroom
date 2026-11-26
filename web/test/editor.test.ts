@@ -2252,7 +2252,9 @@ describe("匯入 AI 風月卡 → 建立", () => {
     expect($<HTMLTextAreaElement>("#f-opening-page").value).toBe(intro);
   });
 
-  it("風月 JSON 沒有規則但開場網頁超限時，保留原文並在建卡前引導修正", async () => {
+  it("風月 JSON 沒有規則但開場網頁超限時，保留原文並在建卡前引導修正", async ({ onTestFinished }) => {
+    setOpeningPageLimitsForTest({ max: 512 * 1024 });
+    onTestFinished(() => setOpeningPageLimitsForTest({ max: null }));
     const fixture = (await import("./fixtures/fengyue-cases.json")).default.cases.find(c => c.name.endsWith("(export-opening-1.json)"))!;
     const intro = `<main>${"字".repeat(175_000)}</main>`;
     await mount("/create");
