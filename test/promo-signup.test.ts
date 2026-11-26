@@ -94,6 +94,16 @@ describe("首聊", () => {
     expect(await opsMetrics(env.DB)).toContain('hearthroom_promo_attributions_total{operation="first_play",outcome="recorded"} 1');
   });
 
+  it("綁定晚於首聊（例如綁定重試才送到）：綁定時補上最早的開聊時間並送首聊事件", async () => {
+    expect((await play()).status).toBe(200);
+    const opened = await env.DB.prepare("SELECT MIN(created_at) AS t FROM member_conversations WHERE member_id = ?").bind(fresh).first<number>("t");
+    expect(await (await bind({ campaign: CAMPAIGN, firstSeenAt: Date.now() - MIN })).json()).toEqual({ bound: true });
+    expect(((await rows())[0] as { first_play_at: number }).first_play_at).toBe(opened);
+    expect(promoPoints("promo_first_play")).toHaveLength(1);
+    await play("fresh", "role-b");
+    expect(promoPoints("promo_first_play")).toHaveLength(1);
+  });
+
   it("沒有歸因的人開聊：不送首聊事件", async () => {
     expect((await play()).status).toBe(200);
     expect(promoPoints("promo_first_play")).toHaveLength(0);

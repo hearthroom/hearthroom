@@ -75,7 +75,8 @@ describe("登入後綁定", () => {
     reply = () => json(400, { error: "invalid_arguments" });
     expect(await bindPromoPost(async () => "tok")).toBe("done");
     expect(pendingPromoPost()).toBeNull();
-    for (const status of [500, 429, 401]) {
+    // 404：網站比伺服器先上線（或回退）時端點還不在，留著等伺服器到位
+    for (const status of [500, 429, 401, 404]) {
       rememberPromoPost("post-a", clicked);
       reply = () => json(status, {});
       expect(await bindPromoPost(async () => "tok")).toBe("retry");

@@ -33,7 +33,7 @@ const DAY = 86_400_000;
 const CLOCK_SLACK = 10 * 60_000;
 const WINDOW = 30 * DAY;
 
-export type PromoBindResult = { bound: true } | { bound: false; reason: 'unknown' | 'existing' | 'not_new' | 'excluded' };
+export type PromoBindResult = { bound: true; firstPlayed?: boolean } | { bound: false; reason: 'unknown' | 'existing' | 'not_new' | 'excluded' };
 
 export async function bindPromoAttribution(db: D1Database, member: { id: string; accountClass?: string }, body: Record<string, unknown>, now: number): Promise<PromoBindResult> {
   const { campaign, firstSeenAt } = body;
@@ -49,10 +49,12 @@ export async function bindPromoAttribution(db: D1Database, member: { id: string;
   if (!row) return { bound: false, reason: 'unknown' };
   if (row.existing) return { bound: false, reason: 'existing' };
   if (row.registered_at < firstSeenAt - CLOCK_SLACK) return { bound: false, reason: 'not_new' };
-  // 主鍵是成員：並發的兩次只有一次寫得進去
-  const res = await db.prepare('INSERT OR IGNORE INTO promo_attributions (member_id, campaign, first_seen_at, registered_at, created_at) VALUES (?, ?, ?, ?, ?)')
-    .bind(member.id, campaign, firstSeenAt, row.registered_at, now).run();
-  return res.meta.changes ? { bound: true } : { bound: false, reason: 'existing' };
+  // 主鍵是成員：並發的兩次只有一次寫得進去。綁定可能重試到首聊之後才送到：那時補上最早的開聊時間
+  const res = await db.prepare(`INSERT OR IGNORE INTO promo_attributions (member_id, campaign, first_seen_at, registered_at, first_play_at, created_at)
+     VALUES (?1, ?2, ?3, ?4, (SELECT MIN(created_at) FROM member_conversations WHERE member_id = ?1), ?5) RETURNING first_play_at`)
+    .bind(member.id, campaign, firstSeenAt, row.registered_at, now).all<{ first_play_at: number | null }>();
+  const inserted = res.results[0];
+  return inserted ? { bound: true, firstPlayed: inserted.first_play_at !== null } : { bound: false, reason: 'existing' };
 }
 
 export const promoRoutes = new Hono<{ Bindings: Env }>();
@@ -64,6 +66,12 @@ promoRoutes.post('/v1/me/promo-attribution', bodyLimit({ maxSize: 512, onError: 
   const now = Date.now();
   const result = await bindPromoAttribution(c.env.DB, member, body, now);
   await bumpOp(c.env.DB, 'promo_attribution', 'bind', result.bound ? 'bound' : result.reason);
-  if (result.bound) emit(c.env, c.executionCtx, { event: 'promo_signup', subject: body.campaign as string, outcome: 'ok', client: 'server' });
-  return c.json(result, 200, { 'Cache-Control': 'private, no-store' });
+  if (result.bound) {
+    emit(c.env, c.executionCtx, { event: 'promo_signup', subject: body.campaign as string, outcome: 'ok', client: 'server' });
+    if (result.firstPlayed) {
+      await bumpOp(c.env.DB, 'promo_attribution', 'first_play', 'recorded');
+      emit(c.env, c.executionCtx, { event: 'promo_first_play', subject: body.campaign as string, outcome: 'ok', client: 'server' });
+    }
+  }
+  return c.json(result.bound ? { bound: true } : result, 200, { 'Cache-Control': 'private, no-store' });
 });
