@@ -2,7 +2,6 @@
   "tier": "feature",
   "audience": "everyone",
   "try": "/me/presets",
-  "draft": true,
   "title": {
     "zh-Hant": "支援切換的預設可以在回覆偏好裡開關「用工具回覆」。",
     "zh-Hans": "支持切换的预设可以在回复偏好里开关「用工具回复」。",
