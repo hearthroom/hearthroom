@@ -20,7 +20,7 @@ import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from "vu
 import { useI18n } from "vue-i18n";
 import { ApiError, uploadImage } from "@/lib/api";
 import {
-  CONSTANT_CHAR_LIMIT, constantChars, deleteWorkshop, discardWorkshopChanges, fetchDraft, fetchMyWorkshops, publishChecklist,
+  constantChars, workshopResidentLimit, deleteWorkshop, discardWorkshopChanges, fetchDraft, fetchMyWorkshops, publishChecklist,
   publishState, publishWorkshop, saveDraft, setPlayerShareConsent, unpublishWorkshop,
   type DraftWrite, type MineItem, type MineStatus, type OwnerState, type WorkshopDraft,
 } from "@/lib/workshop";
@@ -297,14 +297,15 @@ const checklist = computed(() => {
 });
 const residentUsed = computed(() => (draft.value ? constantChars(draft.value.worldbook) : 0));
 // 跟伺服器同口徑（啟用＋常駐條目的字元數），存檔回的 constant_char_limit 不另外記：改少之後要立刻轉綠
-const residentOver = computed(() => residentUsed.value > CONSTANT_CHAR_LIMIT);
+const residentMax = computed(() => workshopResidentLimit(draft.value?.kind ?? "lorebook"));
+const residentOver = computed(() => residentUsed.value > residentMax.value);
 
 function publishError(err: unknown): string {
   const code = err instanceof ApiError ? err.code : "";
   switch (code) {
     case "rating_required": return t("workshop.editor.error.rating");
     case "content_required": return t(isDlc.value ? "workshop.editor.error.content" : "workshop.editor.error.contentLore");
-    case "constant_char_limit": return t("workshop.editor.resident.over", { max: new Intl.NumberFormat(String(locale.value)).format(CONSTANT_CHAR_LIMIT) });
+    case "constant_char_limit": return t("workshop.editor.resident.over", { max: numberFmt.value.format(residentMax.value) });
     case "workshop_closed": workshopClosed.value = true; return t("workshop.editor.error.workshopClosed");
   }
   return message(err, "state.actionFailed");
@@ -634,13 +635,13 @@ watch(error, async (text) => {
             <div class="panel ws-ed__resident" :class="{ 'is-over': residentOver }" data-resident>
               <div class="ws-ed__resident-row">
                 <h3>{{ $t("workshop.editor.resident.title") }}</h3>
-                <span class="ws-ed__resident-n" data-resident-count>{{ $t("workshop.editor.resident.meter", { used: numberFmt.format(residentUsed), max: numberFmt.format(CONSTANT_CHAR_LIMIT) }) }}</span>
+                <span class="ws-ed__resident-n" data-resident-count>{{ $t("workshop.editor.resident.meter", { used: numberFmt.format(residentUsed), max: numberFmt.format(residentMax) }) }}</span>
               </div>
               <div class="ws-ed__meter" role="meter" :aria-label="$t('workshop.editor.resident.title')" aria-valuemin="0"
-                   :aria-valuemax="CONSTANT_CHAR_LIMIT" :aria-valuenow="residentUsed">
-                <span :style="{ width: `${Math.min(100, (residentUsed / CONSTANT_CHAR_LIMIT) * 100)}%` }" />
+                   :aria-valuemax="residentMax" :aria-valuenow="residentUsed">
+                <span :style="{ width: `${Math.min(100, (residentUsed / residentMax) * 100)}%` }" />
               </div>
-              <p class="subtle ws-text">{{ $t("workshop.editor.resident.hint", { max: numberFmt.format(CONSTANT_CHAR_LIMIT) }) }}</p>
+              <p class="subtle ws-text">{{ $t("workshop.editor.resident.hint", { max: numberFmt.format(residentMax) }) }}</p>
             </div>
             <p v-if="residentOver" class="notice notice--error ws-text" role="alert" data-resident-over>{{ $t("workshop.editor.resident.over") }}</p>
             <!-- 擴充的世界書是草稿內嵌的條目，沒有「綁一本書」這回事：以已綁定、書名鎖住的樣子沿用，只編條目 -->

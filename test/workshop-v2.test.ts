@@ -129,6 +129,30 @@ it('quarantines one invalid publication without blocking a later consent closure
  const metrics=await (await import('../src/ops-metrics')).opsMetrics(env.DB);expect(metrics).toContain('hearthroom_workshop_operations_total{operation="sync",outcome="rejected"} 1');
 });
 
+it.each([
+  ['dlc', 74001, 5000, true],
+  ['dlc', 74001, 5001, false],
+  ['lorebook', 74002, 1500, true],
+  ['lorebook', 74002, 1501, false],
+  ['dlc', 74002, 5000, false],
+] as const)('validates %s publication from %i with %i resident characters', async (kind, authorPublicNo, chars, accepted) => {
+  await openPolicy();
+  const base = publication();
+  const receipt = {
+    ...base, kind, authorPublicNo, residentChars: chars,
+    sealed: { ...base.sealed, worldbook: [{ id: 'lore', content: '🌙'.repeat(chars), enabled: true, mode: 'constant' }] },
+  };
+  const { applyWorkshopPublication } = await import('../src/workshop-publication');
+  const result = applyWorkshopPublication(env, 'harbor', receipt as Parameters<typeof applyWorkshopPublication>[2]);
+  if (!accepted) {
+    await expect(result).rejects.toMatchObject({ message: 'invalid_publication' });
+    return;
+  }
+  await result;
+  expect(await env.DB.prepare('SELECT resident_chars FROM workshops WHERE id=?').bind(receipt.workshopId).first())
+    .toMatchObject({ resident_chars: chars });
+});
+
 it('keeps DLC before player extensions on the first page',async()=>{
  await openPolicy();const {applyWorkshopPublication}=await import('../src/workshop-publication');
  for(let i=0;i<21;i++){const p=publication();await applyWorkshopPublication(env,'harbor',p as any);await env.DB.prepare('UPDATE workshops SET install_count=100 WHERE id=?').bind(p.workshopId).run()}

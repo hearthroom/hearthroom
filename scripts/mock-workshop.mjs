@@ -17,6 +17,8 @@
  *   error       工坊列表回 500
  *   big         原卡常駐很大（開始對話會放不下）
  */
+import { workshopResidentLimit } from "../shared/workshop-resident.mjs";
+
 const now = Date.now();
 const DAY = 86400e3;
 const TIERS = [{ tier: 1, tokens: 16000 }, { tier: 2, tokens: 32000 }, { tier: 3, tokens: 64000 }, { tier: 4, tokens: 128000 }];
@@ -104,7 +106,7 @@ function mineItems() {
 }
 function emptyDraft(id, roleId) {
   return {
-    workshopId: id, revision: 1, card: { roleId, cardId: "c-demo", num: 100001, name: "霧港燈塔", ownerIsMe: owner() },
+    workshopId: id, revision: 1, kind: owner() ? "dlc" : "lorebook", card: { roleId, cardId: "c-demo", num: 100001, name: "霧港燈塔", ownerIsMe: owner() },
     name: "", summary: "", readme: "", coverUrl: "", rating: null, ratingAnswers: null, worldbook: [],
     rules: { version: 1, rules: [], statusbar: "", lowered: false }, opening: { mode: "greeting", welcome: "", alternates: [], prologue: [], openingPage: "" },
     updateNote: "", published: null, changedSincePublish: false,
@@ -236,12 +238,13 @@ export async function handleWorkshop({ m, path, url, body, req, json, res }) {
   if (path === "/open/v1/workshop/draft/save") {
     const d = draftFor(body.workshopId);
     if (body.expectedRevision !== d.revision) return json(res, 409, { error: "draft_stale" }), true;
-    const { workshopId, expectedRevision, idempotencyKey, ...fields } = body;
+    const { workshopId, expectedRevision, idempotencyKey, kind, ...fields } = body;
     Object.assign(d, fields, { revision: d.revision + 1, changedSincePublish: !!d.published });
     const item = mineItems().find((x) => x.id === workshopId);
     if (item) { item.name = d.name; item.coverUrl = d.coverUrl; if (item.status === "live") item.status = "live_changed"; }
     const chars = d.worldbook.filter((e) => e.isEnabled && e.isConstant).reduce((n, e) => n + Array.from(e.content ?? "").length, 0);
-    return json(res, 200, { revision: d.revision, errors: chars > 1500 ? [{ code: "constant_char_limit", actual: chars, max: 1500, unit: "unicode_code_points" }] : [] }), true;
+    const max = workshopResidentLimit(d.kind);
+    return json(res, 200, { revision: d.revision, errors: chars > max ? [{ code: "constant_char_limit", actual: chars, max, unit: "chars" }] : [] }), true;
   }
   if (path === "/open/v1/workshop/delete") { drafts.delete(body.workshopId); mine = mineItems().filter((x) => x.id !== body.workshopId); return json(res, 200, { ok: true }), true; }
   return json(res, 404, { error: "not_found" }), true;

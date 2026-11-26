@@ -1,3 +1,4 @@
+import { MAX_PLAYER_CONSTANT_CHARS, workshopResidentLimit } from "../../../shared/workshop-resident.mjs";
 /**
  * 卡片工坊（擴充）的資料層：型別、請求與幾個畫面要用的純函式。
  *
@@ -258,8 +259,10 @@ export const deleteWorkshop = (workshopId: string, token: string) => upstream<un
 
 // ---- 純函式 ----------------------------------------------------------------
 
-/** 每個擴充的常駐上限（owner 2026-11-14：合計 1,500 字、不限條數；原卡不受限） */
-export const CONSTANT_CHAR_LIMIT = 1500;
+export { workshopResidentLimit };
+
+/** 私人玩家擴充的常駐字數上限。 */
+export const CONSTANT_CHAR_LIMIT = MAX_PLAYER_CONSTANT_CHARS;
 
 /** 常駐字數：啟用中且勾了常駐的條目內文，以 Unicode 字元計（跟伺服器的 rune 同口徑，不用 UTF-16 長度）。 */
 export function constantChars(entries: readonly Pick<WorldbookEntryDraft, "content" | "isEnabled" | "isConstant">[]): number {
@@ -323,7 +326,7 @@ export function publishChecklist(d: Pick<WorkshopDraft, "kind" | "name" | "summa
     { key: "basics", ok: !!d.name.trim() && !!d.summary.trim() },
     { key: "rating", ok: !!d.rating },
     { key: "content", ok: hasLore || hasRule || hasOpening },
-    { key: "constant", ok: constantChars(d.worldbook) <= CONSTANT_CHAR_LIMIT },
+    { key: "constant", ok: constantChars(d.worldbook) <= workshopResidentLimit(d.kind) },
   ];
 }
 /** 更新說明選填，只限長度（跟卡片的更新說明同一個上限，伺服器另驗） */

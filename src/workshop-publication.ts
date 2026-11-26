@@ -1,5 +1,6 @@
 import type { Context } from 'hono';
 import { isRating } from '../shared/content-rating';
+import { workshopResidentLimit } from '../shared/workshop-resident.mjs';
 import { bearerOf } from './community-admin';
 import { requireMember, type Member } from './members';
 import { bumpOp } from './ops-metrics';
@@ -25,13 +26,14 @@ function publicationShape(p: WorkshopPublicationReceipt) {
         if (!record(e))
             throw new HttpError(502, 'invalid_publication');
         const enabled = (e.isEnabled ?? e.enabled ?? false) === true;
-        if (enabled && text(e.content)) {
-            lore++;
+        if (enabled && typeof e.content === 'string') {
+            if (text(e.content))
+                lore++;
             if ((e.isConstant ?? (e.mode === 'constant')) === true)
-                resident += [...String(e.content)].length;
+                resident += [...e.content].length;
         }
     }
-    if (resident !== p.residentChars || resident > 1500)
+    if (resident !== p.residentChars || resident > workshopResidentLimit(expected))
         throw new HttpError(502, 'invalid_publication');
     const rules = record(p.sealed.rules) ? p.sealed.rules : {};
     const list = Array.isArray(rules.rules) ? rules.rules : [];

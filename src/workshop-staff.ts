@@ -6,7 +6,8 @@ import { bumpOp } from './ops-metrics';
 import type { ProviderId } from './providers';
 import { communityAdmin, humanOnly, staff } from './staff';
 import { HttpError, type Env } from './types';
-import { MAX_WORKSHOP_CONSTANT_CHARS, memberOwnsExternal, type WorkshopRow } from './workshop';
+import { memberOwnsExternal, type WorkshopRow } from './workshop';
+import { workshopResidentLimit } from '../shared/workshop-resident.mjs';
 import { workshopUpstream } from './workshop-gateway';
 type Ctx = Pick<Context<{
     Bindings: Env;
@@ -106,6 +107,7 @@ function buildWorkshopContentObject(input: {
     previousVersionNo: number;
     updateNote: string | null;
     residentChars: number;
+    residentMax: number;
     sealed?: Record<string, unknown> | null;
     redacted?: boolean;
     lang?: string;
@@ -122,7 +124,7 @@ function buildWorkshopContentObject(input: {
             previousVersion: input.previousVersionNo > 0 ? `v${input.previousVersionNo}` : null,
             updateNote: input.updateNote,
             residentChars: input.residentChars,
-            residentMax: MAX_WORKSHOP_CONSTANT_CHARS,
+            residentMax: input.residentMax,
             entries: [],
             rules: [],
             openings: [],
@@ -261,7 +263,7 @@ function buildWorkshopContentObject(input: {
             ? sealed.updateNote
             : input.updateNote || null,
         residentChars: input.residentChars,
-        residentMax: MAX_WORKSHOP_CONSTANT_CHARS,
+        residentMax: input.residentMax,
         entries,
         rules,
         openings,
@@ -314,6 +316,7 @@ export async function getModerationWorkshopContent(c: Ctx, workshopId: string, l
         previousVersionNo: prevVerNo,
         updateNote: verNoteRow?.update_note ?? null,
         residentChars: releaseData.residentChars ?? ws.resident_chars ?? 0,
+        residentMax: workshopResidentLimit((releaseData.cardOwnerPublicNo ?? card?.author_num_id) === ws.author_num_id ? "dlc" : "lorebook"),
         sealed: releaseData.sealed,
         lang,
     });

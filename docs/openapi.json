@@ -21954,7 +21954,7 @@
           "Roles"
         ],
         "summary": "Save an extension draft",
-        "description": "Saves even over the resident limit and returns `{revision, errors[]}` (`constant_char_limit` with `actual`, `max: 1500`, `unit: unicode_code_points`). An original author can update their DLC package definitions, assignments and script permission in the same draft save.",
+        "description": "Saves even over the resident limit and returns `{revision, errors[]}`. A `constant_char_limit` issue reports `actual`, the applicable `max` (5000 for author DLC or 1500 for player extensions), and `unit: chars`. Counts are Unicode code points across enabled always-included Lorebook entries. An original author can update their DLC package definitions, assignments and script permission in the same draft save.",
         "x-unpublished": true,
         "security": [
           {

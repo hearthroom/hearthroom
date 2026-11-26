@@ -70,20 +70,23 @@ async function mountAt(path: string) {
 const button = (sel: string) => document.querySelector<HTMLButtonElement>(sel);
 function type(el: HTMLInputElement | HTMLTextAreaElement, value: string) { el.value = value; el.dispatchEvent(new Event("input")); }
 
-it("blocks publishing while resident lore is over the 1,500-character limit", async () => {
-  api.fetchDraft.mockResolvedValue(makeDraft({ worldbook: [entry("雪".repeat(1200)), entry("夜".repeat(301)), entry("不算".repeat(900), false)] }));
+it.each([["dlc", 5000, 5000], ["dlc", 5001, 5000], ["lorebook", 1501, 1500]] as const)("checks resident lore for %s with %i characters against %i", async (kind, used, max) => {
+  api.fetchDraft.mockResolvedValue(makeDraft({ kind, worldbook: [entry("雪".repeat(1200)), entry("夜".repeat(used - 1200)), entry("不算".repeat(900), false)] }));
   api.fetchMyWorkshops.mockResolvedValue({ items: [mineItem("draft")] });
   await mountAt("/mine/workshops/w1/edit?section=world");
-  expect(document.querySelector("[data-resident-count]")?.textContent).toContain("1,501 / 1,500");
-  expect(document.querySelector("[data-resident]")?.classList.contains("is-over")).toBe(true);
+  expect(document.querySelector("[data-resident-count]")?.textContent).toContain(`${used.toLocaleString("en")} / ${max.toLocaleString("en")}`);
+  expect(document.querySelector("[data-resident]")?.classList.contains("is-over")).toBe(used > max);
+  if (kind === "lorebook") return;
 
   await router.replace({ query: { section: "publish" } }); await settle();
-  expect(document.querySelector("[data-check=constant]")?.getAttribute("data-ok")).toBe("false");
+  expect(document.querySelector("[data-check=constant]")?.getAttribute("data-ok")).toBe(String(used <= max));
   const publish = button("[data-pub-publish]")!;
   expect(publish.textContent?.trim()).toBe(t("workshop.publish.action.publish"));
-  expect(publish.disabled).toBe(true);
-  publish.click(); await settle();
-  expect(api.publishWorkshop).not.toHaveBeenCalled();
+  expect(publish.disabled).toBe(used > max);
+  if (used > max) {
+    publish.click(); await settle();
+    expect(api.publishWorkshop).not.toHaveBeenCalled();
+  }
 });
 
 // 三種狀態：主按鈕與狀態字（publishState 用真的）

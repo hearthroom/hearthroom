@@ -62,7 +62,7 @@ describe("publishChecklist", () => {
   });
   it("blocks missing rating, content and over-limit resident text", () => {
     expect(failed(draft({ rating: null, worldbook: [] }))).toEqual(["rating", "content"]);
-    expect(failed(draft({ worldbook: [entry("一".repeat(CONSTANT_CHAR_LIMIT + 1))] }))).toEqual(["constant"]);
+    expect(failed(draft({ worldbook: [entry("一".repeat(5001))] }))).toEqual(["constant"]);
   });
   it("an author DLC counts regex or an opening as content", () => {
     expect(failed(draft({ worldbook: [], opening: { mode: "greeting", welcome: "雪停了", alternates: [], prologue: [], openingPage: "" } }))).toEqual([]);

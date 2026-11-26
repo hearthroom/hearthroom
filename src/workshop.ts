@@ -64,7 +64,6 @@ export interface WorkshopRow {
   comment_revision: string;
 }
 
-export const MAX_WORKSHOP_CONSTANT_CHARS = 1500;
 const WORKSHOP_PAGE_SIZE = 20;
 
 export function normalizeWireOwnerState(state: string | null | undefined): "visible" | "returned" | "hidden" {
