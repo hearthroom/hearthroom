@@ -28002,15 +28002,17 @@
             "enum": [
               "turns",
               "new_work_turns",
+              "new_work_main_turns",
               "comment",
               "rating",
               "share_open",
               "active_days",
+              "distinct_work_main_turns",
               "author_replies",
               "share_open_distinct",
               "daily_all"
             ],
-            "description": "Kind of task: `turns` (chat a number of turns), `new_work_turns` (chat a number of turns with a work first opened today that is not the caller's own), `comment` (comment on a work), `rating` (rate a work), `share_open` (someone else opened a link the caller shared), `active_days` (active on a number of days this week), `author_replies` (reply a number of times this week as the author of a work), `share_open_distinct` (a number of different people opened links the caller shared this week) or `daily_all` (every daily task claimed today). Map it to your own copy."
+            "description": "Kind of task: `turns` (chat a number of turns), `new_work_turns` (chat a number of turns with a work first opened today that is not the caller's own), `new_work_main_turns` (completed standard Send turns on a work the caller has never completed a Send on before today), `comment` (comment on a work), `rating` (rate a work), `share_open` (someone else opened a link the caller shared), `active_days` (active on a number of days this week), `distinct_work_main_turns` (a number of different works with at least `minTurnsPerWork` completed standard Send turns each this week), `author_replies` (reply a number of times this week as the author of a work), `share_open_distinct` (a number of different people opened links the caller shared this week) or `daily_all` (every daily task claimed today). Map it to your own copy."
           },
           "progress": {
             "type": "integer",
@@ -28049,6 +28051,11 @@
           "period": {
             "type": "string",
             "description": "Period this task counts in. Send it back unchanged when claiming."
+          },
+          "minTurnsPerWork": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Minimum distinct completed standard Send turns per work. Present on `distinct_work_main_turns` tasks."
           },
           "minTextUnits": {
             "type": "object",

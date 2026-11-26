@@ -39,7 +39,7 @@ const titleOf = (r: { task: RewardTask; view: TaskView }) => {
     n: r.task.target,
     cjkMin: r.task.minTextUnits?.cjk,
     latinMin: r.task.minTextUnits?.latin,
-    minTurns: 3, // Harbor rewards/tasks.go:235: fixed qualifying-work requirement.
+    minTurns: r.task.type === "comment" ? 3 : r.task.minTurnsPerWork,
   });
 };
 const rowTitle = (r: { task: RewardTask; view: TaskView }) => glueUnits(r.view.chest ? t(r.view.title, { n: r.task.target }) : titleOf(r));
@@ -62,7 +62,7 @@ defineExpose({ copied });
       <button v-if="claimable.length >= 2" type="button" class="btn btn--ghost btn--sm" @click="emit('claimAll', claimable)">{{ t("task.claimAll") }}</button>
     </header>
     <ul class="tasks__list">
-      <li v-for="r in rows" :key="r.task.id" class="task" :class="{ 'task--comment': r.task.type === 'comment', 'task--rating': r.task.type === 'rating', 'task--claimable': r.task.status === 'claimable', 'task--claimed': r.task.status === 'claimed' }">
+      <li v-for="r in rows" :key="r.task.id" class="task" :class="{ 'task--comment': r.task.type === 'comment', 'task--rating': r.task.type === 'rating', 'task--weekly-cards': r.task.type === 'distinct_work_main_turns', 'task--claimable': r.task.status === 'claimable', 'task--claimed': r.task.status === 'claimed' }">
         <span class="task__icon" aria-hidden="true">
           <svg v-if="r.view.chest" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="4" rx="1" /><path d="M5 12v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-8M12 8v13M12 8S10.5 3 8 3a2.5 2.5 0 0 0 0 5M12 8s1.5-5 4-5a2.5 2.5 0 0 1 0 5" /></svg>
           <svg v-else-if="r.view.action === 'copyLink'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" /></svg>
@@ -127,7 +127,7 @@ defineExpose({ copied });
 .task__title { font-size:14px; font-weight:600; line-height:1.4; text-wrap:balance; word-break:keep-all; overflow-wrap:anywhere; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
 .task__title :deep(*) { white-space:nowrap; }
 /* Both script thresholds and qualification rules must remain readable. */
-.task--comment .task__title, .task--rating .task__title { display:block; overflow:visible; -webkit-line-clamp:unset; }
+.task--comment .task__title, .task--rating .task__title, .task--weekly-cards .task__title { display:block; overflow:visible; -webkit-line-clamp:unset; }
 .task__progress { font-size:12px; color:var(--text-2); font-variant-numeric:tabular-nums; }
 .task__more { font-size:12px; justify-self:start; }
 .task__error { font-size:12px; padding:4px 8px; border-radius:var(--r-sm); }

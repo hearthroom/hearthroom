@@ -1,0 +1,19 @@
+{
+  "tier": "fix",
+  "audience": "everyone",
+  "title": {
+    "zh-Hant": "今日任務與本週任務已調整為體驗新卡與多張卡片對話。",
+    "zh-Hans": "今日任务与本周任务已调整为体验新卡与多张卡片对话。",
+    "en": "Daily and weekly tasks now focus on trying new cards and chatting across different cards.",
+    "ja": "デイリーミッションとウィークリーミッションを、新しいカードや複数のカードとの会話に更新しました。",
+    "ko": "일일 미션과 주간 미션이 새 카드 및 여러 카드와 대화하는 미션으로 바뀌었어요."
+  },
+  "body": {
+    "zh-Hant": "每日輪替改為與沒玩過的卡聊滿 3 回合，本週任務改為與 5 張不同的卡各聊滿 3 回合（本週自更新後起算），已領取的積分仍會保留。",
+    "zh-Hans": "每日轮替改为与没玩过的卡聊满 3 回合，本周任务改为与 5 张不同的卡各聊满 3 回合（本周自更新后起算），已领取的积分仍会保留。",
+    "en": "The daily rotation now rewards 3 turns on an unplayed card and the weekly task rewards 3 turns on each of 5 different cards (counted from this update for the current week), while any credits you already claimed remain yours.",
+    "ja": "日替わり枠は未プレイのカードで3ターン、週次枠は5枚の異なるカードで各3ターンの会話（今週分はこの更新後の会話から集計）に変わり、受け取り済みのポイントはそのまま残ります。",
+    "ko": "일일 교체 미션은 안 해 본 카드로 3턴 대화하기, 주간 미션은 서로 다른 카드 5장과 각 3턴 대화하기(이번 주는 업데이트 이후 대화부터 집계)로 바뀌며 이미 받은 포인트는 그대로 유지돼요."
+  },
+  "draft": true
+}

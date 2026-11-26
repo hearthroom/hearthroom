@@ -63,6 +63,7 @@ export interface RewardTask {
   period: string;
   /** 留言任務的字數門檻：主要用中日韓文字寫的看 cjk，其餘看 latin（契約 4eafb70） */
   minTextUnits?: { cjk: number; latin: number };
+  minTurnsPerWork?: number;
 }
 
 /** 新手七日的一階（契約 53298e1）。reward 裡 credits 與 chest 恰好一個。 */

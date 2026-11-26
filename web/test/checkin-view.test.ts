@@ -200,6 +200,14 @@ describe("任務列", () => {
     expect(taskView({ ...base, id: "w2", type: "share_open_distinct" })).toMatchObject({ title: "task.weeklyShare.title", progress: "task.progress.people" });
     expect(taskView({ ...base, id: "w3", type: "author_replies" })).toMatchObject({ title: "task.authorReply.title", progress: "task.progress.items", cta: "task.cta.reply" });
   });
+  it("shows the new-card and distinct weekly-card tasks with the right units", () => {
+    expect(taskView({ ...base, id: "rotation", type: "new_work_main_turns" })).toMatchObject({
+      title: "task.tryNew.title", progress: "task.progress.turns", cta: "task.cta.tryNew",
+    });
+    expect(taskView({ ...base, id: "replies3", type: "distinct_work_main_turns" })).toMatchObject({
+      title: "task.weeklyCards.title", progress: "task.progress.cards", cta: "task.cta.chat",
+    });
+  });
   it("不適用的不出現", () => {
     expect(taskView({ ...base, id: "w3", type: "author_replies", status: "unavailable" })).toBeNull();
   });
