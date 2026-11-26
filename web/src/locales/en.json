@@ -801,6 +801,7 @@
   "import.mmd.error.empty": "{name}: the file is empty.",
   "import.mmd.error.invalidJson": "{name}: broken JSON, could not read it.",
   "import.mmd.error.unknown": "{name}: doesn't look like a regex, worldbook, or definition file.",
+  "import.mmd.error.readFailed": "Couldn't read {name}. Select the file again.",
   "import.mmd.detailTooLong": "The definition is {n} characters, over this site's limit of {max}. Trim it after applying before you can save.",
   "import.landed.regex": "{n} regex rules",
   "export.title": "Export",

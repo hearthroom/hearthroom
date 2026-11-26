@@ -63,6 +63,7 @@ const dropCopy = computed(() => ({ tavern: "import.drop", fengyue: "import.fengy
 const formatsCopy = computed(() => ({ tavern: "import.formats", fengyue: "import.fengyue.formats", mmd: "import.mmd.formats" })[kind.value]);
 const dragging = ref(false);
 const error = ref("");
+const errorEl = ref<HTMLElement | null>(null);
 const preview = ref<ImportResult | null>(null);
 const raw = ref<TavernCard | null>(null);
 const rawImage = ref<Blob | null>(null);
@@ -148,35 +149,40 @@ async function addMmd(files: File[]) {
   error.value = "";
   const problems: string[] = [];
   for (const file of files) {
-    // 三件套模式裡丟進一張 PNG 卡：它不是設定 TXT。讀成文字會把整張圖的位元組塞進
-    // 「角色設定」——幾萬個亂碼字（2026-09-11 用戶回報）。切到酒館卡那條路照常讀。
-    if (isPng(new Uint8Array(await file.slice(0, 8).arrayBuffer()))) {
-      kind.value = "tavern";
-      await read(file);
-      return;
-    }
-    // 風月與日里的整卡匯出都是單一 JSON，不是三件套的一部分：切到第 3 格那條路
-    if (await readFengyueFile(file)) {
-      kind.value = "fengyue";
-      await read(file);
-      return;
-    }
-    if (await readRiliFile(file)) {
-      kind.value = "fengyue";
-      await read(file);
-      return;
-    }
+    let redirect: Kind | undefined;
     try {
+      // PNG 卡走酒館匯入，避免圖片位元組被當成設定文字。
+      if (isPng(new Uint8Array(await file.slice(0, 8).arrayBuffer()))) {
+        redirect = "tavern";
+      } else if (await readFengyueFile(file) || await readRiliFile(file)) {
+        // 風月與日里的整卡匯出走單檔 JSON。
+        redirect = "fengyue";
+      }
+      if (redirect) {
+        kind.value = redirect;
+        await read(file);
+        break;
+      }
       const classified = classifyMmdFile(file.name, await file.text());
       const previous = partFile(classified.part);
       mmdFiles.value = [...mmdFiles.value.filter((f) => f.part !== classified.part), classified];
       if (previous) problems.push(t("import.mmd.replaced", { name: previous.fileName, next: file.name }));
     } catch (err) {
+      if (redirect && kind.value === redirect) {
+        kind.value = "mmd";
+        await nextTick();
+      }
       const code = err instanceof Error ? err.message : "";
-      problems.push(t(MMD_ERRORS[code] ?? "import.mmd.error.unknown", { name: file.name }));
+      problems.push(t(MMD_ERRORS[code] ?? "import.mmd.error.readFailed", { name: file.name }));
     }
   }
-  error.value = problems.join("\n");
+  if (problems.length) {
+    if (error.value) problems.push(error.value);
+    error.value = problems.join("\n");
+    // 同批仍能出預覽，先讓手機看得到需要重選的檔案。
+    await nextTick();
+    errorEl.value?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+  }
 }
 
 function removeMmd(part: MmdPart) {
@@ -213,7 +219,9 @@ const stateCount = computed(() => {
 /** 讀到檔之後把報告捲進畫面：手機上編輯區只剩半屏，報告與「套用」按鈕原本落在畫面外。 */
 const reviewEl = ref<HTMLElement | null>(null);
 watch(current, (now, before) => {
-  if (now && !before) void nextTick(() => reviewEl.value?.scrollIntoView?.({ block: "start", behavior: "smooth" }));
+  if (now && !before) void nextTick(() => {
+    if (!errorEl.value) reviewEl.value?.scrollIntoView?.({ block: "start", behavior: "smooth" });
+  });
 });
 const ruleSelection = computed(() => current.value?.regex ? selectCardImportRules(current.value.regex) : null);
 const acceptedAsset = computed(() => {
@@ -313,7 +321,7 @@ onBeforeUnmount(() => { if (thumb.value) URL.revokeObjectURL(thumb.value); });
       <input ref="input" type="file" :multiple="kind === 'mmd'" :accept="acceptFor" class="sr-only" @change="onPick" />
     </div>
 
-    <p v-if="error" class="notice notice--error import__error" role="alert">{{ error }}</p>
+    <p v-if="error" ref="errorEl" class="notice notice--error import__error" role="alert">{{ error }}</p>
 
     <ul v-if="kind === 'mmd' && mmdFiles.length" class="parts">
       <li v-for="part in MMD_PARTS" :key="part" class="parts__row" :class="{ 'parts__row--on': partFile(part) }">

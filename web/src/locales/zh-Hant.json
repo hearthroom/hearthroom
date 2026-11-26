@@ -801,6 +801,7 @@
   "import.mmd.error.empty": "{name}：檔案是空的。",
   "import.mmd.error.invalidJson": "{name}：JSON 格式壞了，讀不出來。",
   "import.mmd.error.unknown": "{name}：看不出是正規表示式、世界書還是設定檔。",
+  "import.mmd.error.readFailed": "無法讀取 {name}。請重新選取這個檔案。",
   "import.mmd.detailTooLong": "角色設定 {n} 字，超過本站上限 {max} 字。套用後要先刪減才能儲存。",
   "import.landed.regex": "正規表示式規則 {n} 條",
   "export.title": "匯出",

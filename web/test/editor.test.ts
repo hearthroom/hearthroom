@@ -357,8 +357,8 @@ const byText = (text: string) =>
     (b) => (b.querySelector(".side__label") ?? b).textContent?.trim() === text,
   )!;
 
-async function pickFile(input: HTMLInputElement, file: File) {
-  Object.defineProperty(input, "files", { value: [file], configurable: true });
+async function pickFile(input: HTMLInputElement, ...files: File[]) {
+  Object.defineProperty(input, "files", { value: files, configurable: true });
   input.dispatchEvent(new Event("change"));
   await flush();
 }
@@ -2389,6 +2389,75 @@ describe("匯入 AI 風月卡 → 建立", () => {
     expect(asset).toMatchObject({ cardFormat: "fengyue", openingPage: "<div>TEST-INTRO-HTML</div>", pageMode: "sandbox", openingMode: "page" });
     expect(api.patchRoleWelcome).toHaveBeenCalledWith("r1", { roleWelcome: "", alternates: [], prologue: ["TEST-OPEN-A", "TEST-OPEN-B"] }, "tok");
     expect(order).toEqual(["asset", "welcome"]);
+  });
+});
+
+describe("MMD 三件套批次選檔", () => {
+  function unreadableFile() {
+    const unreadable = new File(["{}"], "unreadable.json");
+    vi.spyOn(unreadable, "slice").mockReturnValue({
+      arrayBuffer: () => Promise.reject(new DOMException("File is unavailable", "NotReadableError")),
+    } as Blob);
+    return unreadable;
+  }
+
+  it.each([false, true])("有無已填名稱（%s）皆可同時預覽兩個 JSON，缺 TXT 仍顯示槽位", async (hasName) => {
+    await mount("/create");
+    if (hasName) await type($("#f-name"), "手填名稱");
+    await type($("#f-detail"), "手填角色設定");
+    byText(i18n.global.t("import.kind.mmd")).click();
+    await flush();
+
+    const rules = new File([JSON.stringify({
+      regex_scripts: [{ scriptName: "Synthetic rule", findRegex: "a", replaceString: "b" }],
+    })], "rules.json");
+    const book = new File([JSON.stringify({
+      entries: { "0": { key: '["test"]', content: "Synthetic entry" } },
+    })], "book.json");
+    await pickFile($(".import input[type=file]"), ...(hasName ? [book, rules] : [rules, book]));
+
+    const rows = [...root.querySelectorAll(".import .parts__row")];
+    expect(rows[0].textContent).toContain("rules.json");
+    expect(rows[1].textContent).toContain("book.json");
+    expect(rows[2].textContent).toContain(i18n.global.t("import.mmd.pending"));
+    expect(root.querySelector(".import .review")).not.toBeNull();
+    expect($<HTMLInputElement>("#f-name").value).toBe(hasName ? "手填名稱" : "");
+    expect($<HTMLTextAreaElement>("#f-detail").value).toBe("手填角色設定");
+  });
+
+  it("有檔案無法讀取時指出檔名，並繼續讀取同批的正則和世界書", async () => {
+    await mount("/create");
+    byText(i18n.global.t("import.kind.mmd")).click();
+    await flush();
+    const unreadable = unreadableFile();
+    const rules = new File([JSON.stringify([{ name: "Synthetic rule", regex: "a", content: "b" }])], "rules.json");
+    const book = new File([JSON.stringify({
+      entries: { "0": { key: '["test"]', content: "Synthetic entry" } },
+    })], "book.json");
+    const scroll = vi.spyOn(HTMLElement.prototype, "scrollIntoView");
+    await pickFile($(".import input[type=file]"), unreadable, book, rules);
+
+    expect(root.querySelector(".import [role=alert]")?.textContent).toBe(i18n.global.t("import.mmd.error.readFailed", { name: unreadable.name }));
+    const rows = [...root.querySelectorAll(".import .parts__row--on")].map(row => row.textContent);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toContain("rules.json");
+    expect(rows[1]).toContain("book.json");
+    expect(root.querySelector(".import .review")).not.toBeNull();
+    expect(scroll.mock.contexts.at(-1)).toBe(root.querySelector(".import__error"));
+  });
+
+  it("同批轉往日里整卡預覽時保留先前的讀檔錯誤", async () => {
+    const cases = (await import("./fixtures/rili-cases.json")).default.cases;
+    await mount("/create");
+    byText(i18n.global.t("import.kind.mmd")).click();
+    await flush();
+    const unreadable = unreadableFile();
+    const rili = new File([JSON.stringify(cases[0].input)], "rili.json");
+    await pickFile($(".import input[type=file]"), unreadable, rili);
+
+    expect($(".import .seg__item--on").textContent?.trim()).toBe(i18n.global.t("import.kind.json"));
+    expect($(".import .review").textContent).toContain(i18n.global.t("import.kind.rili"));
+    expect(root.querySelector(".import__error")?.textContent).toBe(i18n.global.t("import.mmd.error.readFailed", { name: unreadable.name }));
   });
 });
 
