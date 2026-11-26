@@ -481,9 +481,10 @@ const pageDoc = computed(() => openingSrcdoc(props.openingPage));
   background: var(--accent-tint); color: var(--accent-text); font-size: 12px; font-weight: 500; white-space: nowrap;
 }
 .opening__tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--s-2); }
-.opening__tools .btn { position: relative; }
-/* 30px 高的小按鈕，點擊區補到 44px */
-.opening__tools .btn::after, .ofile__acts .btn::after { content: ""; position: absolute; inset: -7px 0; }
+.opening__tools .btn, .ofile__acts .btn, .ofile__progress .btn, .opening__preview-load .btn { position: relative; }
+/* 偽元素從邊框內緣起算，多補 1px 才能讓 30px 按鈕的點擊區達到 44px。 */
+.opening__tools .btn::after, .ofile__acts .btn::after,
+.ofile__progress .btn::after, .opening__preview-load .btn::after { content: ""; position: absolute; inset: -8px 0; }
 .opening__file-notice { margin: 0; }
 .opening__large { margin: 0; }
 .ofile {
@@ -500,7 +501,6 @@ const pageDoc = computed(() => openingSrcdoc(props.openingPage));
 }
 .ofile__desc { margin: 0; font-size: 13px; line-height: 1.55; color: var(--text-2); }
 .ofile__acts { display: flex; flex-wrap: wrap; gap: var(--s-2); }
-.ofile__acts .btn { position: relative; }
 .ofile__progress { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-3); }
 .ofile__track { flex: 1 1 10em; height: 6px; border-radius: var(--r-pill); background: var(--surface); overflow: hidden; box-shadow: inset 0 0 0 1px var(--line); }
 .ofile__bar { height: 100%; background: var(--accent); transition: width var(--dur) var(--ease); }
