@@ -2,7 +2,6 @@
   "tier": "feature",
   "audience": "everyone",
   "try": "/me/presets",
-  "draft": true,
   "title": {
     "zh-Hant": "公開預設時可以選「只供使用」，其他人能套用，但看不到條目內容。",
     "zh-Hans": "公开预设时可以选「只供使用」，其他人能应用，但看不到条目内容。",
