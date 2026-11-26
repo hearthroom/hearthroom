@@ -14,6 +14,5 @@
     "en": "The daily rotation now rewards 3 turns on an unplayed card and the weekly task rewards 3 turns on each of 5 different cards (counted from this update for the current week), while any credits you already claimed remain yours.",
     "ja": "日替わり枠は未プレイのカードで3ターン、週次枠は5枚の異なるカードで各3ターンの会話（今週分はこの更新後の会話から集計）に変わり、受け取り済みのポイントはそのまま残ります。",
     "ko": "일일 교체 미션은 안 해 본 카드로 3턴 대화하기, 주간 미션은 서로 다른 카드 5장과 각 3턴 대화하기(이번 주는 업데이트 이후 대화부터 집계)로 바뀌며 이미 받은 포인트는 그대로 유지돼요."
-  },
-  "draft": true
+  }
 }
