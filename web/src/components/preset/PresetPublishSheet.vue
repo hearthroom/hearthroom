@@ -5,7 +5,7 @@
  * 上游記下當時顯示的聲明版本（declarationVersion）。
  *
  * 內容公開方式（公開內容／只供使用）放在說明句之後、用途之前，不預選（UI 小稿 2026-11-26：公開內容之後收不回，
- * 不替作者預選比較不可逆的那一邊）。匯入的預設只能公開內容：一打開就停用「只供使用」並自動選公開內容。
+ * 不替作者預選比較不可逆的那一邊）。
  * 比對到他人內容是送出後才知道：彈層不關，停用「只供使用」、清掉選擇，讓作者自己改選。
  * 多了這一組，手機上彈層會超過一屏，在彈層內捲動。
  * 上游的「只供使用」開關關著（或舊上游沒說）時整組不出現，照原本的公開流程送公開內容。
@@ -34,13 +34,10 @@ const busy = ref(false);
 const error = ref("");
 watch([purpose, tested], () => { error.value = ""; }, { deep: true });
 
-const importedOnly = props.preset.sourceKind === "imported";
-/** 開關開著才給選：這份可以只供使用，或是匯入的（照小稿停用並說原因） */
-const offerHidden = props.hiddenEnabled === true && (props.preset.contentHiddenAvailable === true || importedOnly);
+const offerHidden = props.hiddenEnabled === true && props.preset.contentHiddenAvailable === true;
 /** 送出後上游說「只供使用」不能用（比對到他人內容）：記下原因，選項停用到彈層關掉 */
-const hiddenRefused = ref<"" | "imported" | "overlap">("");
-const hiddenBlocked = computed(() => importedOnly ? "imported" : hiddenRefused.value);
-const content = ref<ContentVisibility | "">(offerHidden && !importedOnly ? "" : "open");
+const hiddenBlocked = ref(false);
+const content = ref<ContentVisibility | "">(offerHidden ? "" : "open");
 // 被拒時程式把選擇清空，那時錯誤要留著；只有作者自己選了才清
 watch(content, (v) => { if (v) error.value = ""; });
 const noteId = `publish-content-note-${Math.random().toString(36).slice(2)}`;
@@ -60,8 +57,7 @@ async function submit() {
   const input = {
     purpose: purpose.value, expectedVersion: props.preset.version, declaration: props.declaration, attribution: attribution.value.trim().slice(0, ATTRIBUTION_MAX),
     ...(changedModels.value ? { recommendedModels: tested.value } : {}),
-    // 上游有回模式就一律明送（沒給選時是公開內容，之前只供使用、改回私人的也照公開內容）；舊上游不收這個欄位，不送
-    // 沒有提供二選一時，原本只供使用的不送模式：伺服器維持只供使用（開關關著就拒絕），不會在作者不知情下公開內容。
+    // 舊上游和未提供二選一的只供使用預設，交由伺服器沿用原模式。
     ...(offerHidden || props.preset.contentVisibility === "open" ? { contentVisibility: content.value } : {}),
   };
   const action = `publish:${props.preset.id}:${JSON.stringify(input)}`;
@@ -71,8 +67,8 @@ async function submit() {
     emit("done", receipt);
   } catch (err) {
     if (!resultUnknown(err)) ops.done(action);
-    if (err instanceof ApiError && (err.reason === "preset_hidden_overlap" || err.reason === "preset_hidden_imported")) {
-      hiddenRefused.value = err.reason === "preset_hidden_imported" ? "imported" : "overlap";
+    if (err instanceof ApiError && err.reason === "preset_hidden_overlap") {
+      hiddenBlocked.value = true;
       content.value = "";
     }
     error.value = publishErrorText(err);
@@ -96,12 +92,12 @@ async function submit() {
       </label>
       <label class="publish__choice publish__choice--top" :class="{ 'publish__choice--off': hiddenBlocked }">
         <input
-          v-model="content" type="radio" name="publish-content" value="hidden" :disabled="!!hiddenBlocked"
+          v-model="content" type="radio" name="publish-content" value="hidden" :disabled="hiddenBlocked"
           :aria-describedby="hiddenBlocked || content === 'hidden' ? noteId : undefined" data-testid="publish-content-hidden"
         />
         <span>
           <strong>{{ $t("preset.share.contentVisibility.hidden") }}</strong><span class="publish__hint">{{ $t("preset.share.contentVisibility.hidden.hint") }}</span>
-          <span v-if="hiddenBlocked" :id="noteId" class="publish__note" data-testid="publish-hidden-why">{{ $t(hiddenBlocked === "imported" ? "preset.share.contentVisibility.disabledImported" : "preset.share.contentVisibility.disabledOverlap") }}</span>
+          <span v-if="hiddenBlocked" :id="noteId" class="publish__note" data-testid="publish-hidden-why">{{ $t("preset.share.contentVisibility.disabledOverlap") }}</span>
           <span v-else-if="content === 'hidden'" :id="noteId" class="publish__note" data-testid="publish-limit">{{ $t("preset.share.contentVisibility.limitNote") }}</span>
         </span>
       </label>

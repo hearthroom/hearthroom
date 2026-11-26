@@ -25,7 +25,7 @@
  * 「套用到某張卡」（mode=preset）會把那份記進「喜愛與用過」的用過。
  *
  * 只供使用（2026-11-26-preset-private-share）：預設庫的「夜讀筆記」是只供使用，別人讀詳情拿到空內容與 contentHidden。
- * 公開時 contentVisibility=hidden：匯入的回 422 preset_hidden_imported；名稱含「撞」的當成比對到他人內容，回 422 preset_hidden_overlap。
+ * 公開時 contentVisibility=hidden：名稱含「撞」的當成比對到他人內容，回 422 preset_hidden_overlap。
  *   hiddenOff 「只供使用」開關關著：清單 contentHiddenEnabled=false，每份 contentHiddenAvailable=false，公開 hidden 回 422 preset_hidden_disabled
  */
 import crypto from "node:crypto";
@@ -135,7 +135,7 @@ export function validateNative(doc) {
 
 function summary(p) {
   const head = revisions.get(p.headRevisionId);
-  return { purpose: "", visibility: "private", contentVisibility: "open", publishedAt: null, attribution: "", removed: false, ...p, contentHiddenAvailable: scenario !== "hiddenOff" && p.sourceKind !== "imported", allowedActions: p.bindingCount > 0 ? ["archive"] : ["delete"], recommendedModels: head?.recommendedModels ?? [] };
+  return { purpose: "", visibility: "private", contentVisibility: "open", publishedAt: null, attribution: "", removed: false, ...p, contentHiddenAvailable: scenario !== "hiddenOff", allowedActions: p.bindingCount > 0 ? ["archive"] : ["delete"], recommendedModels: head?.recommendedModels ?? [] };
 }
 function addRevision(preset, title, document, recommendedModels) {
   const revisionId = uuid();
@@ -278,7 +278,6 @@ export async function handlePresets({ m, path, url, body, raw, req, json, res })
       const content = body.contentVisibility ?? p.contentVisibility ?? "open";
       if (!["open", "hidden"].includes(content)) return json(res, 400, { error: "invalid_request" }), true;
       if (content === "hidden" && p.contentVisibility !== "hidden" && scenario === "hiddenOff") return json(res, 422, { error: "preset_invalid", reason: "preset_hidden_disabled" }), true;
-      if (content === "hidden" && p.sourceKind === "imported") return json(res, 422, { error: "preset_invalid", reason: "preset_hidden_imported" }), true;
       if (content === "hidden" && p.title.includes("撞")) return json(res, 422, { error: "preset_invalid", reason: "preset_hidden_overlap" }), true;
       Object.assign(p, { purpose: body.purpose, visibility: "public", contentVisibility: content, publishedAt: p.publishedAt ?? now(), attribution: body.attribution ?? "" });
       if (body.recommendedModels) revisions.get(p.headRevisionId).recommendedModels = body.recommendedModels;

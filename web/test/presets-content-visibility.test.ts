@@ -138,18 +138,18 @@ describe("公開彈層：內容公開方式", () => {
     expect(mocks.publish.mock.calls[0]![2]).toMatchObject({ contentVisibility: "open" });
   });
 
-  it("匯入的預設：只供使用一打開就停用並寫原因，自動選公開內容", async () => {
-    mocks.list.mockResolvedValue(mineList([summary({ sourceKind: "imported", contentHiddenAvailable: false })]));
+  it("匯入的預設可選兩種方式，開啟時不預選", async () => {
+    mocks.list.mockResolvedValue(mineList([summary({ sourceKind: "imported" })]));
     mocks.publish.mockResolvedValue({ presetId: "p1", revisionId: "r2", version: 3 });
     await mount("/me/presets");
     await openPublish();
-    expect(radio("hidden").disabled).toBe(true);
-    expect(radio("open").checked).toBe(true);
-    const why = body$("[data-testid=publish-hidden-why]");
-    expect(why.textContent).toBe(t("preset.share.contentVisibility.disabledImported"));
-    expect(radio("hidden").getAttribute("aria-describedby")).toContain(why.id);
+    expect(radio("hidden").disabled).toBe(false);
+    expect(radio("hidden").checked).toBe(false);
+    expect(radio("open").checked).toBe(false);
+    radio("hidden").click(); await flush();
+    expect(body$("[data-testid=publish-limit]")).not.toBeNull();
     body$<HTMLButtonElement>("[data-testid=publish-confirm]").click(); await flush();
-    expect(mocks.publish.mock.calls[0]![2]).toMatchObject({ contentVisibility: "open" });
+    expect(mocks.publish.mock.calls[0]![2]).toMatchObject({ contentVisibility: "hidden" });
   });
 
   it("比對到他人內容被拒：彈層不關，一行錯誤、只供使用停用寫原因、清掉選擇；改選公開內容再送", async () => {
@@ -389,13 +389,17 @@ describe("我的預設：顯示與切換模式", () => {
     expect($("[data-testid=preset-to-open]")).toBeNull();
   });
 
-  it("匯入的、被下架的、私人的都沒有切換這一項", async () => {
-    mocks.list.mockResolvedValue(mineList([summary({ visibility: "public", sourceKind: "imported", contentHiddenAvailable: false })]));
+  it("已公開的匯入預設可以改成只供使用", async () => {
+    mocks.list.mockResolvedValue(mineList([summary({ visibility: "public", sourceKind: "imported" })]));
+    mocks.publish.mockResolvedValue({ presetId: "p1", revisionId: "r2", version: 3 });
     await mount("/me/presets");
     await openMenu();
-    expect($("[data-testid=preset-to-hidden]")).toBeNull();
-    expect($("[data-testid=preset-to-open]")).toBeNull();
-    app!.unmount(); root.remove();
+    $("[data-testid=preset-to-hidden]").click(); await flush();
+    dialogButton("[data-confirm]").click(); await flush();
+    expect(mocks.publish.mock.calls[0]![2]).toMatchObject({ contentVisibility: "hidden" });
+  });
+
+  it("被下架的、私人的都沒有切換這一項", async () => {
     mocks.list.mockResolvedValue(mineList([summary({ visibility: "public", removed: true }), summary({ id: "p2" })]));
     await mount("/me/presets");
     for (const r of $$("[data-testid=preset-row]")) {
