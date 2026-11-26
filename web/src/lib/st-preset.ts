@@ -72,6 +72,18 @@ export function isPromptPack(st: StDocument): boolean {
   return isObject(st.data) && "type" in st && "version" in st;
 }
 
+const toolReplyToggleableKey = "suki_tool_reply_toggleable";
+
+export function toolReplyToggleable(st: StDocument): boolean {
+  const root = isPromptPack(st) ? (st.data as Record<string, unknown>) : st;
+  return root[toolReplyToggleableKey] === true;
+}
+
+export function setToolReplyToggleable(st: StDocument, enabled: boolean): void {
+  const root = isPromptPack(st) ? (st.data as Record<string, unknown>) : st;
+  root[toolReplyToggleableKey] = enabled;
+}
+
 function promptsOf(st: StDocument): StPrompt[] {
   const holder = isPromptPack(st) ? (st.data as Record<string, unknown>) : st;
   if (!Array.isArray(holder.prompts)) holder.prompts = [];
@@ -445,8 +457,8 @@ export function newDocument(mainName: string): PresetDocument {
 }
 
 /**
- * Harbor 對本站寫的預設可執行的巨集只有 {{char}}、{{user}}、{{lastUserMessage}}，字一模一樣、括號成對
- * （對照 server 的 executableMacros）。其他寫法 analyze 會標「不支援」，存檔整份被拒。
+ * Harbor 對本站寫的預設可執行的巨集有 {{char}}、{{user}}、{{lastUserMessage}}、{{toolReplySlot}}，字一模一樣、括號成對
+ * （對照 server 的 ValidateNative）。其他寫法 analyze 會標「不支援」，存檔整份被拒。
  */
 export function nativeMacrosValid(text: string): boolean {
   let s = text;
@@ -456,7 +468,7 @@ export function nativeMacrosValid(text: string): boolean {
     if (s.slice(0, i).includes("}}")) return false;
     const j = s.indexOf("}}", i + 2);
     if (j < 0) return false;
-    if (!["char", "user", "lastUserMessage"].includes(s.slice(i + 2, j))) return false;
+    if (!["char", "user", "lastUserMessage", "toolReplySlot"].includes(s.slice(i + 2, j))) return false;
     s = s.slice(j + 2);
   }
 }

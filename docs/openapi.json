@@ -12366,6 +12366,18 @@
                     "type": "object",
                     "additionalProperties": false,
                     "properties": {
+                      "toolReply": {
+                        "description": "A conversation's choice for the current configurable preset. on uses the reply tool, off uses normal streaming, and null restores the preset's initial choice. This field is separate from streaming preferences.",
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": ["on", "off"]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
                       "agency": {
                         "anyOf": [
                           {
@@ -33539,13 +33551,23 @@
               "effective",
               "status"
             ],
-            "description": "Whether the bound preset's tool reply applies. Only `active` turns streaming off in `effective`; `overrides` and `defaults` keep the player's own choice.",
+            "description": "The tool-reply choice and whether it is effective for the current model and mode. A configurable tool reply selects delivery independently of the saved streaming preference.",
             "properties": {
               "enabled": {
                 "type": "boolean"
               },
               "effective": {
                 "type": "boolean"
+              },
+              "toggleable": {
+                "type": "boolean"
+              },
+              "defaultEnabled": {
+                "type": "boolean"
+              },
+              "override": {
+                "type": "string",
+                "enum": ["on", "off"]
               },
               "status": {
                 "enum": [

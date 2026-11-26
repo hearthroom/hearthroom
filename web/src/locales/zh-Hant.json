@@ -4229,6 +4229,8 @@
   "preset.reason.entry.relocated_before_history": "這條在酒館插在較早的對話記錄裡；{site}放在對話記錄之前，內容照常使用。",
   "preset.reason.entry.dynamic_after_history": "這條用到玩家這一輪的輸入；{site}放在對話記錄之後，內容照常使用。",
   "preset.toolReply.label": "用工具回覆",
+  "preset.toolReply.playerToggle.label": "允許玩家在對話中自行開關",
+  "preset.toolReply.playerToggle.hint": "預設開關狀態仍由上方「用工具回覆」決定；可在對話紀錄之後的條目放入 {slot}。",
   "preset.toolReply.hint": "回覆會整段生成後才顯示。只在支援的模型上生效，其他模型照常回覆。",
   "preset.toolReply.detected": "這份預設原本靠酒館的擴充功能用工具回覆，{site}沒有那個工具。想用的話，打開「用工具回覆」，改用{site}自己的回覆工具，效果可能和原本不同。",
   "preset.reason.field.external_tools_not_executed": "擴充功能裡的工具不會執行。",

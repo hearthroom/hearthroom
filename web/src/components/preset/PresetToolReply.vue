@@ -1,14 +1,20 @@
 <script setup lang="ts">
 /**
- * 「用工具回覆」：玩家明確打開才用綺夢社自己的回覆工具（整段生成後才顯示）。匯入時一律關著；
- * 來源預設靠酒館擴充功能用工具回覆時只提示（打開後就收起），不替玩家打開。匯入報告與編輯頁共用。
+ * 「用工具回覆」是套用預設的初始狀態。編輯頁另可設定玩家能否在對話中切換。
  * 打開後列出工具格式，讓玩家能在提示詞裡要求 AI 照這個格式呼叫；格式只從上游來，這裡不另寫一份。
  */
 import { computed, onBeforeUnmount, ref } from "vue";
 import type { ReplyTool } from "@/lib/presets";
 
-const props = defineProps<{ enabled: boolean; detected?: boolean; disabled?: boolean; tool?: ReplyTool }>();
-const emit = defineEmits<{ change: [value: boolean] }>();
+const props = withDefaults(defineProps<{
+  enabled: boolean;
+  toggleable?: boolean;
+  detected?: boolean;
+  disabled?: boolean;
+  tool?: ReplyTool;
+}>(), { toggleable: undefined });
+const emit = defineEmits<{ change: [value: boolean]; "change-toggleable": [value: boolean] }>();
+const toolReplySlot = "{{toolReplySlot}}";
 const id = `tool-reply-${Math.random().toString(36).slice(2)}`;
 
 const params = computed(() => Object.entries(props.tool?.parameters.properties ?? {}).map(([name, p]) => ({ name, description: p?.description ?? "" })));
@@ -42,6 +48,14 @@ onBeforeUnmount(() => clearTimeout(timer));
       <span class="tool-reply__label">{{ $t("preset.toolReply.label") }}</span>
     </label>
     <p :id="id" class="subtle tool-reply__hint">{{ $t("preset.toolReply.hint") }}</p>
+    <template v-if="toggleable !== undefined">
+      <label class="tool-reply__row">
+        <input type="checkbox" :checked="toggleable" :disabled="disabled" :aria-describedby="`${id}-player`" data-testid="preset-tool-reply-player-toggle"
+          @change="emit('change-toggleable', ($event.target as HTMLInputElement).checked)" />
+        <span class="tool-reply__label">{{ $t("preset.toolReply.playerToggle.label") }}</span>
+      </label>
+      <p :id="`${id}-player`" class="subtle tool-reply__hint">{{ $t("preset.toolReply.playerToggle.hint", { slot: toolReplySlot }) }}</p>
+    </template>
     <p v-if="detected && !enabled" class="notice tool-reply__detected" data-testid="preset-tool-reply-detected">{{ $t("preset.toolReply.detected") }}</p>
     <div v-if="enabled && tool" class="tool-reply__format" data-testid="preset-tool-format">
       <div class="tool-reply__formatHead">

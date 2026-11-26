@@ -1,0 +1,13 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/me/presets",
+  "draft": true,
+  "title": {
+    "zh-Hant": "支援切換的預設可以在回覆偏好裡開關「用工具回覆」。",
+    "zh-Hans": "支持切换的预设可以在回复偏好里开关「用工具回复」。",
+    "en": "For presets that allow it, you can turn Reply with tools on or off in Reply Preferences.",
+    "ja": "対応するプリセットでは、返信設定でツール返信のオンとオフを切り替えられます。",
+    "ko": "전환을 지원하는 프리셋에서는 답장 설정에서 도구로 답장을 켜거나 끌 수 있습니다."
+  }
+}

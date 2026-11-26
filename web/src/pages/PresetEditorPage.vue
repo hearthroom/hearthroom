@@ -21,7 +21,7 @@ import {
   type PresetPurpose, type Compatibility, type ModelCatalogGroup, type PresetDetail, type WriteReceipt,
 } from "@/lib/presets";
 import {
-  adaptationId, inspectRows, withSelectionDefaults, isPromptPack, nativeProblems, addEntry, canDeleteEntry, deleteEntry, detachedPrompts, entryRows, insertEntry, moveEntryTo, newDocument, prefixLayout, restoreOrder, setEnabled,
+  adaptationId, inspectRows, withSelectionDefaults, isPromptPack, setToolReplyToggleable, toolReplyToggleable, nativeProblems, addEntry, canDeleteEntry, deleteEntry, detachedPrompts, entryRows, insertEntry, moveEntryTo, newDocument, prefixLayout, restoreOrder, setEnabled,
   type EntryRow, type InspectRow, type PresetDocument, type ProvidedKind,
 } from "@/lib/st-preset";
 import { operationKeys, usePresetAccess } from "@/lib/use-preset-access";
@@ -542,8 +542,8 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
         </div>
       </section>
       <section class="panel preset-editor__section">
-          <PresetToolReply :enabled="!!doc.selection.toolReply" :detected="!!compat?.toolReply?.externalToolBindingsDetected" :tool="compat?.toolReply?.tool"
-            @change="(v) => { doc!.selection.toolReply = v; }" />
+          <PresetToolReply :enabled="!!doc.selection.toolReply" :toggleable="toolReplyToggleable(doc.st)" :detected="!!compat?.toolReply?.externalToolBindingsDetected" :tool="compat?.toolReply?.tool"
+            @change="(v) => { doc!.selection.toolReply = v; }" @change-toggleable="(v) => setToolReplyToggleable(doc!.st, v)" />
       </section>
 
       <!-- 條目包（Prompt Manager 匯出的那種）只有條目，沒有採樣參數 -->

@@ -392,8 +392,8 @@ describe("本站寫的預設只用上游收的欄位", () => {
 });
 
 describe("本站寫的預設：存檔前照上游規則找出存不進去的地方", () => {
-  it("巨集只認 char、user、lastUserMessage，括號要成對", () => {
-    for (const ok of ["純文字", "{{char}} 對 {{user}} 說", "回應 {{lastUserMessage}}"]) expect(nativeMacrosValid(ok)).toBe(true);
+  it("只接受已支援的巨集，括號要成對", () => {
+    for (const ok of ["純文字", "{{char}} 對 {{user}} 說", "回應 {{lastUserMessage}}", "{{toolReplySlot}}"]) expect(nativeMacrosValid(ok)).toBe(true);
     for (const bad of ["{{random}}", "{{trim}}", "{{ char }}", "多了 }}", "少了 {{char", "{{// 註解}}"]) expect(nativeMacrosValid(bad)).toBe(false);
   });
   it("停用或移出排序的條目一樣要過；參數就算改回沿用模型，留著的值也要在範圍內", () => {

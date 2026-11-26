@@ -4229,6 +4229,8 @@
   "preset.reason.entry.relocated_before_history": "In SillyTavern this goes into earlier conversation history; {site} puts it before the history and uses it as usual.",
   "preset.reason.entry.dynamic_after_history": "This uses what the player typed this turn, so {site} puts it after the conversation history and uses it as usual.",
   "preset.toolReply.label": "Reply with tools",
+  "preset.toolReply.playerToggle.label": "Let players turn this on or off in chat",
+  "preset.toolReply.playerToggle.hint": "The default state still follows \"Reply with tools\" above; {slot} can be placed in an entry after the chat history.",
   "preset.toolReply.hint": "The reply appears only after it's fully generated. Takes effect on supported models; other models reply as usual.",
   "preset.toolReply.detected": "This preset originally replied with a tool from a SillyTavern extension, which {site} doesn't have. To use tool replies, turn on \"Reply with tools\" so {site}'s own reply tool is used. Results may differ from the original.",
   "preset.reason.field.external_tools_not_executed": "Tools from extensions don't run.",

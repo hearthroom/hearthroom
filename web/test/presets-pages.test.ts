@@ -889,6 +889,23 @@ describe("編輯器桌機版面（UI/UX 規格 editor-layout，2026-10-30）", (
     expect($<HTMLInputElement>("[data-testid=preset-title]").value).toBe("改過的名字");
   });
 
+  it("允許玩家切換可獨立於初始關閉儲存，並保留插槽文字", async () => {
+    await open();
+    tab("settings").click(); await flush();
+    const initial = $<HTMLInputElement>("[data-testid=preset-tool-reply-toggle]");
+    const configurable = $<HTMLInputElement>("[data-testid=preset-tool-reply-player-toggle]");
+    expect(initial.checked).toBe(false);
+    expect(configurable.checked).toBe(false);
+    expect(configurable.labels?.[0]?.parentElement?.textContent).toContain("{{toolReplySlot}}");
+    configurable.click(); await flush();
+    await vi.waitFor(() => expect($<HTMLButtonElement>("[data-testid=preset-save]").disabled).toBe(false));
+    mocks.revise.mockResolvedValue({ presetId: "p1", revisionId: "r3", version: 3 });
+    $("[data-testid=preset-save]").click(); await flush();
+    const saved = mocks.revise.mock.calls[0]![2].document as PresetDocument;
+    expect(saved.st.suki_tool_reply_toggleable).toBe(true);
+    expect(saved.selection.toolReply).not.toBe(true);
+  });
+
   it("測試過的模型：目錄只列系列與模型兩層；選了存 series:／model:，隨存檔送出", async () => {
     mocks.models.mockResolvedValueOnce([{ group: "DeepSeek", families: ["DeepSeek V4 Pro"] }]);
     await open();

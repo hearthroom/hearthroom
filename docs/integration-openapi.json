@@ -10084,6 +10084,20 @@
                     "type": "object",
                     "additionalProperties": false,
                     "properties": {
+                      "toolReply": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "on",
+                              "off"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
                       "agency": {
                         "anyOf": [
                           {
