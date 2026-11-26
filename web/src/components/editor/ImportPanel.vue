@@ -4,8 +4,7 @@
  *
  * 風月的檔不管丟進哪個分頁都會認出來：它的鍵名每次匯出都不同，作者不會知道自己的檔「長得像」哪一種。
  *
- * 兩階段：先解析並列出「哪些東西沒能帶過來」，作者確認之後才蓋掉表單。中間不自動套用——
- * 匯入會覆寫整份草稿，而作者可能已經打了半天字。
+ * 兩階段：先解析並列出「哪些東西沒能帶過來」，作者確認之後才套用。MMD 只更新檔案提供的欄位。
  *
  * 三件套模式讓作者分批加檔（原站是三個分開下載的），每個檔各自認出是哪一部分，
  * 同一部分再丟一次就換掉舊的；三格都亮了再套用，少一兩格也能套。
@@ -397,7 +396,7 @@ onBeforeUnmount(() => { if (thumb.value) URL.revokeObjectURL(thumb.value); });
         </ul>
       </div>
 
-      <p class="notice">{{ $t("import.review.overwrite") }}</p>
+      <p class="notice">{{ $t(current.spec === "mmd" ? "import.review.mmdMerge" : "import.review.overwrite") }}</p>
 
       <div class="acts">
         <button type="button" class="btn btn--primary btn--sm" @click="apply">{{ $t("import.apply") }}</button>

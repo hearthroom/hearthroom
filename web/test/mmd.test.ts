@@ -115,11 +115,12 @@ describe("mergeMmdFiles", () => {
     expect(got.dropped).toEqual([]);
   });
 
-  it("只有兩個檔：缺的部分留空，清單標出來；名字退而用世界書名", () => {
+  it("只有兩個檔：缺的部分留空，世界書名只用來命名世界書", () => {
     const got = mergeMmdFiles([files[0], files[1]], { language: "en" });
     expect(got.parts).toEqual({ rules: true, book: true, definition: false });
     expect(got.draft.roleDetailDesc).toBe("");
-    expect(got.draft.roleName).toBe("小鎮");
+    expect(got.draft.roleName).toBe("");
+    expect(got.worldbook?.name).toBe("小鎮");
     const only = mergeMmdFiles([files[2]], { language: "en" });
     expect(only.parts).toEqual({ rules: false, book: false, definition: true });
     expect(only.worldbook).toBeNull();

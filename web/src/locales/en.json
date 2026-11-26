@@ -767,6 +767,7 @@
   "import.review.title": "Read: {name}",
   "import.review.unnamed": "Unnamed character",
   "import.review.spec": "Format {spec}",
+  "import.review.mmdMerge": "Applying this updates only the fields supplied by the files.",
   "import.review.overwrite": "Applying this replaces what's currently in the form.",
   "import.landed.persona": "Definition, {n} characters",
   "import.landed.greetings": "{n} opening message(s)",

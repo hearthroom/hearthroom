@@ -2401,10 +2401,16 @@ describe("MMD 三件套批次選檔", () => {
     return unreadable;
   }
 
-  it.each([false, true])("有無已填名稱（%s）皆可同時預覽兩個 JSON，缺 TXT 仍顯示槽位", async (hasName) => {
+  it.each([false, true])("有無已填名稱（%s）皆可套用兩個 JSON，保留手填欄位", async (hasName) => {
     await mount("/create");
-    if (hasName) await type($("#f-name"), "手填名稱");
+    if (hasName) {
+      await submit();
+      expect(root.querySelector("form [role=alert]")?.textContent).toContain(i18n.global.t("editor.needName"));
+      await type($("#f-name"), "手填名稱");
+    }
+    await type($("#f-nickname"), "手填自稱");
     await type($("#f-detail"), "手填角色設定");
+    await type($("#f-welcome"), "手填開場白");
     byText(i18n.global.t("import.kind.mmd")).click();
     await flush();
 
@@ -2421,8 +2427,96 @@ describe("MMD 三件套批次選檔", () => {
     expect(rows[1].textContent).toContain("book.json");
     expect(rows[2].textContent).toContain(i18n.global.t("import.mmd.pending"));
     expect(root.querySelector(".import .review")).not.toBeNull();
-    expect($<HTMLInputElement>("#f-name").value).toBe(hasName ? "手填名稱" : "");
-    expect($<HTMLTextAreaElement>("#f-detail").value).toBe("手填角色設定");
+    byText("套用到表單").click();
+    await flush();
+
+    expect({
+      name: $<HTMLInputElement>("#f-name").value,
+      nickname: $<HTMLInputElement>("#f-nickname").value,
+      definition: $<HTMLTextAreaElement>("#f-detail").value,
+      welcome: $<HTMLTextAreaElement>("#f-welcome").value,
+    }).toEqual({
+      name: hasName ? "手填名稱" : "",
+      nickname: "手填自稱",
+      definition: "手填角色設定",
+      welcome: "手填開場白",
+    });
+    if (!hasName) {
+      await submit();
+      expect(root.querySelector("form [role=alert]")?.textContent).toContain(i18n.global.t("editor.needName"));
+    } else {
+      expect(root.querySelector("form [role=alert]")).toBeNull();
+    }
+  });
+
+  it.each([false, true])("套用明確的名稱與開場，TXT 只有在選取時才替換人設（%s）", async (hasDefinition) => {
+    await mount("/create");
+    await type($("#f-name"), "手填名稱");
+    await type($("#f-detail"), "手填角色設定");
+    await type($("#f-welcome"), "手填開場白");
+    byText(i18n.global.t("import.kind.mmd")).click();
+    await flush();
+    const files = [new File([JSON.stringify({
+      roleName: "匯入名稱",
+      beginning: "匯入開場白",
+      regex_scripts: [{ scriptName: "Synthetic rule", findRegex: "a", replaceString: "b" }],
+    })], "rules.json")];
+    if (hasDefinition) files.push(new File(["匯入角色設定"], "角色名.txt"));
+    await pickFile($(".import input[type=file]"), ...files);
+    byText("套用到表單").click();
+    await flush();
+
+    expect($<HTMLInputElement>("#f-name").value).toBe("匯入名稱");
+    expect($<HTMLTextAreaElement>("#f-welcome").value).toBe("匯入開場白");
+    expect($<HTMLTextAreaElement>("#f-detail").value).toBe(hasDefinition ? "匯入角色設定" : "手填角色設定");
+  });
+
+  it("MMD 正則沒有開場網頁或樣式時保留編輯器現有的網頁、開局呈現和自訂樣式", async () => {
+    await mount("/create");
+    $('[data-opening-mode="page"]').click();
+    await flush();
+    await type($("#f-opening-page"), "<p>手填開場網頁</p>");
+    $<HTMLButtonElement>("[data-card-css-toggle]").click();
+    await flush();
+    await type($(".card-style__custom textarea"), ".keep-me { color: green; }");
+    byText(i18n.global.t("import.kind.mmd")).click();
+    await flush();
+    await pickFile($(".import input[type=file]"), new File([JSON.stringify({
+      regex_scripts: [{ scriptName: "Synthetic rule", findRegex: "a", replaceString: "b" }],
+    })], "rules.json"));
+    byText("套用到表單").click();
+    await flush();
+    expect($('[data-opening-mode="page"]').getAttribute("aria-checked")).toBe("true");
+    expect($<HTMLTextAreaElement>("#f-opening-page").value).toBe("<p>手填開場網頁</p>");
+    expect($<HTMLTextAreaElement>(".card-style__custom textarea").value).toBe(".keep-me { color: green; }");
+  });
+
+  it.each([
+    { label: "只有 CSS", source: { cardCss: ".imported { color: red; }" }, layer: "under", rule: "既有規則" },
+    { label: "有規則但未提供層級", source: { regex_scripts: [{ scriptName: "匯入規則", findRegex: "x", replaceString: "y" }] }, layer: "under", rule: "匯入規則" },
+    { label: "來源明訂上層", source: { pageDepth: 2, regex_scripts: [{ scriptName: "匯入規則", findRegex: "x", replaceString: "y" }] }, layer: "over", rule: "匯入規則" },
+  ])("MMD 套用正則資產只更新來源提供的項目（$label）", async ({ source, layer, rule }) => {
+    await mount("/create");
+    await type($("#f-name"), "手填名稱");
+    await type($("#f-detail"), "手填設定");
+    await type($("#f-welcome"), "手填開場白");
+    await pickFile($(".rxbar input[type=file]"), new File([JSON.stringify({
+      pageDepth: 1,
+      statusbar: "既有功能欄",
+      regex_scripts: [{ scriptName: "既有規則", findRegex: "a", replaceString: "b" }],
+    })], "existing.json"));
+    byText(i18n.global.t("import.kind.mmd")).click();
+    await flush();
+    await pickFile($(".import input[type=file]"), new File([JSON.stringify(source)], "mmd.json"));
+    byText("套用到表單").click();
+    await flush();
+    await submit();
+    expect(api.saveAuthorAsset).toHaveBeenCalledWith("r1", expect.objectContaining({
+      mountTrigger: "既有功能欄",
+      mountLayer: layer,
+      rules: expect.arrayContaining([expect.objectContaining({ name: rule })]),
+      ...("cardCss" in source ? { cardCss: source.cardCss } : {}),
+    }), "tok");
   });
 
   it("有檔案無法讀取時指出檔名，並繼續讀取同批的正則和世界書", async () => {

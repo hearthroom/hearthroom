@@ -767,6 +767,7 @@
   "import.review.title": "読み込みました：{name}",
   "import.review.unnamed": "名前のないキャラクター",
   "import.review.spec": "形式 {spec}",
+  "import.review.mmdMerge": "適用すると、ファイルに内容がある項目だけが更新されます。",
   "import.review.overwrite": "適用すると今のフォームの内容が置き換わります。",
   "import.landed.persona": "設定 {n} 文字",
   "import.landed.greetings": "書き出し {n} 件",

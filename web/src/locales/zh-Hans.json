@@ -767,6 +767,7 @@
   "import.review.title": "读到了：{name}",
   "import.review.unnamed": "未命名角色",
   "import.review.spec": "格式 {spec}",
+  "import.review.mmdMerge": "应用时只会更新导入文件中有内容的字段。",
   "import.review.overwrite": "套用会覆盖当前表单上的内容。",
   "import.landed.persona": "角色设定 {n} 字",
   "import.landed.greetings": "开场白 {n} 段",

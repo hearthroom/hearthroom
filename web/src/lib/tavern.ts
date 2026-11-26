@@ -117,6 +117,8 @@ export interface ImportResult {
   /** V3 卡帶的主背景（CHARX 內嵌或 data: URI）。沒有就不給。 */
   background?: Blob | null;
   spec: string;
+  /** MMD 解析後的預設層級無法區分來源省略與明確選擇。 */
+  mmd?: { mountDepthProvided: boolean };
   /** 酒館卡 extensions.regex_scripts 落成的正則規則。沒有就是 null。 */
   regex: RegexRuleSet | null;
 }

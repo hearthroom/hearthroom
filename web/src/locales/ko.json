@@ -767,6 +767,7 @@
   "import.review.title": "읽었습니다: {name}",
   "import.review.unnamed": "이름 없는 캐릭터",
   "import.review.spec": "형식 {spec}",
+  "import.review.mmdMerge": "적용하면 파일에 내용이 있는 항목만 업데이트돼요.",
   "import.review.overwrite": "적용하면 지금 양식의 내용이 바뀝니다.",
   "import.landed.persona": "설정 {n}자",
   "import.landed.greetings": "도입부 {n}개",

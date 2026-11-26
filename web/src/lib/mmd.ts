@@ -5,8 +5,7 @@
  *   - 世界書 JSON（酒館世界書檔的形狀；關鍵詞是 JSON 字串）
  *   - 角色設定 TXT（純文字，整份就是設定）
  *
- * 作者一次丟三個，這裡各認各的、拼成一份跟酒館卡同形的 ImportResult，表單就全預填好；
- * 少一兩個也行，缺的那部分留空給作者自己補。
+ * 三個檔各自識別，再拼成 ImportResult。來源未提供的欄位留空，由編輯器保留手填資料。
  */
 
 import { bookEntriesToDrafts, bookEntryDrops, countSplitEntries, entryContentMax, worldInfoToBook, type DropNote, type ImportResult, type TavernBook } from "./tavern";
@@ -22,7 +21,7 @@ export const MMD_PARTS: MmdPart[] = ["rules", "book", "definition"];
 
 /** 一個檔案認出來是哪一部分，連同它帶的東西。 */
 export type MmdFile =
-  | { part: "rules"; fileName: string; set: RegexRuleSet; skippedPromptOnly?: number; dockOffByDefault?: boolean; welcome: string; roleName: string }
+  | { part: "rules"; fileName: string; set: RegexRuleSet; skippedPromptOnly?: number; dockOffByDefault?: boolean; mountDepthProvided?: boolean; welcome: string; roleName: string }
   | { part: "book"; fileName: string; book: TavernBook }
   | { part: "definition"; fileName: string; text: string };
 
@@ -73,8 +72,18 @@ export function classifyMmdFile(fileName: string, content: string): MmdFile {
   // 正則匯出檔 / 裸的酒館規則陣列 / 匯入酬載
   const imported = ruleSetFromImport(raw);
   if (imported) {
-    if (!Array.isArray(raw) && "pageDepth" in obj) imported.set.lowered = loweredFromPageDepth(obj.pageDepth);
-    return { part: "rules", fileName, set: imported.set, ...(imported.skippedPromptOnly ? { skippedPromptOnly: imported.skippedPromptOnly } : {}), dockOffByDefault: (!Array.isArray(obj.rules) || "pageDepth" in obj || "chatVersion" in obj) && imported.set.format !== "tavern", welcome: imported.welcome, roleName: str(obj.roleName) || str(obj.name) };
+    const hasPageDepth = typeof obj.pageDepth === "number" || Boolean(str(obj.pageDepth));
+    if (hasPageDepth) imported.set.lowered = loweredFromPageDepth(obj.pageDepth);
+    return {
+      part: "rules",
+      fileName,
+      set: imported.set,
+      skippedPromptOnly: imported.skippedPromptOnly,
+      dockOffByDefault: (!Array.isArray(obj.rules) || hasPageDepth || "chatVersion" in obj) && imported.set.format !== "tavern",
+      mountDepthProvided: hasPageDepth || (Array.isArray(obj.rules) && typeof obj.lowered === "boolean"),
+      welcome: imported.welcome,
+      roleName: str(obj.roleName) || str(obj.name),
+    };
   }
   throw new Error("mmd_unknown");
 }
@@ -93,15 +102,9 @@ export function mergeMmdFiles(files: MmdFile[], options: { language: string }): 
 
   const dockCopy = (mmdDockCopy as Record<string, { name: string; description: string }>)[options.language] ?? mmdDockCopy.en;
   const draft = makeDraft(options.language);
-  const nonBook = files.find((f) => f.part !== "book");
-  // 名字：匯出檔裡帶的 > 設定檔的檔名 > 世界書名 > 非世界書檔的檔名 > 任一檔的檔名
-  draft.roleName =
-    rules?.roleName ||
-    (definition ? stemOf(definition.fileName) : "") ||
-    str(book?.book.name) ||
-    (nonBook ? stemOf(nonBook.fileName) : files[0] ? stemOf(files[0].fileName) : "");
+  // 角色名稱只取匯出檔明填的名稱或角色設定檔名。
+  draft.roleName = rules?.roleName || (definition ? stemOf(definition.fileName) : "");
   draft.roleDetailDesc = definition?.text ?? "";
-  // 整卡匯入：開場白直接用匯出檔的 beginning，不看表單裡原本有沒有
   draft.roleWelcome = rules?.welcome ?? "";
 
   const dropped: DropNote[] = [];
@@ -109,14 +112,15 @@ export function mergeMmdFiles(files: MmdFile[], options: { language: string }): 
   let worldbook: ImportResult["worldbook"] = null;
   if (book) {
     const entries = book.book.entries ?? [];
-    worldbook = { name: str(book.book.name) || draft.roleName, description: str(book.book.description), format: "tavern", entries: bookEntriesToDrafts(entries, undefined, options.language) };
+    const sourceName = (rules ?? book).fileName;
+    worldbook = { name: str(book.book.name) || draft.roleName || stemOf(sourceName), description: str(book.book.description), format: "tavern", entries: bookEntriesToDrafts(entries, undefined, options.language) };
     dropped.push(...bookEntryDrops(entries));
     const split = countSplitEntries(entries, options.language);
     if (split) dropped.push({ key: "import.split.entries", params: { n: split, max: entryContentMax(options.language) } });
   }
 
   let regex = rules?.set ?? null;
-  if (rules?.dockOffByDefault && regex && !regex.rules.some(r => r.find === MMD_DOCK_FIND && r.replace.includes(MMD_DOCK_CSS))) {
+  if (rules?.dockOffByDefault && regex?.rules.length && !regex.rules.some(r => r.find === MMD_DOCK_FIND && r.replace.includes(MMD_DOCK_CSS))) {
     if (regex.rules.length >= REGEX_LIMITS.rules) {
       dropped.push({ key: "import.mmd.dockAtLimit" });
     } else {
@@ -138,6 +142,7 @@ export function mergeMmdFiles(files: MmdFile[], options: { language: string }): 
     dropped,
     image: null,
     spec: "mmd",
+    mmd: { mountDepthProvided: Boolean(rules?.mountDepthProvided) },
     regex,
     parts: { rules: !!rules, book: !!book, definition: !!definition },
   };

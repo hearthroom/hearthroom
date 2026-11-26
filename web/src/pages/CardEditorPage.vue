@@ -2099,22 +2099,51 @@ function adoptImage(image: Blob) {
 }
 
 function applyImport(result: ImportResult) {
-  const language = draft.value.language;
-  draft.value = { ...result.draft, language };
-  tagsText.value = formatTags(draft.value.roleTag);
+  const mmd = result.spec === "mmd";
+  if (mmd) {
+    const { roleName, roleDetailDesc, roleWelcome } = result.draft;
+    if (roleName) draft.value.roleName = roleName;
+    if (draft.value.roleName.trim() && error.value === t("editor.needName")) error.value = "";
+    if (roleDetailDesc) draft.value.roleDetailDesc = roleDetailDesc;
+    if (roleWelcome.trim()) draft.value.roleWelcome = roleWelcome;
+  } else {
+    draft.value = { ...result.draft, language: draft.value.language };
+    tagsText.value = formatTags(draft.value.roleTag);
+  }
   track("card_import", {
     detail: result.spec === "mmd" || result.spec === "fengyue" || result.spec === "rili" ? result.spec : result.image ? "png" : "json",
   });
   if (result.worldbook) void importBook(wb, { name: result.worldbook.name || draft.value.roleName, entries: result.worldbook.entries, format: result.worldbook.format });
   const portrait = result.background ?? result.image;
   if (portrait) void adoptImage(portrait);
-  openingFile.reset();
+  const keepOpeningPage = mmd && !result.regex?.openingPage?.trim();
+  if (!keepOpeningPage) openingFile.reset();
   if (result.regex) {
-    result.regex.pageMode ??= "classic";
     // 匯入的卡帶著超過編輯門檻的開場網頁：收成待存的檔案，不放進文字框。
     // 拿掉的是副本上的：匯入面板還留著原本那份，再按一次套用照樣有開場網頁。
     const regex = { ...result.regex };
-    if (regex.openingPage && openingFile.importText(regex.openingPage)) delete regex.openingPage;
+    if (mmd) {
+      if (!regex.rules.length) {
+        regex.rules = regexSet.value.rules;
+        regex.pageMode ??= regexSet.value.pageMode;
+        regex.format ??= regexSet.value.format;
+      }
+      if (!regex.cardCss?.trim()) {
+        regex.cardCss = regexSet.value.cardCss;
+        regex.cardCssDialect = regexSet.value.cardCssDialect;
+      }
+      if (!regex.statusbar.trim()) regex.statusbar = regexSet.value.statusbar;
+      if (!result.mmd?.mountDepthProvided) {
+        regex.lowered = regexSet.value.lowered;
+        regex.mountLayer = regexSet.value.mountLayer;
+      }
+    }
+    regex.pageMode ??= "classic";
+    if (keepOpeningPage) {
+      regex.openingPage = regexSet.value.openingPage;
+      regex.openingMode = openingMode.value;
+    }
+    if (!keepOpeningPage && regex.openingPage && openingFile.importText(regex.openingPage)) delete regex.openingPage;
     regexSet.value = regex;
   } else if (result.spec === "fengyue" || result.spec === "rili") {
     // 風月與日里卡都是新的網頁玩法，沒有舊版聊天頁要相容；同時清掉上一份草稿殘留的規則、首屏與樣式
@@ -2123,14 +2152,16 @@ function applyImport(result: ImportResult) {
       pageMode: "sandbox",
       format: "fengyue",
     };
-  } else {
-    // 酒館／MMD 未帶規則時沿用編輯器既有的顯示規則與樣式，只把聊天頁切回傳統頁
+  } else if (!mmd) {
+    // 酒館未帶規則時沿用編輯器既有的顯示規則與樣式，只把聊天頁切回傳統頁
     regexSet.value.pageMode = "classic";
   }
   // 風月與日里卡以開場網頁開局：歸開場網頁；其他照開場白（owner 2026-11-10）
-  regexSet.value.openingMode =
-    result.spec === "fengyue" || result.spec === "rili" || regexSet.value.format === "fengyue" ? "page" : "greeting";
-  savedOpening.value = openingMode.value;
+  if (!keepOpeningPage) {
+    regexSet.value.openingMode =
+      result.spec === "fengyue" || result.spec === "rili" || regexSet.value.format === "fengyue" ? "page" : "greeting";
+    savedOpening.value = openingMode.value;
+  }
   tagsPrompted.value = false;
   serverTagsRejected.value = false;
   defaultChatPageForNew();
