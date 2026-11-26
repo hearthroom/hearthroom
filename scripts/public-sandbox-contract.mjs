@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const snapshot = new URL("../web/public/contracts/sandbox-contract.json", import.meta.url);
+const editorLimits = new URL("../web/src/lib/opening-page-limits.json", import.meta.url);
 
 // These fields describe implementation provenance. Other "source" fields,
 // including sdk.context.source and openingPage.source, are author API details.
@@ -51,10 +52,19 @@ function main(args) {
   }
 
   const source = git(stageDirectory, "show", "HEAD:contract/sandbox-contract.json");
-  const data = JSON.stringify(projectPublicContract(JSON.parse(source), pin), null, 2) + "\n";
-  if (mode === "--write") writeFileSync(snapshot, data);
-  else if (readFileSync(snapshot, "utf8") !== data) {
-    throw new Error("Public sandbox contract differs from the pinned Stage; regenerate and review the public snapshot");
+  const contract = projectPublicContract(JSON.parse(source), pin);
+  const { openingPageMaxBytes, workshopOpeningPageMaxBytes } = contract.provider ?? {};
+  // Public builds omit Stage, and Vite serves public/ assets without transforming imports.
+  const files = [
+    [snapshot, contract],
+    [editorLimits, { openingPageMaxBytes, workshopOpeningPageMaxBytes }],
+  ];
+  for (const [path, value] of files) {
+    const data = JSON.stringify(value, null, 2) + "\n";
+    if (mode === "--write") writeFileSync(path, data);
+    else if (readFileSync(path, "utf8") !== data) {
+      throw new Error(`Contract snapshot ${path.pathname} differs from the pinned Stage; regenerate with --write`);
+    }
   }
   console.log(`Public sandbox contract matches pinned Stage ${pin}`);
 }

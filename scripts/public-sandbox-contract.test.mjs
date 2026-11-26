@@ -30,3 +30,12 @@ test("public snapshot has a fixed Stage version and no implementation references
   assert.ok(result.sdk.capabilities.includes("cache.set"));
   assert.doesNotMatch(published, /src\/sandbox\/|provider\/internal\/|internal\/importer\/|"generatedBy"|"sources"/);
 });
+
+test("editor opening limits match the public contract without a Stage checkout", () => {
+  const snapshot = JSON.parse(readFileSync(new URL("../web/public/contracts/sandbox-contract.json", import.meta.url), "utf8"));
+  const editor = JSON.parse(readFileSync(new URL("../web/src/lib/opening-page-limits.json", import.meta.url), "utf8"));
+  assert.deepEqual(editor, {
+    openingPageMaxBytes: snapshot.provider.openingPageMaxBytes,
+    workshopOpeningPageMaxBytes: snapshot.provider.workshopOpeningPageMaxBytes,
+  });
+});
