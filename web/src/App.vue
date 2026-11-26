@@ -39,6 +39,7 @@ import { watchCheckinNudges } from "@/lib/checkin-nudges";
 import { useUpdates } from "@/lib/updates";
 import { footerSupport, type FooterContext } from "@/lib/footer-nav";
 import { watchCampaignShareBinding, watchShareRefBinding } from "@/lib/share-ref";
+import { watchPromoPostBinding } from "@/lib/promo-post";
 import { refreshGa4Account } from "@/lib/ga4";
 import { fetchHeaderSummary, fetchMe, fetchReviewMe, type HeaderSummary } from "@/lib/api";
 import { currentProvider } from "@/lib/provider";
@@ -162,6 +163,8 @@ watch(() => [currentProvider(), session.me?.accountNumId ?? null, locale.value] 
 watchShareRefBinding();
 // 點了活動分享連結的人：登入後送一次歸因綁定，伺服器決定算不算新玩家。
 watchCampaignShareBinding();
+// 推廣貼文的代號（utm_campaign）：點了之後才註冊的人，登入後記成那篇貼文帶來的（lib/promo-post.ts）
+watchPromoPostBinding();
 /**
  * 直接開另一個網域、這裡還沒登入：Harbor 那邊已登入的會員自動登回來（lib/silent-login.ts 把關快慢、頻率與登出）。
  * 過場頁與回呼頁不做；開關在 Harbor 支援之前是關的。

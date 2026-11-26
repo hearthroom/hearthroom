@@ -1,6 +1,6 @@
 import {setCardCommentPin} from './card-comment-pin';
 import {parseCountryRegion, updateCountryRegion} from './country-region';
-import { promoCampaign } from './promo-attribution';
+import { promoCampaign, promoRoutes } from './promo-attribution';
 import {viewerCountryRegion, assertRegionCard, viewerAllowsAdultContent, normalizeHiddenTags, confirmAdult} from './members';
 import { cardRewardMaintenance } from "./card-reward-service";
 import {readOwnCardView} from './card-owner-view';
@@ -1311,6 +1311,7 @@ app.post("/v1/blog/posts/:postId/comments", async (c) => {
 
 app.route("/", communityRoutes);
 app.route("/", campaignRoutes);
+app.route("/", promoRoutes);
 // 卡片共用狀態（sdk.shared：投票、共鬥計數器、排行榜）；設計見 src/card-state.ts
 app.route("/", cardStateRoutes);
 app.route("/", cardRewardRoutes);
