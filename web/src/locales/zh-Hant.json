@@ -6294,6 +6294,7 @@
   "reviewAi.first.title": "AI 審卡",
   "reviewAi.first.verdict.pass": "建議通過",
   "reviewAi.first.verdict.reject": "建議駁回",
+  "reviewAi.first.verdict.handoff": "AI 已審：交給人工",
   "reviewAi.first.pending": "AI 還在審這張卡，每 10 秒自動重新整理。你也可以直接照一般流程決定。",
   "reviewAi.first.none": "AI 這次沒有給出建議，照一般流程決定。",
   "reviewAi.first.error": "AI 的建議暫時載入不了，可以直接照一般流程決定。",

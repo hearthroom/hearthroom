@@ -26,8 +26,8 @@ export const isManagerRole = (role: string | null | undefined) => role === "mana
 
 // ---- AI 為主（ui-ai-first.md） ----
 
-/** 「AI 審卡」區塊的狀態：讀取中、讀不到、還沒審完、沒有判斷（交人、拒答）、已判 */
-export type AiView = "loading" | "error" | "pending" | "none" | "ready";
+/** 「AI 審卡」區塊的狀態：讀取中、讀不到、還沒審完、沒有可用判斷、交給人工、已判 */
+export type AiView = "loading" | "error" | "pending" | "none" | "handoff" | "ready";
 
 /**
  * 定案時伺服器拿來比的那一筆 AI 判斷（與服務端 aiStateOf 同一條規則）：清單照更新時間新到舊，第一筆下了結論的。

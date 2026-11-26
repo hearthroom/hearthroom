@@ -337,7 +337,7 @@ const aiSuggestion = computed(() => aiState.value?.suggestion ?? null);
 const aiView = computed<AiView>(() => {
   const s = aiState.value;
   if (!s) return aiLoadFailed.value ? 'error' : 'loading';
-  if (s.state === 'pending') return 'pending';
+  if (s.state === 'pending' || s.state === 'handoff') return s.state;
   return s.state === 'ready' && aiAsHuman(s.suggestion.verdict) ? 'ready' : 'none';
 });
 const aiVerdict = computed(() => (aiView.value === 'ready' ? aiAsHuman(aiSuggestion.value!.verdict) : null));
@@ -1134,8 +1134,11 @@ onMounted(() => { void load(); });
           </template>
           <p v-else-if="aiView === 'pending'" class="ai-first__line" data-ai-pending>{{ $t("reviewAi.first.pending") }}</p>
           <p v-else-if="aiView === 'none'" class="ai-first__line" data-ai-none>{{ $t("reviewAi.first.none") }}</p>
-          <template v-else-if="aiSuggestion && aiVerdict">
-            <p class="ai-first__chips">
+          <template v-else-if="aiSuggestion">
+            <p v-if="aiView === 'handoff'" class="ai-first__chips">
+              <span class="chip ai-first__chip" data-ai-handoff>{{ $t("reviewAi.first.verdict.handoff") }}</span>
+            </p>
+            <p v-else-if="aiVerdict" class="ai-first__chips">
               <span class="chip ai-first__chip" :class="aiVerdict === 'approve' ? 'ai-first__chip--pass' : 'ai-first__chip--reject'" :data-ai-verdict="aiSuggestion.verdict">{{ $t(`reviewAi.first.verdict.${aiSuggestion.verdict}`) }}</span>
               <span v-if="aiSuggestion.confidence !== null" class="chip ai-first__chip ai-first__chip--num" data-ai-confidence>{{ $t("reviewAi.reveal.confidence", { pct: new Intl.NumberFormat(String(locale), { style: "percent", maximumFractionDigits: 0 }).format(aiSuggestion.confidence) }) }}</span>
             </p>

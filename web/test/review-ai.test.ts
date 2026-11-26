@@ -252,13 +252,15 @@ it('only an override that would publish the card asks for confirmation', async (
   expect(posts('stamp')[0]!.body).toEqual({ generation: 'g', finalSource: 'modified', verdict: 'approve', note: '', aiSuggestionId: 'g1', aiSuggestionAt: 5 });
 });
 
-it('without an AI suggestion (handoff) the block says so in one line and the decision is the usual flow, recorded as no AI comparison', async () => {
+it('shows that AI handed the card to a human and keeps the internal reason out of the decision', async () => {
   pending();
-  routes['/v1/review/s1/ai'] = aiWith(suggestion({ verdict: 'handoff', reasons: [] }));
+  routes['/v1/review/s1/ai'] = aiWith(suggestion({ verdict: 'handoff', reasons: [], handoffCause: 'unsure', note: 'The opening depends on a missing reference.' }));
   routes['/v1/review/s1/stamp'] = () => stampOk('human_no_ai', 'rejected');
   await mountPage('/en/review/s1');
-  await vi.waitFor(() => expect($('[data-ai-none]')).not.toBeNull());
-  expect($('[data-ai-none]')!.textContent).toBe(t('reviewAi.first.none'));
+  await vi.waitFor(() => expect($('[data-ai-handoff]')).not.toBeNull());
+  expect($('[data-ai-handoff]')!.textContent).toBe(t('reviewAi.first.verdict.handoff'));
+  expect($('[data-ai-none]')).toBeNull();
+  expect($('[data-ai-internal-note]')!.textContent).toBe('The opening depends on a missing reference.');
   expect($('[data-ai-inaccurate]')).toBeNull();
   expect(checked()).toBeNull();
   expect($('[data-ai-default]')).toBeNull();

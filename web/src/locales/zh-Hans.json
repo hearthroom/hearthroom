@@ -6294,6 +6294,7 @@
   "reviewAi.first.title": "AI 审卡",
   "reviewAi.first.verdict.pass": "建议通过",
   "reviewAi.first.verdict.reject": "建议驳回",
+  "reviewAi.first.verdict.handoff": "AI 已审：交给人工",
   "reviewAi.first.pending": "AI 还在审这张卡，每 10 秒自动刷新。你也可以直接按一般流程决定。",
   "reviewAi.first.none": "AI 这次没有给出建议，按一般流程决定。",
   "reviewAi.first.error": "AI 的建议暂时无法加载，可以直接按一般流程决定。",

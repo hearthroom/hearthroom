@@ -6294,6 +6294,7 @@
   "reviewAi.first.title": "AI review",
   "reviewAi.first.verdict.pass": "Suggests approving",
   "reviewAi.first.verdict.reject": "Suggests rejecting",
+  "reviewAi.first.verdict.handoff": "AI reviewed: Left to human",
   "reviewAi.first.pending": "The AI is still reviewing this card and refreshes every 10 seconds. You can also decide the usual way now.",
   "reviewAi.first.none": "The AI gave no suggestion this time. Decide the usual way.",
   "reviewAi.first.error": "Couldn't load the AI suggestion. You can decide the usual way.",

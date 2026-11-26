@@ -6294,6 +6294,7 @@
   "reviewAi.first.title": "AI 심사",
   "reviewAi.first.verdict.pass": "승인 제안",
   "reviewAi.first.verdict.reject": "반려 제안",
+  "reviewAi.first.verdict.handoff": "AI 심사 완료: 사람에게 맡김",
   "reviewAi.first.pending": "AI가 아직 이 카드를 심사 중이며 10초마다 자동으로 새로고침해요. 지금 평소대로 결정해도 돼요.",
   "reviewAi.first.none": "이번에는 AI 제안이 없어요. 평소대로 결정해 주세요.",
   "reviewAi.first.error": "AI 제안을 불러오지 못했어요. 평소대로 결정할 수 있어요.",

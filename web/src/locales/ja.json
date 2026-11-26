@@ -6294,6 +6294,7 @@
   "reviewAi.first.title": "AI審査",
   "reviewAi.first.verdict.pass": "承認を提案",
   "reviewAi.first.verdict.reject": "却下を提案",
+  "reviewAi.first.verdict.handoff": "AI審査済み：人に任せる",
   "reviewAi.first.pending": "AIはまだこのカードを審査中です。10秒ごとに自動で更新します。通常どおり今すぐ決定することもできます。",
   "reviewAi.first.none": "今回はAIの提案がありません。通常どおり決定してください。",
   "reviewAi.first.error": "AIの提案を読み込めませんでした。通常どおり決定できます。",
