@@ -110,11 +110,13 @@ const COVER_MAX_MS = 22_000;
 const intro = shallowRef<PlayIntro | null>(readPlayIntro(routeId.value));
 const readyBaseline = shallowRef(stageContentSeq.value);
 const coverExpired = shallowRef(false);
+const openingProgress = shallowRef<{ label: string; percent: number | null } | null>(null);
 const covering = computed(() => !error.value && !gated.value && !regionBlocked.value && !coverExpired.value && stageContentSeq.value <= readyBaseline.value);
 let coverTimer: ReturnType<typeof setTimeout> | undefined;
 function resetCover() {
   readyBaseline.value = stageContentSeq.value;
   coverExpired.value = false;
+  openingProgress.value = null;
   clearTimeout(coverTimer);
   if (!intro.value) intro.value = readPlayIntro(routeId.value);
 }
@@ -345,7 +347,7 @@ watch(locale, () => { void remergeStageMessages(); });
 
 <template>
   <div class="play">
-    <component :is="Stage" v-if="Stage" :key="roleId" :role-id="roleId" :conversation-id="historyBootstrap.conversationId" :read-only="historyBootstrap.readOnly" :access-reason="historyBootstrap.reason" :history-title="historyBootstrap.title" :ws-capacity="workshopProps.wsCapacity" :ws-trial="workshopProps.wsTrial" :ws-opening="workshopProps.wsOpening" />
+    <component :is="Stage" v-if="Stage" :key="roleId" :role-id="roleId" :conversation-id="historyBootstrap.conversationId" :read-only="historyBootstrap.readOnly" :access-reason="historyBootstrap.reason" :history-title="historyBootstrap.title" :ws-capacity="workshopProps.wsCapacity" :ws-trial="workshopProps.wsTrial" :ws-opening="workshopProps.wsOpening" @opening-progress="openingProgress = $event" />
     <RegionUnavailable v-else-if="regionBlocked" :href="playApp ? homeUrl : undefined" />
     <div v-else-if="error || gated" class="play__state" :class="{ 'play__state--author': authorDraftHref }">
       <AdultGate v-if="gated" :unrated="gateUnrated" @enabled="retry++" />
@@ -367,7 +369,7 @@ watch(locale, () => { void remergeStageMessages(); });
     </div>
     <!-- Hidden pages may never run the animation frames needed by a CSS leave
          transition. Once loading ends, remove the input-blocking cover directly. -->
-    <PlayLoading v-if="covering" :name="intro?.name" :art="intro?.art" :backdrop="intro?.backdrop" />
+    <PlayLoading v-if="covering" :name="intro?.name" :art="intro?.art" :backdrop="intro?.backdrop" :opening-progress="openingProgress" />
     <PlayInfoPanel />
     <PlayModWindow
       :open="playModWindow.open" :conversation-id="playModWindow.conversationId" :token="workshopToken"

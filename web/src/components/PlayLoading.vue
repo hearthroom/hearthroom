@@ -10,7 +10,12 @@
  */
 import { onBeforeUnmount, ref, watch } from "vue";
 
-const props = defineProps<{ name?: string; art?: string; backdrop?: string }>();
+const props = defineProps<{
+  name?: string;
+  art?: string;
+  backdrop?: string;
+  openingProgress?: { label: string; percent: number | null } | null;
+}>();
 
 /** 等太久就換一句話：首次載入舞台與卡片資源要多一點時間，讓人知道不是當掉了 */
 const SLOW_AFTER_MS = 6000;
@@ -35,8 +40,13 @@ watch(() => props.art, () => { artLoaded.value = false; });
         </div>
       </div>
       <p v-if="name" class="play-cover__name">{{ name }}</p>
-      <span class="play-cover__bar" aria-hidden="true"><span></span></span>
-      <p class="play-cover__hint">{{ slow ? $t("play.loadingSlow") : $t("play.entering") }}</p>
+      <span v-if="openingProgress" class="play-cover__bar"
+        :class="{ 'play-cover__bar--determinate': openingProgress.percent !== null }"
+        role="progressbar" aria-labelledby="play-cover-hint" :aria-valuenow="openingProgress.percent ?? undefined">
+        <span :style="openingProgress.percent === null ? undefined : { width: `${openingProgress.percent}%` }"></span>
+      </span>
+      <span v-else class="play-cover__bar" aria-hidden="true"><span></span></span>
+      <p id="play-cover-hint" class="play-cover__hint">{{ openingProgress?.label ?? (slow ? $t("play.loadingSlow") : $t("play.entering")) }}</p>
     </div>
   </div>
 </template>
@@ -111,6 +121,7 @@ watch(() => props.art, () => { artLoaded.value = false; });
   transform: translateX(-100%);
   animation: play-cover-bar 1.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
 }
+.play-cover__bar--determinate > span { animation: none; transform: none; }
 .play-cover__hint { margin: 0; font-size: 13px; color: rgba(255, 255, 255, 0.72); }
 
 @keyframes play-cover-breathe { 0%, 100% { opacity: 0.45; transform: scale(0.94); } 50% { opacity: 0.85; transform: scale(1.04); } }
@@ -121,6 +132,6 @@ watch(() => props.art, () => { artLoaded.value = false; });
   .play-cover__halo, .play-cover__sheen, .play-cover__bar > span { animation: none; }
   .play-cover__halo { opacity: 0.6; }
   .play-cover__sheen { display: none; }
-  .play-cover__bar > span { width: 100%; transform: none; opacity: 0.6; }
+  .play-cover__bar:not(.play-cover__bar--determinate) > span { width: 100%; transform: none; opacity: 0.6; }
 }
 </style>

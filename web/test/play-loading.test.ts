@@ -6,7 +6,7 @@
  *   - 載入失敗：收掉，露出錯誤與返回鈕。
  */
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { createApp, nextTick } from 'vue';
+import { createApp, defineComponent, h, nextTick } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
 import { createMemoryHistory, createRouter } from 'vue-router';
 import { i18n } from '../src/lib/i18n';
@@ -64,6 +64,44 @@ it('舞台掛上了還蓋著，舞台喊畫好了才收', async () => {
   await settle();
   expect(root!.textContent).toContain('Fixture player');
   expect(covered()).toBe(true);
+  markStageContentReady();
+  await settle();
+  expect(covered()).toBe(false);
+});
+
+it('開場網頁下載中的百分比在遮罩上顯示，下載結束後回到一般載入提示', async () => {
+  type Progress = { label: string; percent: number | null };
+  let reportProgress!: (progress: Progress | null) => void;
+  mocks.stage.mockResolvedValue(defineComponent({
+    emits: ['opening-progress'],
+    setup(_props, { emit }) {
+      reportProgress = progress => emit('opening-progress', progress);
+      return () => h('div', 'Fixture player');
+    },
+  }));
+  await mount('/play/100194');
+  await settle();
+  const progressBar = () => cover()!.querySelector<HTMLElement>('[role="progressbar"]');
+
+  reportProgress({ label: '開場網頁載入中', percent: null });
+  await settle();
+  expect(cover()!.textContent).toContain('開場網頁載入中');
+  expect(progressBar()).not.toBeNull();
+  expect(progressBar()!.getAttribute('aria-valuenow')).toBeNull();
+
+  for (const percent of [0, 42]) {
+    reportProgress({ label: `開場網頁載入中 ${percent}%`, percent });
+    await settle();
+    expect(cover()!.textContent).toContain(`${percent}%`);
+    expect(progressBar()!.getAttribute('aria-valuenow')).toBe(String(percent));
+    expect(progressBar()!.firstElementChild!.getAttribute('style')).toContain(`${percent}%`);
+  }
+
+  reportProgress(null);
+  await settle();
+  expect(progressBar()).toBeNull();
+  expect(cover()!.textContent).toContain(i18n.global.t('play.entering'));
+
   markStageContentReady();
   await settle();
   expect(covered()).toBe(false);
