@@ -3435,7 +3435,7 @@ describe("開場網頁：大頁面", () => {
   });
 
   it("上限 512 KB 時：超過的檔案在本機擋下，計數器與上限都以 MB 講", async () => {
-    setOpeningPageLimitsForTest({ max: null });
+    setOpeningPageLimitsForTest({ max: 512 * KB });
     await openLarge({ openingPage: "<div>首屏</div>" });
     await pickFile($("[data-opening-file-input]"), new File([page(600 * KB)], "big.html"));
     expect($("[data-opening-file-error]").textContent).toContain(i18n.global.t("editor.openingPage.errTooBig", { max: "524.3 KB" }));
@@ -3545,11 +3545,38 @@ describe("開場網頁：大頁面", () => {
     expect(api.saveAuthorAsset).not.toHaveBeenCalled();
     expect(api.patchRoleWelcome).not.toHaveBeenCalled();
     expect($("[data-opening-unsaved]")).not.toBeNull();
+    api.fetchAuthorAsset.mockResolvedValueOnce(pageAsset());
     await submit();
     expect(api.uploadOpeningPage).toHaveBeenCalledTimes(2);
     expect(api.uploadOpeningPage.mock.calls[1][1]).toBe(big);
     expect(root.querySelector("[data-opening-file-error]")).toBeNull();
     expect(assetBody()).toMatchObject({ openingPage: "", version: 5 });
+  });
+
+  it.each([true, false])("reconciles a lost opening upload response only when the saved content matches: %s", async (matches) => {
+    await openLarge({});
+    const text = page(OPENING_PAGE_EDIT_MAX_BYTES + 100);
+    const file = new File([text], "big.html", { type: "text/html" });
+    await pickFile($("[data-opening-file-input]"), file);
+    api.uploadOpeningPage.mockRejectedValueOnce(new ApiError(0, "Network connection lost"));
+    await submit();
+    expect(api.saveAuthorAsset).not.toHaveBeenCalled();
+
+    api.fetchAuthorAsset.mockResolvedValueOnce(pageAsset({ version: 5,
+      openingPageUrl: URL_PATH, openingPageBytes: file.size }));
+    api.fetchOpeningPage.mockResolvedValueOnce(new Blob([matches ? text : "x" + text.slice(1)]));
+    await type($("#f-name"), "Updated draft");
+    await submit();
+
+    expect(api.fetchOpeningPage).toHaveBeenCalledWith(URL_PATH, "tok", expect.anything());
+    expect(api.uploadOpeningPage).toHaveBeenCalledTimes(1);
+    if (matches) {
+      expect(root.querySelector("[data-opening-unsaved]")).toBeNull();
+      expect(api.patchRoleDocument).toHaveBeenCalled();
+    } else {
+      expect($("[data-opening-unsaved]")).not.toBeNull();
+      expect(api.patchRoleDocument).not.toHaveBeenCalled();
+    }
   });
 
   it("上傳可以取消：不算失敗、不存其餘的，檔案留著", async () => {
@@ -3686,6 +3713,49 @@ describe("還原上架版：大開場網頁", () => {
     if (confirmState.current) { settleConfirm(true); await flush(); }
     expect($("[data-opening-file]").textContent).toContain("3 MB");
     expect(root.querySelector("[data-approved-undo]")).toBeNull();
+  });
+
+  it.each(["replace", "clear"])("saves an opening file edit after the published restore: %s", async (action) => {
+    api.fetchAuthorAsset.mockResolvedValueOnce(asset({ openingPage: "<p>草稿</p>" }))
+      .mockResolvedValueOnce(asset({ openingPageBytes: 5 * MB, openingPageUrl: approvedUrl }))
+      .mockResolvedValueOnce(asset({ openingPageBytes: 5 * MB, openingPageUrl: draftUrl, version: 5 }));
+    await mount("/cards/r1/edit");
+    await revert();
+    const replacement = new File(["x".repeat(2 * MB)], "replacement.html", { type: "text/html" });
+    if (action === "replace") {
+      await pickFile($("[data-opening-file-input]"), replacement);
+    } else {
+      $<HTMLButtonElement>("[data-opening-clear]").click(); await flush();
+    }
+    settleConfirm(true); await flush();
+
+    await submit();
+    expect(api.saveApprovedDraft).toHaveBeenCalledTimes(1);
+    if (action === "replace") {
+      expect(api.uploadOpeningPage).toHaveBeenCalledWith("r1", replacement, 5, "tok", expect.anything());
+    } else {
+      expect(api.saveAuthorAsset).toHaveBeenCalled();
+      expect(api.saveAuthorAsset.mock.calls[0][1]).toMatchObject({ openingPageClear: true, version: 5 });
+    }
+  });
+
+  it("restores the draft file and download after discarding a recovered restore", async () => {
+    const draftAsset = asset({ openingPageBytes: 3 * MB, openingPageUrl: draftUrl });
+    api.fetchAuthorAsset.mockResolvedValue(draftAsset)
+      .mockResolvedValueOnce(draftAsset)
+      .mockResolvedValueOnce(asset({ openingPageBytes: 5 * MB, openingPageUrl: approvedUrl }));
+    await mount("/cards/r1/edit");
+    await revert();
+    app.unmount();
+    root.remove();
+    await mount("/cards/r1/edit");
+    expect($("[data-opening-file]").textContent).toContain("5 MB");
+
+    btnIn(root, i18n.global.t("editor.draftDiscard")).click(); await flush();
+    expect($("[data-opening-file]").textContent).toContain("3 MB");
+    api.fetchOpeningPage.mockResolvedValueOnce(new Blob(["draft"]));
+    $<HTMLButtonElement>("[data-opening-file] [data-opening-download]").click(); await flush();
+    expect(api.fetchOpeningPage).toHaveBeenLastCalledWith(draftUrl, "tok", expect.anything());
   });
 
   it("上架版的頁面在編輯門檻內但沒內嵌：從上架版讀進文字框", async () => {

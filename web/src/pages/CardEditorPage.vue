@@ -44,6 +44,7 @@ import {
   deleteRole,
   fetchCardDeletion,
   fetchAuthorAsset,
+  fetchOpeningPage,
   fetchRoleDetail,
   fetchRoleValidation,
   patchRoleDocument,
@@ -305,6 +306,7 @@ const regexOpen = ref(false);
 // 舊版 partial-create 草稿沒有作者資產：讀回前不能把空白預設當成作者要覆寫的內容。
 const pendingRegexRead = ref(false);
 const pendingRegexWrite = ref<{ set: RegexRuleSet; version: number } | null>(null);
+let pendingOpeningWrite: { roleId: string; page: Blob; version: number; text?: string } | null = null;
 
 /** 右欄那塊面板：對話測試或我的資源，收起來把版面讓回表單。 */
 type Panel = "test" | "res";
@@ -959,6 +961,7 @@ async function discardDraft() {
   if (saving.value || imageUploadsBusy.value.size) return;
   if(recoveredRevert.value && pendingRevert.value && !pendingRevert.value.saveAttempted){
     applyEditorSnapshot(pendingRevert.value.before);
+    if (pendingRevert.value.openingBefore) openingFile.restore(pendingRevert.value.openingBefore);
     pendingRevert.value=null;recoveredRevert.value=false;restoredDraft.value=false;
     storeApprovedLocalDraft();
     return;
@@ -992,6 +995,7 @@ async function discardDraft() {
   savedOpening.value = "greeting";
   pendingRegexRead.value = false;
   pendingRegexWrite.value = null;
+  pendingOpeningWrite = null;
   defaultChatPageForNew();
   draft.value = makeDraft(locale.value);
   tagsText.value = "";
@@ -1366,6 +1370,39 @@ async function reconcilePendingRegexWrite(token: string) {
   } catch { return false; }
 }
 
+async function reconcilePendingOpeningWrite(token: string) {
+  const pending = pendingOpeningWrite;
+  if (!pending || pending.roleId !== roleId.value) return;
+
+  const asset = await fetchAuthorAsset(pending.roleId, token);
+  if (asset.version === pending.version) {
+    pendingOpeningWrite = null;
+    return;
+  }
+
+  // 只採認原始上傳寫入的那一版。規則或頁面有出入時保留本機編輯並交由作者處理。
+  const previous = { ...regexOriginal.value, openingPage: undefined };
+  const actual = { ...ruleSetFromAuthorAsset(asset), openingPage: undefined };
+  if (asset.version !== pending.version + 1 || asset.openingPageBytes !== pending.page.size ||
+      !asset.openingPageUrl || regexWriteKey(actual) !== regexWriteKey(previous)) {
+    throw new Error(t("editor.image.pageOutdated"));
+  }
+  const downloaded = await fetchOpeningPage(asset.openingPageUrl, token, { total: pending.page.size });
+  if (downloaded.size !== pending.page.size) throw new Error(t("editor.image.pageOutdated"));
+  const chunkSize = 1024 * 1024;
+  for (let start = 0; start < downloaded.size; start += chunkSize) {
+    const end = start + chunkSize;
+    const local = new Uint8Array(await pending.page.slice(start, end).arrayBuffer());
+    const remote = new Uint8Array(await downloaded.slice(start, end).arrayBuffer());
+    if (local.some((byte, index) => byte !== remote[index])) throw new Error(t("editor.image.pageOutdated"));
+  }
+
+  regexVersion.value = asset.version;
+  regexOriginal.value = { ...regexOriginal.value, openingPage: pending.text };
+  openingFile.confirmUpload(asset, pending.page);
+  pendingOpeningWrite = null;
+}
+
 /**
  * 卡片存完才存規則：新卡要先有 roleId。沒改就不送。
  * savedAs 是存完要記成「上次存的」那份（大頁面送出時 openingPage 是空字串，記下來的要是真的內容）；
@@ -1594,7 +1631,7 @@ async function revertPublished(){
 }
 async function undoPublished(){
  const pending=pendingRevert.value;if(!pending||recoveredRevert.value||pending.saveAttempted||saving.value)return;
- if(JSON.stringify(editorSnapshot())!==JSON.stringify(pending.preview)&&!(await confirmDialog({phraseWrap:true,title:t('editor.revertUndoTitle'),message:t('editor.revertUndoBody'),confirmText:t('editor.revertUndoConfirm'),cancelText:t('editor.revertUndoCancel'),focusCancel:true})))return;
+ if((openingFile.dirty()||JSON.stringify(editorSnapshot())!==JSON.stringify(pending.preview))&&!(await confirmDialog({phraseWrap:true,title:t('editor.revertUndoTitle'),message:t('editor.revertUndoBody'),confirmText:t('editor.revertUndoConfirm'),cancelText:t('editor.revertUndoCancel'),focusCancel:true})))return;
  applyEditorSnapshot(pending.before);if(pending.openingBefore)openingFile.restore(pending.openingBefore);pendingRevert.value=null;
  storeApprovedLocalDraft();
  await nextTick();restoreButton.value?.focus();
@@ -1609,9 +1646,11 @@ async function commitPendingRevert(token:string){
  }
  const baseline=await readEditorSnapshot(roleId.value,token).catch(()=>{throw new Error(t('editor.revertSaveUnknown'));});
  const edited=editorSnapshot();
+ const openingEdited=openingFile.dirty()||edited.rules.openingPage!==pending.preview.rules.openingPage;
  applyEditorSnapshot(baseline.state);original.value=cloneDraft(draft.value);regexOriginal.value=copied(regexSet.value);regexVersion.value=baseline.assetVersion;savedOpening.value=openingModeOf(regexSet.value);
- // 上游已整份還原（大開場網頁的物件也一起）：開場網頁照讀回來的這張卡重新認一次
- openingFile.adopt(baseline.asset);
+ // 讀回還原後的上游版本，同時保留作者在預覽還原之後做的開場網頁改動。
+ if(openingEdited)openingFile.adoptServer(baseline.asset);
+ else openingFile.adopt(baseline.asset);
  for(const key of Object.keys(edited.draft) as (keyof RoleDraft)[]){
   if(JSON.stringify(edited.draft[key])!==JSON.stringify(pending.preview.draft[key]))Object.assign(draft.value,{[key]:copied(edited.draft[key])});
  }
@@ -1759,6 +1798,7 @@ async function save() {
       if (!(await recoverPendingRegex(token))) throw new Error(t("state.loadFailed"));
     }
     if (pendingRegexWrite.value && !(await reconcilePendingRegexWrite(token))) throw new Error(t("state.loadFailed"));
+    await reconcilePendingOpeningWrite(token);
     await reconcileCompletedProvision(token);
     wasNew = isNew.value;
     let targetRoleId = roleId.value;
@@ -1791,9 +1831,16 @@ async function save() {
     if (regexSnapshot) {
       openingPlan = await openingFile.planSave({ text: regexSnapshot.openingPage ?? "", original: regexOriginal.value.openingPage ?? "", dropPage: clearPage });
       if (openingPlan.upload) {
-        const uploaded = await openingFile.upload(targetRoleId, openingPlan.upload, regexSnapshotVersion, token);
-        regexVersion.value = uploaded.version;
-        regexSnapshotVersion = uploaded.version;
+        pendingOpeningWrite = { roleId: targetRoleId, page: openingPlan.upload, version: regexSnapshotVersion, text: regexSnapshot.openingPage };
+        try {
+          const uploaded = await openingFile.upload(targetRoleId, openingPlan.upload, regexSnapshotVersion, token);
+          regexVersion.value = uploaded.version;
+          regexSnapshotVersion = uploaded.version;
+          pendingOpeningWrite = null;
+        } catch (err) {
+          if (err instanceof ApiError && err.status >= 400 && err.status < 500) pendingOpeningWrite = null;
+          throw err;
+        }
         // 頁面已經存上去：後面失敗重試時不要再傳一次
         if (regexSnapshot.openingPage) regexOriginal.value = { ...regexOriginal.value, openingPage: regexSnapshot.openingPage };
       }

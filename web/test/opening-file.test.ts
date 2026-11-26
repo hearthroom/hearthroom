@@ -48,13 +48,13 @@ beforeEach(() => {
 afterEach(() => setOpeningPageLimitsForTest({ max: null, workshop: null }));
 
 describe("大小規則", () => {
-  it("上限照公開沙盒契約；工坊沒寫就是 512 KB；測試可換成 100 MB", () => {
+  it("預設讀取正式的 100 MB 與工坊的 512 KiB，測試仍能模擬舊上限", () => {
     setOpeningPageLimitsForTest({ max: null });
+    expect(openingPageMaxBytes()).toBe(100000000);
+    setOpeningPageLimitsForTest({ max: 524288 });
     expect(openingPageMaxBytes()).toBe(524288);
     expect(workshopOpeningPageMaxBytes()).toBe(524288);
-    setOpeningPageLimitsForTest({ max: 100000000, workshop: 524288 });
-    expect(openingPageMaxBytes()).toBe(100000000);
-    expect(workshopOpeningPageMaxBytes()).toBe(524288);
+
   });
 
   it("UTF-8 位元組與 TextEncoder 一致（中文、emoji、落單代理字元）", () => {

@@ -311,7 +311,18 @@ export function useOpeningFile(deps: OpeningFileDeps) {
     return { ...keep, json: input.text };
   }
 
-  /** 原始上傳：進度顯示在卡上、可取消；失敗原本的頁面不變，檔案留著等下次儲存。 */
+  function confirmUpload(saved: AuthorAsset, page: Blob) {
+    storedLarge.value = true;
+    storedUrl = saved.openingPageUrl ?? storedUrl;
+    const current = file.value;
+    if (current?.pending && current.blob === page) {
+      setFile({ bytes: page.size, blob: page, pending: false });
+      notice.value = "";
+    }
+    if (error.value === "errFail") error.value = "";
+  }
+
+  /** 原始上傳：進度顯示在卡上、可取消；失敗時保留選取的檔案供下次儲存。 */
   async function upload(roleId: string, page: Blob, version: number, token: string): Promise<AuthorAsset> {
     controller?.abort();
     const own = new AbortController();
@@ -323,12 +334,9 @@ export function useOpeningFile(deps: OpeningFileDeps) {
         signal: own.signal,
         onProgress: (loaded, total) => { if (controller === own) transfer.value = { kind: "upload", percent: percentOf(loaded, total) }; },
       });
-      storedLarge.value = true;
-      storedUrl = saved.openingPageUrl ?? storedUrl;
       cleared.value = false;
       notice.value = "";
-      const current = file.value;
-      if (current?.pending && current.blob === page) setFile({ bytes: page.size, blob: page, pending: false });
+      confirmUpload(saved, page);
       return saved;
     } catch (err) {
       if (!isAbortError(err)) error.value = "errFail";
@@ -353,7 +361,7 @@ export function useOpeningFile(deps: OpeningFileDeps) {
   return {
     file, storedLarge, cleared, transfer, error, notice,
     reset, adopt, adoptServer, showRevision, snapshot, restore, pick, paste, importText, clear, cancel, download, previewContent,
-    hasPage, bytes, dirty, planSave, upload, saved,
+    hasPage, bytes, dirty, planSave, upload, confirmUpload, saved,
   };
 }
 
