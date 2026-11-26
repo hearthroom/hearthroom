@@ -8,6 +8,7 @@ import worker from "../src/index";
 import { envWithAssets } from "./helpers";
 import { isSandboxHost, sandboxRoleIdOf } from "../src/sandbox";
 import { isSelfHost } from "../src/site";
+import { SANDBOX_PARENT_ORIGINS } from "../shared/site-hosts";
 
 const SHELL = "<!doctype html><html><head><title>chat sandbox</title></head><body><div id=\"app\"></div></body></html>";
 // 真資源層對 /sandbox/index.html 回 3xx 到 /sandbox/，所以殼頁只掛在目錄路徑上；index.html 路徑故意給 302，
@@ -44,8 +45,9 @@ describe("沙箱子網域", () => {
     expect(await page.text()).toContain("<title>chat sandbox</title>");
     const csp = page.headers.get("content-security-policy") ?? "";
     expect(csp).toContain("connect-src 'self' https://assets.harperharbor.com;");
-    // 每個正式網域（含 www、play）都能嵌這張卡；順序跟著主網域走，不寫死
-    expect(csp).toMatch(/frame-ancestors [^;]*https:\/\/hearthroom\.club https:\/\/www\.hearthroom\.club/);
+    // Safari 的開場 Blob 會沿用殼的 frame-ancestors，包含它的直屬上層（這張卡的殼）。
+    expect(csp.split("; ").find(directive => directive.startsWith("frame-ancestors ")))
+      .toBe(`frame-ancestors 'self' ${SANDBOX_PARENT_ORIGINS.join(" ")}`);
     for (const origin of ["https://sukisuki.ai", "https://sukisuki.chat", "https://play.hearthroom.club"]) expect(csp).toContain(origin);
     expect(csp).toContain("script-src 'self' 'unsafe-inline' 'unsafe-eval' https:");
     // No additional response policy may deny the host iframe's sharing/write delegation.
