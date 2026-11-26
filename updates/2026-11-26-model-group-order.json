@@ -1,0 +1,11 @@
+{
+  "tier": "fix",
+  "audience": "everyone",
+  "title": {
+    "zh-Hant": "模型設定的分類順序改為 DeepSeek、Gemini、Claude。",
+    "zh-Hans": "模型设置的分类顺序改为 DeepSeek、Gemini、Claude。",
+    "en": "Model settings now list DeepSeek, Gemini, then Claude.",
+    "ja": "モデル設定の分類は DeepSeek、Gemini、Claude の順になりました。",
+    "ko": "모델 설정 분류가 DeepSeek, Gemini, Claude 순으로 바뀌었어요."
+  }
+}
