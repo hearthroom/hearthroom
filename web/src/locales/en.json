@@ -4380,7 +4380,6 @@
   "preset.share.contentVisibility.hidden.hint": "Others can apply this preset, without seeing its entries or parameters",
   "preset.share.contentVisibility.required": "Choose content visibility",
   "preset.share.contentVisibility.limitNote": "When applied, the preset content is still sent to the model to generate replies, so prompting in chat may still cause the model to repeat parts of it.",
-  "preset.share.contentVisibility.disabledImported": "Presets imported from SillyTavern can only be published with contents shown.",
   "preset.share.contentVisibility.disabledOverlap": "Some entries match an existing public or imported preset, so this preset can only be published with contents shown.",
   "preset.share.chip.contentHidden": "Use only",
   "preset.share.detail.contentHidden.factValue": "Hidden",

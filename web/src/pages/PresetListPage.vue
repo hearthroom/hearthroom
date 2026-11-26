@@ -147,7 +147,7 @@ async function unpublish(p: PresetSummary) {
   }
 }
 
-/** 已公開、本站寫的、沒被下架，而且上游有回目前的模式，才能切換 */
+/** 已公開、沒被下架的預設可切換，能否改成「只供使用」由上游回應決定。 */
 const canSwitch = (p: PresetSummary) => p.visibility === "public" && !p.removed && (p.contentVisibility === "hidden" || p.contentHiddenAvailable === true);
 
 async function switchContent(p: PresetSummary, to: ContentVisibility) {

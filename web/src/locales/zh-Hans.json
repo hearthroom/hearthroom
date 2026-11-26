@@ -4380,7 +4380,6 @@
   "preset.share.contentVisibility.hidden.hint": "其他人可以应用，但看不到条目内容与采样参数",
   "preset.share.contentVisibility.required": "选择内容公开方式",
   "preset.share.contentVisibility.limitNote": "应用后，预设内容仍会发送给模型以生成回复；对话中若刻意引导模型，仍可能被复述出部分内容。",
-  "preset.share.contentVisibility.disabledImported": "从酒馆导入的预设只能选「公开内容」。",
   "preset.share.contentVisibility.disabledOverlap": "部分条目与已有的公开或导入预设相同，只能选「公开内容」。",
   "preset.share.chip.contentHidden": "只供使用",
   "preset.share.detail.contentHidden.factValue": "不公开",

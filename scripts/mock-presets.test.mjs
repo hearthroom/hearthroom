@@ -70,14 +70,16 @@ test("deleted owned publications disappear from the mock library", async () => {
  assert.ok(!(await request("/open/v1/preset-library")).body.items.some(p=>p.presetId===id));
 });
 
-test("use-only publishing: imported and overlapping presets are refused, others read an empty detail", async () => {
+test("use-only publishing: imported presets are eligible, overlap is refused, others read an empty detail", async () => {
   await request("/__presets/reset");
   const declaration = "preset-publish-2026-10-30";
   const imported = (await request("/open/v1/presets")).body.items[0];
   assert.equal(imported.sourceKind, "imported");
   assert.equal(imported.contentVisibility, "open");
-  const refused = await request(`/open/v1/presets/${imported.id}/publish`, "POST", { expectedVersion: imported.version, declaration, purpose: "general", contentVisibility: "hidden" });
-  assert.deepEqual(refused, { status: 422, body: { error: "preset_invalid", reason: "preset_hidden_imported" } });
+  const importedHidden = await request(`/open/v1/presets/${imported.id}/publish`, "POST", { expectedVersion: imported.version, declaration, purpose: "general", contentVisibility: "hidden" });
+  assert.equal(importedHidden.status, 200);
+  assert.equal(imported.contentHiddenAvailable, true);
+  assert.equal((await request(`/open/v1/presets/${imported.id}`)).body.contentVisibility, "hidden");
   const document = { schemaVersion: "hearthroom.st-preset.v1", st: { prompts: [] }, selection: { profileId: 1 } };
   const copied = await request("/open/v1/presets", "POST", { title: "撞到的預設", document, purpose: "general", recommendedModels: [] });
   const overlap = await request(`/open/v1/presets/${copied.body.presetId}/publish`, "POST", { expectedVersion: 1, declaration, purpose: "general", contentVisibility: "hidden" });
@@ -101,12 +103,12 @@ test("use-only publishing: imported and overlapping presets are refused, others 
   assert.ok(hidden.body.item.enabledEntryCount > 0);
 });
 
-test("use-only availability follows the switch and the source", async (t) => {
+test("use-only availability follows the switch for both sources", async (t) => {
   await request("/__presets/reset");
   t.after(() => request("/__presets?scenario="));
   const on = await request("/open/v1/presets");
   assert.equal(on.body.contentHiddenEnabled, true);
-  assert.equal(on.body.items[0].contentHiddenAvailable, false); // 匯入的
+  assert.equal(on.body.items[0].contentHiddenAvailable, true);
   const document = { schemaVersion: "hearthroom.st-preset.v1", st: { prompts: [] }, selection: { profileId: 1 } };
   const own = await request("/open/v1/presets", "POST", { title: "自己寫的", document, purpose: "general", recommendedModels: [] });
   assert.equal((await request(`/open/v1/presets/${own.body.presetId}`)).body.contentHiddenAvailable, true);

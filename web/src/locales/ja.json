@@ -4380,7 +4380,6 @@
   "preset.share.contentVisibility.hidden.hint": "ほかの人も適用できますが、エントリーの内容とサンプリング設定は表示されません",
   "preset.share.contentVisibility.required": "内容の公開範囲を選択",
   "preset.share.contentVisibility.limitNote": "適用するとプリセットの内容は返信生成のためモデルに送られるため、会話の誘導によって一部が復唱される場合があります。",
-  "preset.share.contentVisibility.disabledImported": "SillyTavernから読み込んだプリセットは「内容を公開」でのみ公開できます。",
   "preset.share.contentVisibility.disabledOverlap": "一部のエントリーが既存の公開プリセットまたは読み込み済みプリセットと一致するため、「内容を公開」でのみ公開できます。",
   "preset.share.chip.contentHidden": "使用のみ",
   "preset.share.detail.contentHidden.factValue": "非公開",

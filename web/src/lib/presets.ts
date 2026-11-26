@@ -37,7 +37,7 @@ export interface PresetSummary {
   attribution?: string;
   /** 公開時的內容模式；私人預設也會帶（上次公開選的，沒公開過是 open），只在已公開時有意義 */
   contentVisibility?: ContentVisibility;
-  /** 這份現在能選「只供使用」：上游開關開著而且不是匯入的。舊上游沒有這一項，當不能選 */
+  /** 這份現在能選「只供使用」。舊上游沒有這一項，當不能選。 */
   contentHiddenAvailable?: boolean;
   /** 平台下架了：作者看得到這個標示，不能再公開 */
   removed?: boolean;
@@ -122,7 +122,6 @@ const REASON_KEY: Record<string, string> = {
   preset_removed: "preset.share.takenDown.note",
   preset_declaration_changed: "preset.share.error.declarationChanged",
   // 只供使用被拒；preset_hidden_disabled（還沒開放）沒有專屬的句子，落到一般的公開失敗句
-  preset_hidden_imported: "preset.share.contentVisibility.disabledImported",
   preset_hidden_overlap: "preset.share.contentVisibility.disabledOverlap",
 };
 /** 沒有細碼時看碼本身；這幾個在預設頁上有比站上通用句更準的說法。 */
