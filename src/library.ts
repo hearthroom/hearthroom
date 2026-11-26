@@ -6,7 +6,8 @@ import { authFunnelMetrics } from './auth-funnel';
 import {publicPosition,publicCandidates,publicCandidatePage} from './work-pagination';
 import { ownedHistory, bindOwnedHistory } from "./owned-history";
 import { moderationMetrics } from "./moderation";
-import { opsMetrics } from "./ops-metrics";
+import { bumpOp, opsMetrics } from "./ops-metrics";
+import { emit } from "./analytics";
 import { flushMetrics, recordLibraryMetric } from "./metrics-buffer";
 import { bodyLimit } from "hono/body-limit";
 import { Hono } from "hono";
@@ -194,7 +195,14 @@ libraryRoutes.put('/v1/me/conversations', bodyLimit({ maxSize: 2048 }), async c 
     db.prepare("UPDATE campaign_attributions SET first_play_at = ? WHERE member_id = ? AND first_play_at IS NULL AND ?=1").bind(now, member.id, publicActivity),
     db.prepare("INSERT OR IGNORE INTO campaign_active_days (member_id, day) SELECT ?, ? WHERE ?=1 AND EXISTS (SELECT 1 FROM campaign_attributions WHERE member_id = ?)")
       .bind(member.id, Math.floor(now / 86_400_000), publicActivity, member.id),
+    // 推廣貼文歸因的首聊：主鍵更新，沒有歸因或已記過就比不到列；記到了才回代號給 AE
+    db.prepare("UPDATE promo_attributions SET first_play_at = ? WHERE member_id = ? AND first_play_at IS NULL AND ?=1 RETURNING campaign").bind(now, member.id, publicActivity),
   ]);
+  const promo = (results[5].results as { campaign?: string }[] | undefined)?.[0]?.campaign;
+  if (promo) {
+    await bumpOp(db, 'promo_attribution', 'first_play', 'recorded');
+    emit(c.env, c.executionCtx, { event: 'promo_first_play', subject: promo, outcome: 'ok', client: 'server' });
+  }
   return c.json({ saved: true, first: results[0].meta.changes === 1 });
 });
 

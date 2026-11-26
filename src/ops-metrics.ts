@@ -9,6 +9,7 @@ import { flushMetrics, recordOpsMetric } from "./metrics-buffer";
 const METRICS = {
   review_status:{name:'hearthroom_review_status_reads_total',help:'Author-only review summary reads.',label:'operation',operations:['read'],outcomes:['success','denied','error']},
   comment_pin:{name:'hearthroom_comment_pins_total',help:'Card author pin and unpin requests by bounded result.',label:'action',operations:['pin','unpin'],outcomes:['ok','limit','forbidden','error']},
+  promo_attribution:{name:'hearthroom_promo_attributions_total',help:'Per-post promotion attribution: login binding of a registered post campaign and the attributed member\'s first chat; no campaign or member identifiers.',label:'operation',operations:['bind','first_play'],outcomes:['bound','unknown','existing','not_new','excluded','recorded']},
   promo_redirect: {name:'hearthroom_promo_redirects_total',help:'Temporary promotion redirects by bounded outcome; no campaign or referral identifiers.',label:'operation',operations:['redirect'],outcomes:['success','unknown','invalid']},
   score_admission: {name:'hearthroom_score_admissions_total',help:'Verified card rating qualification before score writes.',label:'operation',operations:['set'],outcomes:['allowed','denied','unavailable']},
   country_region:{name:'hearthroom_country_region_operations_total',help:'First country/region defaults, settings saves and region policy denials.',label:'operation',operations:['initialize','save','admission'],outcomes:['success','denied','error']},

@@ -12,6 +12,7 @@ import { isPlayHost } from "./lib/site";
 import { setSurface } from "./lib/track";
 import { ga4PageView } from "./lib/ga4";
 import { captureGa4Source } from "./lib/ga4-attribution";
+import { notePromoPost } from "./lib/promo-post";
 import { campaignShareFromQuery, noteCampaignShare, refFromQuery, rememberShareRef, noteShareOpen } from "./lib/share-ref";
 import { rememberAndroidAppLaunch } from "./lib/route-lines";
 import { LEGACY_SETTINGS_HASH, isSettingsSection } from "./lib/settings-sections";
@@ -242,6 +243,7 @@ export function withLocale(path: string, locale: string): string {
 // 之後的登入連結（例如活動頁的 returnTo）不再帶 s，靠瀏覽器的紀錄綁定。
 router.beforeEach((to) => {
   captureGa4Source(new URL(to.fullPath, location.origin).href);
+  notePromoPost(new URL(to.fullPath, location.origin).href);
   const share = campaignShareFromQuery(to.query.s);
   if (!("ref" in to.query) && !share) return true;
   const code = refFromQuery(to.query.ref);

@@ -42,6 +42,8 @@ forged by anyone, so use them for trends and comparisons, not for billing or ran
 | `campaign_apply` | apply action on the campaign page | campaign slug |
 | `campaign_share` | a share link is copied | campaign slug |
 | `promo_redirect` | non-bot GET `/go/<code>` redirects; `detail` is `get`, `outcome` is `success`, `unknown` or `invalid` | configured short code; empty for unknown input |
+| `promo_signup` | server: a member whose account was created after clicking a registered post link signs in and is attributed to that post (once per member, test accounts excluded); `blob15 = 'server'` | registered `utm_campaign` |
+| `promo_first_play` | server: that attributed member opens their first chat | registered `utm_campaign` |
 
 Promotional landing campaigns are accepted only when registered in `config/promo-links.json`,
 matching `[a-z0-9][a-z0-9-]{0,63}`, with exactly one `utm_campaign` parameter. Register a
@@ -171,6 +173,33 @@ FORMAT JSON
 External referrers (`blob7`) are recorded only on HTML loads, which beacon events are not, so
 this dataset cannot say which external site sent a blog reader. Use Cloudflare Web Analytics
 for that.
+
+## 5. Per promotion post: clicks, sign-ups, first chats
+
+Each post's code is its registered `utm_campaign`. A signed-out visitor's browser keeps the
+last code it landed with (first click time, 30 days); after sign-in it is bound once on the
+server, only for an account created after that click. Counts are a lower bound: a click in an
+in-app browser followed by sign-up in another browser is not attributed, as with referral
+codes. Referral rewards and share-season attribution are unchanged.
+
+```sql
+SELECT blob11 AS post,
+       SUM(IF(blob1 = 'promo_signup', _sample_interval, 0))     AS signups,
+       SUM(IF(blob1 = 'promo_first_play', _sample_interval, 0)) AS first_chats
+FROM hearthroom_events
+WHERE timestamp > NOW() - INTERVAL '30' DAY
+  AND blob1 IN ('promo_signup', 'promo_first_play')
+GROUP BY post
+ORDER BY signups DESC
+FORMAT JSON
+```
+
+Clicks for the same post come from section "Data point layout" above: `page_html` with
+`blob16 = '<post>'` (landings) or `promo_redirect` with `blob11 = '<short code>'`. The
+durable record is the D1 table `promo_attributions` (one row per attributed member: code and
+times only); reconcile with an aggregate only, for example
+`SELECT campaign, COUNT(*) AS signups, COUNT(first_play_at) AS first_chats FROM promo_attributions GROUP BY campaign`.
+Measurement starts when this release went live; earlier posts have no sign-up rows.
 
 ## Running the queries
 
