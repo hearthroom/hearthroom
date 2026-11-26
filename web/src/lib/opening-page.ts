@@ -7,7 +7,7 @@
  * - 超過 OPENING_PAGE_EDIT_MAX_BYTES 的頁面不放進文字框：文字框灰掉，只能上傳取代、下載、清除。
  *   門檻是在真的 Chrome 裡量出來的（桌機與手機模擬），數字與量法見任務書。
  */
-import { provider as contractLimits } from "../../public/contracts/sandbox-contract.json";
+import { provider as contractLimits } from "../../../stage/contract/sandbox-contract.json";
 
 /** 上游內嵌在作者資產裡的上限；超過就只給大小與網址，存檔也要走原始上傳。 */
 export const OPENING_PAGE_INLINE_BYTES = 512 * 1024;
