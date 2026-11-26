@@ -155,7 +155,7 @@ describe('不走快速通道（留在人工佇列）', () => {
   it('AI 判不通過、交人工、有審核標記、不是目前判準版本', async () => {
     const { update } = await liveCardWithUpdate();
     await suggest(update, { verdict: 'reject' });
-    await suggest(update, { verdict: 'handoff', handoffCause: 'unsure' });
+    await suggest(update, { verdict: 'handoff', handoffCause: 'unsure', reasons: ['quality_evidence'] });
     expect(await metric('ineligible_verdict')).toBe(2);
     await suggest(update, { flags: ['ai_unedited'] });
     expect(await metric('ineligible_flags')).toBe(1);

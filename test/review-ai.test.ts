@@ -145,6 +145,36 @@ describe('寫建議', () => {
     const handoff = await suggest(id, { verdict: 'handoff', handoffCause: 'refusal' });
     expect(handoff.status).toBe(200);
   });
+
+  it('只接受明確的品質原因交給人工，並用固定說明保護交人工欄位', async () => {
+    const { id } = await submitCard();
+    const detail = await json(await get(`/v1/review-ai/submissions/${id}`, 'key'));
+    const badReasons = [[], ['unrelated'], ['opening.no_reply_hook'], ['quality_evidence', 'update_diff_unavailable']];
+    for (const reasons of badReasons) {
+      const res = await suggest(id, { verdict: 'handoff', handoffCause: 'unsure', reasons, note: 'Unrelated assessment' });
+      expect(res.status).toBe(400);
+      expect(await json(res)).toMatchObject({
+        error: 'review_unsure_reason_required',
+        detail: { field: 'reasons', hint: expect.stringContaining('pass') },
+      });
+    }
+    expect((await suggest(id, { verdict: 'handoff' })).status).toBe(400);
+    expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM review_ai_suggestions WHERE submission_id=?').bind(id).first('n')).toBe(0);
+    expect(detail.allowed.handoffReasons).toEqual(['quality_evidence', 'suspected_template', 'update_diff_unavailable']);
+    for (const reason of detail.allowed.handoffReasons) {
+      const res = await suggest(id, { verdict: 'handoff', handoffCause: 'unsure', reasons: [reason], note: 'Unrelated assessment' });
+      expect(res.status).toBe(200);
+      const row = await env.DB.prepare('SELECT verdict, reasons, note FROM review_ai_suggestions WHERE submission_id=?').bind(id).first();
+      expect(row).toMatchObject({ verdict: 'handoff', reasons: JSON.stringify([reason]), note: expect.any(String) });
+      expect(row?.note).not.toBe('Unrelated assessment');
+    }
+    expect(await status(id)).toBe('pending');
+    expect((await suggest(id, { verdict: 'reject', reasons: ['quality_evidence'] })).status).toBe(400);
+    expect((await suggest(id, { verdict: 'handoff', handoffCause: 'timeout' })).status).toBe(200);
+    const metrics = await opsMetrics(env.DB);
+    expect(metrics).toContain('hearthroom_review_ai_unsure_total{operation="suggest",outcome="invalid_reason"} 5');
+    expect(metrics).toContain('hearthroom_review_ai_unsure_total{operation="suggest",outcome="saved"} 3');
+  });
 });
 
 describe('佇列', () => {
@@ -532,7 +562,7 @@ describe('仲裁：不受理中的單與改判', () => {
     const res = await send('POST', `/v1/review-ai/disagreements/${sid}/arbitration`, 'mgr', { value: 'ai_right', operationId: crypto.randomUUID() });
     expect(res.status).toBe(200);
     // 審卡員同一版判準重寫成交人：現在已經不算分歧（重新審核改判也會這樣）
-    await suggest(id, { verdict: 'handoff', handoffCause: 'unsure' });
+    await suggest(id, { verdict: 'handoff', handoffCause: 'unsure', reasons: ['quality_evidence'] });
     const done = await json(await get('/v1/review-ai/disagreements?state=done', 'mgr'));
     expect(done.items.map((i: any) => [i.suggestionId, i.direction, i.human.decision])).toEqual([[sid, 'ai_stricter', 'approved']]);
     expect((await get(`/v1/review-ai/disagreements/${sid}`, 'mgr')).status).toBe(200);

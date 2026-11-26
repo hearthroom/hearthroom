@@ -2,7 +2,7 @@ import { Hono, type Context } from "hono";
 import { requireReviewer, reviewerRole } from "./members";
 import { bumpOp } from "./ops-metrics";
 import { getSubmission, type SubmissionRow } from "./review";
-import { currentCriteria, setCurrentCriteria, AI_FLAGS, AI_HANDOFF_CAUSES, AI_REASONS, AI_VERDICTS, aiCardInput, aiPhaseOf, aiReadPhase, aiReport, aiSubmissionMeta, AI_BACKFILL_WINDOW_MS, canReveal, parseSuggestion, saveSuggestion, suggestionsOf } from "./review-ai";
+import { currentCriteria, setCurrentCriteria, AI_FLAGS, AI_HANDOFF_CAUSES, AI_HANDOFF_REASONS, AI_REASONS, AI_VERDICTS, aiCardInput, aiPhaseOf, aiReadPhase, aiReport, aiSubmissionMeta, AI_BACKFILL_WINDOW_MS, canReveal, parseSuggestion, saveSuggestion, suggestionsOf, UNSURE_REASON_ERROR } from "./review-ai";
 import { loadSnapshot } from "./review-snapshot";
 import { originalityReport } from "./originality";
 import { diffView } from "./review-diff-store";
@@ -51,6 +51,9 @@ async function counted<T>(c: Ctx, op: Op, run: () => Promise<T>): Promise<T> {
     return out;
   } catch (error) {
     const status = error instanceof HttpError ? error.status : 500;
+    if (op === "suggest" && error instanceof HttpError && error.message === UNSURE_REASON_ERROR) {
+      await bumpOp(c.env.DB, "review_ai_unsure", "suggest", "invalid_reason");
+    }
     await bumpOp(c.env.DB, "review_ai", op, status === 401 || status === 403 ? "denied" : status === 502 || status === 503 ? "unavailable" : status < 500 ? "rejected" : "error");
     throw error;
   }
@@ -102,7 +105,7 @@ reviewAiRoutes.get("/v1/review-ai/submissions/:id", (c) => counted(c, "read", as
     ...aiCardInput(settings, meta, { applyRules: true }),
     update: await aiUpdateDiff(c.env, s),
     originality: await aiOriginality(c.env.DB, s, settings),
-    allowed: { verdicts: AI_VERDICTS, reasons: AI_REASONS, flags: AI_FLAGS, handoffCauses: AI_HANDOFF_CAUSES },
+    allowed: { verdicts: AI_VERDICTS, reasons: AI_REASONS, flags: AI_FLAGS, handoffCauses: AI_HANDOFF_CAUSES, handoffReasons: AI_HANDOFF_REASONS },
   }, 200, NO_STORE);
 }));
 
@@ -224,6 +227,7 @@ async function write(c: Ctx, tagsOnly: boolean) {
   const input = parseSuggestion(body, { tagsOnly });
   const row = await saveSuggestion(c.env.DB, { ...input, submissionId: s.id, cardId: Number(s.card_id), agentId: agent.id, phase, now }, { tagsOnly });
   if (!tagsOnly && input.verdict) await bumpOp(c.env.DB, "review_ai_verdict", input.verdict, phase);
+  if (input.handoffCause === "unsure") await bumpOp(c.env.DB, "review_ai_unsure", "suggest", "saved");
   // AI 快速通道（review-fast-track.ts）：待審單寫下結論後判一次；不符合就留在人工佇列。結果不回給審卡員
   if (!tagsOnly && input.verdict && phase === "shadow") {
     if (await tryFastTrack(c.env, s.id, { suggestionId: row.id, at: row.updated_at }) === "approved") queuePush(c);

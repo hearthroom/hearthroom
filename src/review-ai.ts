@@ -22,6 +22,13 @@ export const AI_REASONS = ["opening.no_reply_hook", "opening.no_focused_event", 
 /** 審核標記：只給審核與數據，作者看不到 */
 export const AI_FLAGS = ["ai_unedited", "copied_text", "mass_produced"] as const;
 export const AI_HANDOFF_CAUSES = ["unsure", "refusal", "invalid_output", "timeout", "error", "too_large"] as const;
+const QUALITY_HANDOFF_NOTES = {
+  quality_evidence: "現有資料不足以判斷這張卡的玩法是否經過設計，請人工比對。",
+  suspected_template: "疑似套用相同模板，請人工比對作者的其他卡片。",
+  update_diff_unavailable: "讀不到可比較的前版差異，請人工確認這次更新是否讓品質下降。",
+} as const;
+export const AI_HANDOFF_REASONS = Object.keys(QUALITY_HANDOFF_NOTES) as (keyof typeof QUALITY_HANDOFF_NOTES)[];
+export const UNSURE_REASON_ERROR = "review_unsure_reason_required";
 export const AI_FEEDBACK = ["ai_right", "ai_wrong", "both_ok"] as const;
 /** 已定案的單，送審後多久內還能讓 AI 讀（試跑用） */
 export const AI_BACKFILL_WINDOW_MS = 7 * 86_400_000;
@@ -375,14 +382,25 @@ export function parseSuggestion(body: Record<string, unknown>, opts: { tagsOnly?
   }
   if (!oneOf(body.verdict, AI_VERDICTS)) bad("verdict");
   const verdict = body.verdict as AiVerdict;
-  const reasons = codes(body.reasons, AI_REASONS, "reasons");
-  if (verdict === "reject" && reasons.length + flags.length === 0) bad("reasons");
-  if (verdict === "pass" && reasons.length) bad("reasons");
   let handoffCause: string | null = null;
   if (verdict === "handoff") {
     if (body.handoffCause !== undefined && !oneOf(body.handoffCause, AI_HANDOFF_CAUSES)) bad("handoffCause");
     handoffCause = (body.handoffCause as string | undefined) ?? "unsure";
   } else if (body.handoffCause !== undefined && body.handoffCause !== null) bad("handoffCause");
+  let unsureReason: keyof typeof QUALITY_HANDOFF_NOTES | null = null;
+  if (handoffCause === "unsure") {
+    const selected = Array.isArray(body.reasons) && body.reasons.length === 1 ? body.reasons[0] : null;
+    if (!oneOf(selected, AI_HANDOFF_REASONS)) {
+      throw new HttpError(400, UNSURE_REASON_ERROR, {
+        field: "reasons",
+        hint: "請依卡片的用心程度及量產跡象判定 pass 或 reject。若仍需要人工比對，從讀卡結果的交人工理由中選一項。",
+      });
+    }
+    unsureReason = selected;
+  }
+  const reasons = unsureReason ? [unsureReason] : codes(body.reasons, AI_REASONS, "reasons");
+  if (verdict === "reject" && reasons.length + flags.length === 0) bad("reasons");
+  if (verdict === "pass" && reasons.length) bad("reasons");
   const confidence = count(body.confidence, "confidence", 1);
   const note = body.note === undefined || body.note === null ? "" : body.note;
   if (typeof note !== "string" || note.length > LIMITS.note) bad("note");
@@ -399,7 +417,9 @@ export function parseSuggestion(body: Record<string, unknown>, opts: { tagsOnly?
     hint: "authorNote is shown to the card's author. Describe only the card itself (opening, setting, lorebook, writing) and how to improve it. Keep submission quota, pace, devices, accounts and scores in note, which only reviewers see.",
   });
   return {
-    criteriaVersion: criteriaVersion as string, model: model as string, verdict, reasons, flags, flagsGiven, confidence, note: (note as string).trim(), handoffCause, authorNote: (authorNote as string).trim(),
+    criteriaVersion: criteriaVersion as string, model: model as string, verdict, reasons, flags, flagsGiven, confidence,
+    note: unsureReason ? QUALITY_HANDOFF_NOTES[unsureReason] : (note as string).trim(),
+    handoffCause, authorNote: (authorNote as string).trim(),
     inputTokens: count(body.inputTokens, "inputTokens"), outputTokens: count(body.outputTokens, "outputTokens"),
     costUsd: count(body.costUsd, "costUsd", 100), latencyMs: count(body.latencyMs, "latencyMs", 86_400_000),
   };
