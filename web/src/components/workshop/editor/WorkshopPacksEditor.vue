@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, nextTick, ref } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { confirmDialog } from "@/lib/confirm";
+import { filterWorkshopPacks, WORKSHOP_INLINE_PACKS, WORKSHOP_PACK_LIMIT } from "@/lib/workshop-mods";
 import type { LorePackDraft } from "@/lib/workshop";
 import type { WorldbookEntryDraft } from "@/lib/role-draft";
 
@@ -16,6 +17,17 @@ const dialog = ref<HTMLDialogElement | null>(null);
 const draft = ref<LorePackDraft>();
 const field = ref<"all" | "name" | "description">("all");
 const tried = ref(false);
+
+const page = ref(0);
+const search = ref("");
+const matches = computed(() => filterWorkshopPacks(packs.value, search.value));
+const pageCount = computed(() => Math.ceil(matches.value.length / WORKSHOP_INLINE_PACKS));
+const shown = computed(() => {
+  const start = page.value * WORKSHOP_INLINE_PACKS;
+  return matches.value.slice(start, start + WORKSHOP_INLINE_PACKS);
+});
+watch(search, () => { page.value = 0; menu.value = ""; });
+watch(pageCount, count => { if (page.value >= count) page.value = Math.max(0, count - 1); });
 
 const entryCounts = computed(() => {
   const counts = new Map<string, number>();
@@ -78,8 +90,11 @@ async function remove(pack: LorePackDraft) {
     <h3 id="workshop-packs-title">{{ tr("title") }}</h3>
     <p class="subtle">{{ tr("hint") }}</p>
     <p v-if="!packs.length" class="subtle">{{ tr("empty") }}</p>
-    <ul v-else class="workshop-packs__list">
-      <li v-for="pack in packs" :key="pack.id" class="workshop-packs__row">
+    <input v-if="packs.length > WORKSHOP_INLINE_PACKS || search" v-model="search" class="input" type="search"
+           :aria-label="tr('search')" :placeholder="tr('search')" />
+    <p v-if="search.trim() && !matches.length" class="subtle" role="status">{{ tr("noMatches") }}</p>
+    <ul v-if="shown.length" class="workshop-packs__list">
+      <li v-for="pack in shown" :key="pack.id" class="workshop-packs__row">
         <strong>{{ pack.name }}</strong>
         <span class="subtle workshop-packs__count">{{ tr("rowCount", { n: n(entryCounts.get(pack.id) ?? 0) }) }}</span>
         <span class="chip">{{ tr(pack.defaultEnabled ? "chipDefaultOn" : "chipDefaultOff") }}</span>
@@ -93,7 +108,12 @@ async function remove(pack: LorePackDraft) {
         </div>
       </li>
     </ul>
-    <button type="button" class="btn" :disabled="packs.length >= 100" @click="edit()">{{ tr("add") }}</button>
+    <nav v-if="pageCount > 1" class="workshop-packs__pages" :aria-label="tr('title')">
+      <button type="button" class="btn btn--sm" :disabled="page === 0" @click="page--; menu = ''">{{ tr("prevPage") }}</button>
+      <span class="subtle" aria-live="polite">{{ n(page + 1) }} / {{ n(pageCount) }}</span>
+      <button type="button" class="btn btn--sm" :disabled="page + 1 >= pageCount" @click="page++; menu = ''">{{ tr("nextPage") }}</button>
+    </nav>
+    <button type="button" class="btn" :disabled="packs.length >= WORKSHOP_PACK_LIMIT" @click="edit()">{{ tr("add") }}</button>
     <div class="workshop-packs__script">
       <label>
         <input v-model="scriptCanSwitch" role="switch" type="checkbox" :disabled="!packs.length" aria-describedby="workshop-packs-permission" />
@@ -135,6 +155,7 @@ async function remove(pack: LorePackDraft) {
 
 <style scoped>
 .workshop-packs { display: grid; justify-items: start; gap: var(--s-3); padding: var(--s-4); }
+.workshop-packs__pages { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2); }
 .workshop-packs h3, .workshop-packs p { margin: 0; }
 .workshop-packs__list { margin: 0; padding: 0; list-style: none; width: 100%; }
 .workshop-packs__row { position: relative; display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2); min-height: 48px; }

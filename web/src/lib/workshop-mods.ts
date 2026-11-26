@@ -17,6 +17,9 @@ export interface ConversationMod {
   enabled: boolean;
   residentChars: number;
   packs?: ModPack[];
+  packCount?: number;
+  enabledPackCount?: number;
+  packCatalogVersion?: string;
   scriptCanSwitchPacks?: boolean;
 }
 
@@ -71,4 +74,13 @@ export interface UniversalModChoice {
   residentChars: number;
   updatedAt: number;
   joined: boolean;
+}
+
+export const WORKSHOP_PACK_LIMIT = 10_000;
+export const WORKSHOP_INLINE_PACKS = 20;
+
+export function filterWorkshopPacks<T extends { name: string; description?: string }>(packs: readonly T[], query: string): readonly T[] {
+  const term = query.trim().toLowerCase();
+  if (!term) return packs;
+  return packs.filter(pack => pack.name.toLowerCase().includes(term) || pack.description?.toLowerCase().includes(term));
 }

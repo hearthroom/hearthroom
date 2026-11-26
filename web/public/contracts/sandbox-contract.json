@@ -1554,6 +1554,7 @@
       "tavern",
       "mmd"
     ],
+    "workshopPackMaxChanges": 10000,
     "openingPageMaxBytes": 100000000,
     "workshopOpeningPageMaxBytes": 524288,
     "cardCssMaxBytes": 524288,
@@ -1622,5 +1623,5 @@
       ]
     }
   },
-  "stageCommit": "5be0a3a130118b74c5303fde97bcd743e074c0df"
+  "stageCommit": "a4ccb3af1d40644b818d3ab99a12bc1c861c24e6"
 }

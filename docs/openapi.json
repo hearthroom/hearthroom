@@ -21991,6 +21991,7 @@
                   },
                   "lorePacks": {
                     "type": "array",
+                    "maxItems": 10000,
                     "maxItems": 100,
                     "items": {
                       "$ref": "#/components/schemas/WorkshopLorePackDraft"
@@ -22611,6 +22612,8 @@
                   "packs": {
                     "type": "array",
                     "minItems": 1,
+                    "maxItems": 10000,
+                    "minItems": 1,
                     "items": {
                       "type": "object",
                       "properties": {
@@ -22762,6 +22765,18 @@
         "description": "Requires chat.play and conversation ownership. Selection changes apply at the next send.",
         "parameters": [
           {
+            "name": "packSummary",
+            "in": "query",
+            "description": "Use 1 to return only counts and a catalog revision for DLCs with over 20 packages.",
+            "schema": {"type": "string", "enum": ["1"]}
+          },
+          {
+            "name": "packWorkshopId",
+            "in": "query",
+            "description": "With packSummary=1, expand the selected DLC's public packages in the same versioned response.",
+            "schema": {"type": "string", "format": "uuid"}
+          },
+          {
             "in": "query",
             "name": "trialWorkshopId",
             "description": "Require the conversation to be the signed-in DLC author’s trial of this draft. Trial writes support package switches only.",
@@ -22811,6 +22826,12 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "packSummary",
+            "in": "query",
+            "description": "Use 1 to return only counts and a catalog revision for DLCs with over 20 packages.",
+            "schema": {"type": "string", "enum": ["1"]}
           }
         ],
         "requestBody": {
@@ -22852,6 +22873,8 @@
                   },
                   "packs": {
                     "type": "array",
+                    "minItems": 1,
+                    "maxItems": 10000,
                     "minItems": 1,
                     "items": {
                       "type": "object",

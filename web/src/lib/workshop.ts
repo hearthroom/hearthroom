@@ -208,10 +208,11 @@ export const fetchUsageSummary = (roleId: string, token: string) => upstream<Usa
 
 const conversationModsPath = "/workshop/conversation/mods";
 const privateModPath = "/workshop/conversation/private-lorebook";
-export const fetchConversationMods = (conversationId: string, token: string, trialWorkshopId?: string) =>
-  upstream<ConversationMods>(conversationModsPath + q({ conversationId, trialWorkshopId }), token);
+export const fetchConversationMods = (
+  conversationId: string, token: string, scope: { packWorkshopId?: string; trialWorkshopId?: string } = {},
+) => upstream<ConversationMods>(conversationModsPath + q({ conversationId, packSummary: "1", ...scope }), token);
 export const applyConversationMod = (conversationId: string, version: string, action: ModAction, token: string, trialWorkshopId?: string) =>
-  upstream<ConversationMods>(conversationModsPath + q({ trialWorkshopId }), token, { conversationId, version, ...action });
+  upstream<ConversationMods>(conversationModsPath + q({ packSummary: "1", trialWorkshopId }), token, { conversationId, version, ...action });
 export const fetchPrivateMod = (conversationId: string, token: string) =>
   upstream<PrivateModBook>(privateModPath + q({ conversationId }), token);
 export const savePrivateMod = (conversationId: string, revision: string, entries: PrivateModEntry[], token: string) =>

@@ -16,6 +16,8 @@ import { confirmDialog } from "@/lib/confirm";
 import type { WorldbookEntryDraft, WorldbookMatchOptions } from "@/lib/role-draft";
 import { entryContentMax } from "@/lib/tavern";
 import { looksLikeBareRegex } from "@/lib/lorebook-regex";
+import WorkshopPackOptions from "@/components/workshop/WorkshopPackOptions.vue";
+import { WORKSHOP_INLINE_PACKS, WORKSHOP_PACK_LIMIT } from "@/lib/workshop-mods";
 import type { LorePackDraft } from "@/lib/workshop";
 
 const props = defineProps<{
@@ -51,9 +53,24 @@ const secondaryRegexHint = computed(() => entry.value?.secondaryKeywords?.some(l
 
 const query = ref("");
 const packFilter = ref("");
+const largePackList = computed(() => (props.lorePacks?.length ?? 0) > WORKSHOP_INLINE_PACKS);
+const packPicker = ref<HTMLDialogElement | null>(null);
+const packPickerMode = ref<"filter" | "assign">("filter");
+const pickerOpen = ref(false);
+function openPackPicker(mode: typeof packPickerMode.value) {
+  packPickerMode.value = mode;
+  pickerOpen.value = true;
+  packPicker.value?.showModal();
+}
+function selectPack(id: string) {
+  if (packPickerMode.value === "filter") packFilter.value = id;
+  else patch({ packId: id || undefined });
+  packPicker.value?.close();
+}
 const batch = ref(false);
 const selection = ref<number[]>([]);
 const moveDialog = ref<HTMLDialogElement | null>(null);
+const moveOpen = ref(false);
 const targetPack = ref<string | null>(null);
 const newPack = ref("");
 const NEW_PACK = "new";
@@ -75,13 +92,14 @@ function cancelBatch() {
 function openMoveDialog() {
   targetPack.value = null;
   newPack.value = "";
+  moveOpen.value = true;
   moveDialog.value?.showModal();
 }
 function saveMove() {
   if (!props.lorePacks || !selection.value.length || targetPack.value === null) return;
   let packId = targetPack.value || undefined;
   if (packId === NEW_PACK) {
-    if (!newPack.value.trim() || newPackError.value || props.lorePacks.length >= 100) return;
+    if (!newPack.value.trim() || newPackError.value || props.lorePacks.length >= WORKSHOP_PACK_LIMIT) return;
     packId = crypto.randomUUID();
     emit("update:lorePacks", [...props.lorePacks, { id: packId, name: newPack.value.trim(), defaultEnabled: true }]);
   }
@@ -332,7 +350,7 @@ function onKeydown(event: KeyboardEvent) {
   const target = event.target as HTMLElement;
   // Preserve the full DOM tab order even when the list is scrolled: Add → first
   // entry, and Shift+Tab from the edit form → last entry, rather than window edges.
-  if (!event.shiftKey && target.matches('.wbd__list > button')) {
+  if (!event.shiftKey && target.matches('[data-worldbook-add]')) {
     event.preventDefault(); void focusPosition(0, true);
   } else if (event.shiftKey && target.id === 'wbd-name') {
     event.preventDefault(); void focusPosition(visible.value.length - 1, false);
@@ -361,10 +379,13 @@ function onKeydown(event: KeyboardEvent) {
 
         <div class="wbd__body">
           <!-- 左：清單 -->
-          <aside class="wbd__list">
+          <aside class="wbd__list" :class="{ 'wbd__list--packages': !!lorePacks }">
             <input v-model="query" class="input" type="search" :placeholder="$t('wb.search.placeholder')"
                    :aria-label="$t('wb.search.placeholder')" />
-            <div v-if="lorePacks?.length" class="seg wbd__pack-filter">
+            <button v-if="largePackList" type="button" class="btn wbd__pack-filter-button" @click="openPackPicker('filter')">
+              {{ packFilter === 'unpacked' ? $t("wb.filter.unpacked") : availablePack.get(packFilter) ?? $t("wb.packs.filter") }} <span aria-hidden="true">⌄</span>
+            </button>
+            <div v-else-if="lorePacks?.length" class="seg wbd__pack-filter">
               <button type="button" class="seg__item" :class="{ 'seg__item--on': !packFilter }" :aria-pressed="!packFilter"
                       @click="packFilter = ''">{{ $t("wb.filter.all") }}</button>
               <button v-for="pack in lorePacks" :key="pack.id" type="button" class="seg__item"
@@ -372,7 +393,7 @@ function onKeydown(event: KeyboardEvent) {
               <button type="button" class="seg__item" :class="{ 'seg__item--on': packFilter === 'unpacked' }"
                       :aria-pressed="packFilter === 'unpacked'" @click="packFilter = 'unpacked'">{{ $t("wb.filter.unpacked") }}</button>
             </div>
-            <button v-if="!batch" type="button" class="btn btn--sm" @click="add">{{ $t("wb.entry.add") }}</button>
+            <button v-if="!batch" type="button" class="btn btn--sm" data-worldbook-add @click="add">{{ $t("wb.entry.add") }}</button>
             <button v-if="lorePacks && modelValue.length && !batch" type="button" class="btn btn--sm" @click="batch = true">{{ $t("wb.batch.select") }}</button>
             <p v-if="canOrder" class="subtle wbd__order-hint">{{ $t("wb.order.hint") }}</p>
             <ul ref="rowsElement" class="wbd__rows" @scroll="onListScroll" @keydown="onListKeydown">
@@ -382,7 +403,7 @@ function onKeydown(event: KeyboardEvent) {
                   :class="{ 'wbd__row--on': index === selected, 'wbd__row--off': !row.isEnabled, 'wbd__row--over': dragOver === index, 'wbd__row--package': !!lorePacks }"
                   :draggable="canOrder" @dragstart="dragFrom = index" @dragover.prevent="dragOver = index"
                   @drop="onDrop(index)" @dragend="dragFrom = null; dragOver = null">
-                <input v-if="batch" type="checkbox" :checked="selection.includes(index)" :aria-label="row.name || $t('wb.entry.untitled')"
+                <input v-if="batch" class="wbd__batch-check" type="checkbox" :checked="selection.includes(index)" :aria-label="row.name || $t('wb.entry.untitled')"
                        @click.stop @change="setSelection(index, ($event.target as HTMLInputElement).checked)" />
                 <input v-else-if="!lorePacks" type="checkbox" :checked="row.isEnabled" :aria-label="$t('wb.entry.enabled')"
                        @click.stop @change="setEnabled(index, ($event.target as HTMLInputElement).checked)" />
@@ -439,7 +460,10 @@ function onKeydown(event: KeyboardEvent) {
 
             <div v-if="lorePacks" class="field">
               <label for="wbd-pack">{{ $t("wb.entry.pack.label") }}</label>
-              <select id="wbd-pack" class="input" :value="entry.packId ?? ''"
+              <button v-if="largePackList" id="wbd-pack" type="button" class="btn wbd__pack-filter-button" @click="openPackPicker('assign')">
+                {{ availablePack.get(entry.packId ?? "") ?? $t("wb.filter.unpacked") }} <span aria-hidden="true">⌄</span>
+              </button>
+              <select v-else id="wbd-pack" class="input" :value="entry.packId ?? ''"
                       @change="patch({ packId: ($event.target as HTMLSelectElement).value || undefined })">
                 <option value="">{{ $t("wb.entry.pack.none") }}</option>
                 <option v-for="pack in lorePacks" :key="pack.id" :value="pack.id">{{ pack.name }}</option>
@@ -549,18 +573,21 @@ function onKeydown(event: KeyboardEvent) {
         </div>
       </div>
     </div>
-    <dialog v-if="lorePacks" ref="moveDialog" class="mod-window wbd__move-packs" aria-labelledby="wbd-move-title" @click.self="moveDialog?.close()">
+    <dialog v-if="lorePacks" ref="moveDialog" class="mod-window wbd__move-packs" aria-labelledby="wbd-move-title" @click.self="moveDialog?.close()" @close="moveOpen = false">
       <form class="mod-window__section" @submit.prevent="saveMove">
         <header class="mod-window__head">
           <h2 id="wbd-move-title">{{ $t("wb.batch.moveModal.title", { n: selection.length }) }}</h2>
         </header>
         <div class="mod-window__scroll mod-window__form">
           <p class="subtle">{{ $t("wb.batch.moveModal.hint", { n: selection.length }) }}</p>
-          <label v-for="pack in lorePacks" :key="pack.id">
-            <span><input v-model="targetPack" type="radio" name="wbd-move-pack" :value="pack.id" /> {{ pack.name }}</span>
-          </label>
+          <WorkshopPackOptions v-if="largePackList && moveOpen" :packs="lorePacks" :selected="targetPack" @select="targetPack = $event" />
+          <template v-else-if="!largePackList">
+            <label v-for="pack in lorePacks" :key="pack.id">
+              <span><input v-model="targetPack" type="radio" name="wbd-move-pack" :value="pack.id" /> {{ pack.name }}</span>
+            </label>
+          </template>
           <label><span><input v-model="targetPack" type="radio" name="wbd-move-pack" value="" /> {{ $t("wb.batch.moveModal.unpacked") }}</span></label>
-          <label v-if="lorePacks.length < 100"><span><input v-model="targetPack" type="radio" name="wbd-move-pack" :value="NEW_PACK" /> {{ $t("wb.batch.moveModal.newPack") }}</span></label>
+          <label v-if="lorePacks.length < WORKSHOP_PACK_LIMIT"><span><input v-model="targetPack" type="radio" name="wbd-move-pack" :value="NEW_PACK" /> {{ $t("wb.batch.moveModal.newPack") }}</span></label>
           <label v-if="targetPack === NEW_PACK">
             {{ $t("wb.packs.form.nameLabel") }}
             <input v-model="newPack" class="input" required :placeholder="$t('wb.packs.form.namePlaceholder')" />
@@ -572,6 +599,24 @@ function onKeydown(event: KeyboardEvent) {
           <button type="submit" class="btn btn--primary" :disabled="targetPack === null || (targetPack === NEW_PACK && (!!newPackError || !newPack.trim()))">{{ $t("wb.batch.moveModal.confirm", { n: selection.length }) }}</button>
         </footer>
       </form>
+    </dialog>
+
+    <dialog v-if="lorePacks" ref="packPicker" class="mod-window wbd__move-packs" aria-labelledby="wbd-pack-picker-title"
+            @click.self="packPicker?.close()" @close="pickerOpen = false">
+      <section class="mod-window__section">
+        <header class="mod-window__head">
+          <h2 id="wbd-pack-picker-title">{{ $t(packPickerMode === "filter" ? "wb.packs.filter" : "wb.packs.title") }}</h2>
+        </header>
+        <div class="mod-window__scroll mod-window__form">
+          <button v-if="packPickerMode === 'filter'" class="btn" type="button" @click="selectPack('')">{{ $t("wb.filter.all") }}</button>
+          <button class="btn" type="button" @click="selectPack(packPickerMode === 'filter' ? 'unpacked' : '')">{{ $t("wb.filter.unpacked") }}</button>
+          <WorkshopPackOptions v-if="pickerOpen" :packs="lorePacks"
+                               :selected="packPickerMode === 'filter' ? packFilter : entry?.packId" @select="selectPack" />
+        </div>
+        <footer class="mod-window__foot">
+          <button type="button" class="btn" @click="packPicker?.close()">{{ $t("dialog.cancel") }}</button>
+        </footer>
+      </section>
     </dialog>
 
   </Teleport>
@@ -594,6 +639,9 @@ function onKeydown(event: KeyboardEvent) {
   display: grid; grid-template-rows: auto auto auto minmax(0, 1fr); gap: var(--s-2);
   padding: var(--s-3); box-shadow: 1px 0 0 var(--line); min-height: 0;
 }
+.wbd__list--packages { display: flex; flex-direction: column; }
+.wbd__list--packages > :not(.wbd__rows) { flex: 0 0 auto; }
+.wbd__list--packages > .wbd__rows { flex: 1 1 auto; min-height: 0; }
 .wbd__order-hint { margin: 0; }
 .wbd__rows { position: relative; list-style: none; margin: 0; padding: 0; overflow-y: auto; display: grid; gap: 2px; align-content: start; }
 .wbd__row { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: var(--r-sm); }
@@ -631,6 +679,8 @@ function onKeydown(event: KeyboardEvent) {
 .wbd__row--package .wbd__row-name { position: relative; min-height: 44px; padding-inline-end: 20px; }
 .wbd__row-chevron { position: absolute; inset-inline-end: 4px; inset-block-start: 50%; transform: translateY(-50%); }
 .wbd__pack-filter { display: flex; flex-shrink: 0; overflow-x: auto; max-width: 100%; }
+.wbd input[type="checkbox"], .wbd__move-packs input[type="radio"] { accent-color: var(--accent); }
+.wbd__pack-filter-button { min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 .wbd__pack-filter button { flex-shrink: 0; }
 .wbd__batch { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 6px; padding: 6px 0 max(6px, env(safe-area-inset-bottom)); }
 .wbd__batch button { min-height: 44px; }

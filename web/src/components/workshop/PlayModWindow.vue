@@ -3,10 +3,11 @@ import { computed, nextTick, ref, shallowRef, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import ExtensionCover from "./ExtensionCover.vue";
 import WorkshopIcon from "./WorkshopIcon.vue";
+import PlayWorkshopPackList from "./PlayWorkshopPackList.vue";
 import PlayPrivateModEntries from "./PlayPrivateModEntries.vue";
 import { ApiError } from "@/lib/api";
 import { fetchConversationMods, applyConversationMod, listUniversalMods } from "@/lib/workshop";
-import type { ConversationMod, ConversationMods, ModAction, UniversalModChoice } from "@/lib/workshop-mods";
+import { WORKSHOP_INLINE_PACKS, type ConversationMod, type ConversationMods, type ModAction, type ModPack, type UniversalModChoice } from "@/lib/workshop-mods";
 import { useLocalePath } from "@/lib/use-locale";
 
 const props = defineProps<{
@@ -38,6 +39,10 @@ const universalFailed = ref(false);
 const changed = ref(false);
 const refreshed = ref(false);
 const expanded = ref<string[]>([]);
+const packDetails = shallowRef<Record<string, { version: string; packs: ModPack[] }>>({});
+const packLoading = ref(new Set<string>());
+const packFailed = ref(new Set<string>());
+const packRequests = new Map<string, symbol>();
 const failure = shallowRef<{ row: string; action: ModAction }>();
 let loadSequence = 0;
 let refreshAfterWrite = false;
@@ -48,6 +53,9 @@ const onCount = computed(() => items.value.filter(item => item.status === "resid
 const noticeCount = computed(() => Number(!!props.capacityPending) + Number(!!view.value?.triggeredCount));
 const slotsAfterOpening = computed(() => noticeCount.value + Number(!!view.value?.openingName) < 2);
 const isExpanded = (item: ConversationMod) => expanded.value.includes(item.workshopId);
+const packTotal = (item: ConversationMod) => item.packCount ?? item.packs?.length ?? 0;
+const packsFor = (item: ConversationMod) => item.packs ?? packDetails.value[item.workshopId]?.packs;
+const enabledPacks = (item: ConversationMod) => item.packCount ? (item.enabledPackCount ?? 0) : item.packs?.filter(pack => pack.enabled).length ?? 0;
 const rowActive = (item: ConversationMod) => item.status === "resident" || item.status === "triggered";
 
 async function auth() {
@@ -63,10 +71,16 @@ async function load() {
   loading.value = true;
   loadFailed.value = false;
   try {
-    const next = await fetchConversationMods(id, await auth(), trial);
+    const next = await fetchConversationMods(id, await auth(), { trialWorkshopId: trial });
     if (sequence === loadSequence) {
       view.value = next;
-      if (!trial && !next.workshopClosed) void loadUniversalChoices();
+      packDetails.value = Object.fromEntries(
+        Object.entries(packDetails.value).filter(([, detail]) => detail.version === next.version),
+      );
+      if (!next.workshopClosed) {
+        if (!trial) void loadUniversalChoices();
+        for (const item of next.items) if (isExpanded(item)) void loadPacks(item);
+      }
     }
   } catch {
     if (sequence === loadSequence) loadFailed.value = true;
@@ -87,6 +101,10 @@ watch(() => [props.conversationId, props.trialWorkshopId], () => {
   universalChoices.value = [];
   universalLoading.value = false;
   expanded.value = [];
+  packRequests.clear();
+  packDetails.value = {};
+  packLoading.value.clear();
+  packFailed.value.clear();
   changed.value = false;
   refreshed.value = false;
   failure.value = undefined;
@@ -101,6 +119,11 @@ watch(() => props.open, async open => {
     if (busy.value) refreshAfterWrite = true;
     else void load();
   } else {
+    const large = new Set(items.value.filter(item => packTotal(item) > WORKSHOP_INLINE_PACKS).map(item => item.workshopId));
+    expanded.value = expanded.value.filter(id => !large.has(id));
+    packRequests.clear();
+    packLoading.value.clear();
+    packFailed.value.clear();
     dialog.value?.close();
   }
 }, { immediate: true });
@@ -112,10 +135,48 @@ watch(() => props.settingsChanged, () => {
   else void load();
 });
 
+async function loadPacks(item: ConversationMod) {
+  if (!props.open || !item.packCount || !rowActive(item) || !view.value) return;
+  const id = props.conversationId;
+  const workshopId = item.workshopId;
+  const version = view.value.version;
+  if (packDetails.value[workshopId]?.version === version) return;
+  const request = Symbol();
+  packRequests.set(workshopId, request);
+  packLoading.value.add(workshopId);
+  packFailed.value.delete(workshopId);
+  try {
+    const detail = await fetchConversationMods(id, await auth(), {
+      packWorkshopId: workshopId, trialWorkshopId: props.trialWorkshopId,
+    });
+    if (packRequests.get(workshopId) !== request || id !== props.conversationId) return;
+    if (view.value?.version !== version) return;
+    if (detail.version !== version) {
+      void load();
+      return;
+    }
+    const packs = detail.items.find(candidate => candidate.workshopId === workshopId)?.packs;
+    if (!packs) throw new Error("Missing workshop packages");
+    packDetails.value = { ...packDetails.value, [workshopId]: { version, packs } };
+  } catch {
+    if (packRequests.get(workshopId) === request) packFailed.value.add(workshopId);
+  } finally {
+    if (packRequests.get(workshopId) === request) {
+      packRequests.delete(workshopId);
+      packLoading.value.delete(workshopId);
+    }
+  }
+}
+
 function expand(item: ConversationMod) {
   expanded.value = isExpanded(item)
     ? expanded.value.filter(id => id !== item.workshopId)
     : [...expanded.value, item.workshopId];
+  if (isExpanded(item)) void loadPacks(item);
+}
+
+function togglePack(item: ConversationMod, pack: ModPack) {
+  void mutate({ action: "packs", packs: [{ workshopId: item.workshopId, packId: pack.id, enabled: !pack.enabled }] }, item.workshopId);
 }
 
 async function mutate(action: ModAction, row: string, version = view.value?.version) {
@@ -133,7 +194,24 @@ async function mutate(action: ModAction, row: string, version = view.value?.vers
     if (!sameScope()) return false;
     loadSequence++;
     loading.value = false;
+    const previousItems = new Map(view.value?.items.map(item => [item.workshopId, item]));
+    const changedPacks = new Map(action.action === "packs" ? action.packs.map(pack => [pack.packId, pack]) : []);
+    const nextDetails: typeof packDetails.value = {};
+    for (const item of next.items) {
+      const detail = packDetails.value[item.workshopId];
+      const previous = previousItems.get(item.workshopId);
+      if (!detail || detail.version !== version || !item.packCatalogVersion || previous?.packCatalogVersion !== item.packCatalogVersion || view.value?.version !== version) continue;
+      const packs = action.action === "packs" ? detail.packs.map(pack => {
+        const update = changedPacks.get(pack.id);
+        return update?.workshopId === item.workshopId ? { ...pack, enabled: update.enabled } : pack;
+      }) : detail.packs;
+      if (packs.filter(pack => pack.enabled).length === (item.enabledPackCount ?? 0)) {
+        nextDetails[item.workshopId] = { version: next.version, packs };
+      }
+    }
+    packDetails.value = nextDetails;
     view.value = next;
+    for (const item of next.items) if (isExpanded(item)) void loadPacks(item);
     if (accepted === props.acceptedTurn) changed.value = true;
     emit("changed", next);
     return true;
@@ -315,7 +393,7 @@ async function saveNotice() {
                 <div class="mod-window__row" :aria-busy="pendingRow === item.workshopId || undefined"
                      :class="{ 'mod-window__row--muted': item.status === 'removed' || view.workshopClosed }">
                   <button
-                    v-if="item.packs?.length && !sorted" class="btn btn--ghost mod-window__icon" type="button"
+                    v-if="packTotal(item) && !sorted" class="btn btn--ghost mod-window__icon" type="button"
                     :disabled="!rowActive(item) || view.workshopClosed" :aria-expanded="rowActive(item) && isExpanded(item)"
                     :aria-label="tr(isExpanded(item) ? 'a11y.collapsePacks' : 'a11y.expandPacks', { name: item.name })"
                     @click="expand(item)"
@@ -331,7 +409,7 @@ async function saveNotice() {
                       <template v-else>
                         <span v-if="item.status === 'triggered'">{{ tr("row.demoted") }}</span>
                         <span v-if="item.residentChars">{{ tr("row.resident", { chars: n(item.residentChars) }) }}</span>
-                        <span v-if="item.packs?.length">{{ tr("row.packCount", { on: item.packs.filter(pack => pack.enabled).length, total: item.packs.length }) }}</span>
+                        <span v-if="packTotal(item)">{{ tr("row.packCount", { on: n(enabledPacks(item)), total: n(packTotal(item)) }) }}</span>
                       </template>
                     </div>
                   </div>
@@ -349,7 +427,15 @@ async function saveNotice() {
                     @click="mutate({ action: 'toggle', workshopId: item.workshopId, enabled: !item.enabled }, item.workshopId)"
                   ><span /></button>
                 </div>
-                <ul v-if="!sorted && !view.workshopClosed && rowActive(item) && isExpanded(item)" class="mod-window__packs">
+                <template v-if="!sorted && !view.workshopClosed && rowActive(item) && isExpanded(item)">
+                  <PlayWorkshopPackList v-if="packTotal(item) > WORKSHOP_INLINE_PACKS && packsFor(item)"
+                    :packs="packsFor(item)!" :busy="busy || loading" :script-managed="item.scriptCanSwitchPacks" @toggle="togglePack(item, $event)" />
+                  <p v-else-if="packLoading.has(item.workshopId)" class="mod-window__skeleton" role="status" :aria-label="tr('pack.loading')" />
+                  <p v-else-if="packFailed.has(item.workshopId)" class="mod-window__row-error" role="alert">
+                    {{ tr("pack.loadFailed") }}
+                    <button type="button" class="btn btn--sm" @click="loadPacks(item)">{{ tr("pack.retry") }}</button>
+                  </p>
+                  <ul v-else class="mod-window__packs">
                   <li v-if="item.scriptCanSwitchPacks" class="mod-window__muted">{{ tr("pack.scriptManagedHint") }}</li>
                   <li v-for="pack in item.packs" :key="pack.id" class="mod-window__row">
                     <div class="mod-window__row-copy">
@@ -362,10 +448,11 @@ async function saveNotice() {
                     <button
                       class="mod-window__switch mod-window__switch--pack" role="switch" type="button" :aria-checked="pack.enabled"
                       :aria-label="tr('pack.a11yToggle', { name: pack.name })" :disabled="busy || loading"
-                      @click="mutate({ action: 'packs', packs: [{ workshopId: item.workshopId, packId: pack.id, enabled: !pack.enabled }] }, item.workshopId)"
+                      @click="togglePack(item, pack)"
                     ><span /></button>
                   </li>
                 </ul>
+                </template>
                 <p v-if="failure?.row === item.workshopId" class="mod-window__row-error" role="alert">
                   {{ tr(rowError(failure.action)) }}
                   <button class="btn btn--ghost" type="button" :disabled="busy || loading" @click="mutate(failure.action, item.workshopId)">{{ tr("state.retry") }}</button>
