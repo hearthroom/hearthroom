@@ -2,7 +2,6 @@
   "tier": "feature",
   "audience": "authors",
   "try": "/create",
-  "draft": true,
   "title": {
     "zh-Hant": "開場網頁可以直接上傳或下載 .html 檔，很大的開場網頁也能完整存下來。",
     "zh-Hans": "开场网页可以直接上传或下载 .html 文件，很大的开场网页也能完整保存。",

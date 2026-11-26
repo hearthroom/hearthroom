@@ -1554,7 +1554,8 @@
       "tavern",
       "mmd"
     ],
-    "openingPageMaxBytes": 524288,
+    "openingPageMaxBytes": 100000000,
+    "workshopOpeningPageMaxBytes": 524288,
     "cardCssMaxBytes": 524288,
     "render": {
       "endpoint": "GET /open/v1/role/render",
@@ -1621,5 +1622,5 @@
       ]
     }
   },
-  "stageCommit": "ffd8a249ef82a47f381bade93c6571c4aba936d7"
+  "stageCommit": "e051447dc32f3d3bd7afb330e8f5c2243cfd5720"
 }
