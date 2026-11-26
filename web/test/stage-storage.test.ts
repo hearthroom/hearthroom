@@ -17,6 +17,7 @@ function fakeIdb(order: string[] = []) {
 beforeEach(async () => {
   vi.resetModules();
   localStorage.clear();
+  sessionStorage.clear();
   setActivePinia(createPinia());
 });
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
@@ -41,6 +42,17 @@ it('signing out deletes the player rule cache and runs the embedded player clean
   await clearStageStorage();
   expect(deleted).toEqual(['hearthroom-author-rules']);
   expect(hook).toHaveBeenCalledOnce();
+});
+
+it('signing out clears the host tab composer draft when Stage is not mounted', async () => {
+  const { factory } = fakeIdb();
+  vi.stubGlobal('indexedDB', factory);
+  const { clearStageStorage } = await import('../src/lib/stage-storage');
+  sessionStorage.setItem('moonstage-composer-draft', 'unsent text');
+  sessionStorage.setItem('other-tab-setting', 'kept');
+  await clearStageStorage();
+  expect(sessionStorage.getItem('moonstage-composer-draft')).toBeNull();
+  expect(sessionStorage.getItem('other-tab-setting')).toBe('kept');
 });
 
 it('cleanup never throws when storage is unavailable', async () => {

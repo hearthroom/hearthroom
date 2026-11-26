@@ -29,7 +29,7 @@ export function sandboxRoleIdOf(host: string): string | null {
 }
 
 /**
- * 殼頁的 CSP：殼自己只連自己、只能被主站嵌（frame-ancestors）；作者外鏈腳本（含模組腳本、import()）與樣式走 https:。
+ * 殼頁的 CSP：嵌入來源限站台與該卡的沙箱來源（frame-ancestors）；作者外鏈腳本（含模組腳本、import()）與樣式走 https:。
  * connect-src 另外只放行媒體素材庫（https://assets.harperharbor.com）：卡片 fetch 自己的 JSON、WASM（WASM 編譯由
  * 'unsafe-eval' 涵蓋），別的外站連不到。worker-src 不加素材庫：跨源網址本來就起不了 Worker，函式庫用 blob: 起執行緒、
  * 在裡面從素材庫 import／fetch，受 script-src／connect-src 管。
@@ -51,8 +51,8 @@ export const SANDBOX_CSP = [
   "form-action 'none'",
   "base-uri 'none'",
   "object-src 'none'",
-  // 卡片 App 網域（play.<HOST>）也會嵌殼：同一份對話頁在那裡跑
-  `frame-ancestors ${SANDBOX_PARENT_ORIGINS.join(" ")}`,
+  // Safari 的開場 Blob 繼承此指令，直屬上層就是建立它的該卡沙箱。
+  `frame-ancestors 'self' ${SANDBOX_PARENT_ORIGINS.join(" ")}`,
 ].join("; ");
 
 /**

@@ -33,6 +33,9 @@ export function onStageSignOut(fn: () => unknown): () => void {
 
 /** 登出時呼叫：刪掉舞台的快取。最多等 timeoutMs 就放行（登出與重新載入不因儲存卡住），從不丟錯。 */
 export async function clearStageStorage(timeoutMs = 2000): Promise<void> {
+  // Stage's canvas-composer-draft.ts uses this tab key. Logout can happen on a
+  // page that never loaded the Stage module, so the site clears it directly.
+  try { sessionStorage.removeItem("moonstage-composer-draft"); } catch { /* Storage can be unavailable. */ }
   const work = Promise.allSettled([
     ...Array.from(hooks, (fn) => Promise.resolve().then(fn)),
     ...(stageSite ? [stageSite.clearRuleStore({ timeoutMs })] : []),
