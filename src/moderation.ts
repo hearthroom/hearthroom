@@ -141,16 +141,30 @@ moderationRoutes.post('/v1/moderation/cases',async c=>{
  const card=await cardOf(db,String(body.cardId));await guardCard(db,card,member.id);
  const existing=await db.prepare('SELECT * FROM moderation_cases WHERE created_by=? AND operation_id=?').bind(member.id,op).first<CaseRow>();
  if(existing){if(existing.provider!==card.provider||existing.source_role_id!==card.source_role_id||existing.action!==action||existing.reason!==reason)throw new HttpError(409,'moderation_conflict');await syncCase(c.env,existing);return c.json(publicCase(existing,member.id));}
+ const delist=action==='delist';
+ // Old workbench tabs still describe a two-reviewer proposal. Their fresh requests must refresh.
+ if(delist&&body.confirmImmediateDelist!==true)throw new HttpError(409,'moderation_conflict');
  if(card.status!=='approved'||(action==='delist'&&card.board_hidden)||(action==='suspend'&&card.public_blocked)||(action==='restore_listing'&&!card.board_hidden)||(action==='restore_public'&&!card.public_blocked))throw new HttpError(409,'moderation_conflict');
  const frozen=card.approved_version_id?await db.prepare('SELECT public_role FROM hosting_versions WHERE version_id=?').bind(card.approved_version_id).first<{public_role:string}>():null;
  const published=frozen?JSON.parse(frozen.public_role):null;
  const evidence=JSON.stringify({names:JSON.parse(card.names),summaries:JSON.parse(card.summaries),tags:JSON.parse(card.tags),avatarUrl:card.background_url,rating:card.rating,welcome:published?.welcome??'',searchText:card.search_text??''});
  const id=crypto.randomUUID();const now=Date.now();
+ const version=card.approved_version_id||card.reviewed_hash;
  await mutate(()=>db.batch([
   db.prepare('INSERT OR IGNORE INTO moderation_state(provider,source_role_id) VALUES(?,?)').bind(card.provider,card.source_role_id),
   ... (action==='suspend'?[db.prepare("UPDATE moderation_cases SET status='dismissed',decided_at=?,resolution='Superseded by urgent suspension' WHERE provider=? AND source_role_id=? AND status IN ('pending','disputed') AND action IN ('delist','restore_listing')").bind(now,card.provider,card.source_role_id)]:[]),
-   db.prepare('INSERT INTO moderation_cases(id,provider,source_role_id,version_id,title,author_member_id,action,reason,created_by,operation_id,created_at,card_number,rating,public_evidence) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(id,card.provider,card.source_role_id,card.approved_version_id||card.reviewed_hash,pickLocale(JSON.parse(card.names),'zh-Hant'),card.author_member_id,action,reason,member.id,op,now,card.card_number,card.rating,evidence),
+  // A fresh delist replaces an old one-vote proposal. A disputed case still goes through manager resolution.
+  ...(delist?[db.prepare(`UPDATE moderation_cases SET status='dismissed',decided_at=?,resolved_by=?,resolution='moderation.resolution.replacedByDelist'
+    WHERE provider=? AND source_role_id=? AND action='delist' AND status='pending'`).bind(now,member.id,card.provider,card.source_role_id)]:[]),
+  // The first delist releases the open-case index in this same batch. Recheck the current
+  // card before inserting so a racing request can't create another confirmed case.
+  // If no case is inserted, the existing vote guard aborts and rolls back the batch.
+  db.prepare(`INSERT INTO moderation_cases(id,provider,source_role_id,version_id,title,author_member_id,action,reason,created_by,operation_id,created_at,card_number,rating,public_evidence)
+    SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?
+    WHERE ?=0 OR EXISTS(SELECT 1 FROM cards WHERE id=? AND status='approved' AND board_hidden=0 AND rating IS ? AND COALESCE(approved_version_id,reviewed_hash)=?)`)
+    .bind(id,card.provider,card.source_role_id,version,pickLocale(JSON.parse(card.names),'zh-Hant'),card.author_member_id,action,reason,member.id,op,now,card.card_number,card.rating,evidence,Number(delist),card.id,card.rating,version),
   db.prepare("INSERT INTO moderation_votes VALUES(?,?,'confirm',?,?)").bind(id,member.id,reason,now),
+  ...(delist?[db.prepare("UPDATE moderation_cases SET status='confirmed',decided_at=? WHERE id=?").bind(now,id)]:[]),
  ]));
  const created=await caseOf(db,id);await syncCase(c.env,created);
  return c.json(publicCase(created,member.id),201);

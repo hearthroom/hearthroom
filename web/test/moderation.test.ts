@@ -50,6 +50,29 @@ it('discards a delayed card response after changing tabs',async()=>{
  finish({card:{id:'card1',name:'Stale card',tags:[]},cases:[],events:[],reviews:[]});await nextTick();await nextTick();
  expect(el.textContent).not.toContain('Stale card');
 });
+it.each(['confirmed','pending'])('delist confirms the immediate action and only reports success for a confirmed case (%s)',async status=>{
+ mock.request.mockImplementation(async(path:string)=>{
+  if(path.startsWith('/cards?'))return {items:[{id:'card1',name:'Card one'}]};
+  if(path.startsWith('/cards/card1'))return {card:{id:'card1',name:'Card one',tags:[],status:'approved',boardHidden:false,publicBlocked:false},cases:[],events:[],reviews:[]};
+  if(path==='/cases')return {status};
+  return {items:[]};
+ });
+ await router.push('/review/cards');
+ await vi.waitFor(()=>expect(el.textContent).toContain('Card one'));
+ el.querySelector<HTMLButtonElement>('.work-item')!.click();
+ await vi.waitFor(()=>expect(el.querySelector('#card-reason')).not.toBeNull());
+ const reason=el.querySelector<HTMLTextAreaElement>('#card-reason')!;
+ reason.value='Specific delist reason';reason.dispatchEvent(new Event('input'));await nextTick();
+ el.querySelector<HTMLButtonElement>('.work-submit')!.click();
+ await vi.waitFor(()=>expect(mock.request).toHaveBeenCalledWith('/cases','reviewer',expect.objectContaining({
+  action:'delist',cardId:'card1',reason:'Specific delist reason',confirmImmediateDelist:true,
+ })));
+ if(status==='confirmed')await vi.waitFor(()=>expect(el.querySelector('[role="status"]')?.textContent).toContain(i18n.global.t('moderation.saved')));
+ else {
+  await vi.waitFor(()=>expect(el.querySelector('[role="alert"]')?.textContent).toContain(i18n.global.t('moderation.error.delistRefresh')));
+  expect(el.querySelector('[role="status"]')).toBeNull();
+ }
+});
 it('invalidates a pending vote confirmation when navigating to another management section',async()=>{
  let confirm!:(ok:boolean)=>void;mock.confirm.mockImplementationOnce(()=>new Promise<boolean>(r=>{confirm=r;}));
  el.querySelector<HTMLButtonElement>('[data-case="case1"]')!.click();await nextTick();

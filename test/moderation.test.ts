@@ -1,5 +1,6 @@
 import {workPolicyGateway,type WorkPolicyReceipt} from '../src/work-policy';
-import { env, SELF } from 'cloudflare:test';
+import { createExecutionContext, env, SELF, waitOnExecutionContext } from 'cloudflare:test';
+import worker from '../src/index';
 import { beforeEach, afterEach, it, expect, vi } from 'vitest';
 import { GENERAL_RATING, resetDb, makeMember, makeReviewer, role, identities, bearer, restoreUpstream, appAdmins } from './helpers';
 import { upsertCard } from '../src/cards';
@@ -8,13 +9,13 @@ let card: string;
 const request = (path: string, token = 'r1', body?: unknown) => SELF.fetch('https://c.test/v1/moderation' + path, {
   method: body ? 'POST' : 'GET', headers: { ...bearer(token), 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}),
 });
-const proposal = (action: string, token = 'r1') => request('/cases', token, { cardId: card, action, reason: 'A specific review reason', operationId: crypto.randomUUID() });
+const proposal = (action: string, token = 'r1') => request('/cases', token, { cardId: card, action, reason: 'A specific review reason', operationId: crypto.randomUUID(), ...(action==='delist'?{confirmImmediateDelist:true}:{}) });
 beforeEach(async () => {
   await resetDb();
   await makeMember(10001);
   await makeReviewer(2); await makeReviewer(3); await makeReviewer(4);
   identities({author:10001,r1:2,r2:3,manager:4});
-  card = (await upsertCard(env.DB, role({roleId:'reviewed',authorNumId:10001}), Date.now())).id;
+  card = (await upsertCard(env.DB, role({roleId:'reviewed',name:'Synthetic card',authorNumId:10001}), Date.now())).id;
 });
 afterEach(() => { restoreUpstream(); vi.restoreAllMocks(); });
 it('returns an empty card search for an oversized LIKE pattern', async () => {
@@ -22,16 +23,122 @@ it('returns an empty card search for an oversized LIKE pattern', async () => {
  expect(response.status).toBe(200);
  expect(await response.json()).toEqual({items:[],hasNext:false});
 });
-it('two independent votes remove a work from discovery while retaining direct sharing', async () => {
-  const before = await SELF.fetch('https://c.test/v1/cards?zone=all'); expect((await before.json() as any).items).toHaveLength(1);
-  const res = await proposal('delist'); expect(res.status).toBe(201);
+async function legacyDelist() {
+  const id = crypto.randomUUID();
+  const operationId = crypto.randomUUID();
+  const reason = 'Original proposal';
+  const now = Date.now();
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO moderation_state(provider,source_role_id) VALUES('harbor','reviewed')"),
+    env.DB.prepare(`INSERT INTO moderation_cases
+      (id,provider,source_role_id,version_id,title,author_member_id,action,reason,created_by,operation_id,created_at,card_number,rating,public_evidence)
+      SELECT ?,'harbor','reviewed',reviewed_hash,'Synthetic card','member-10001','delist',?,'member-2',?,?,1,rating,'{}'
+      FROM cards WHERE id=?`).bind(id,reason,operationId,now,card),
+    env.DB.prepare("INSERT INTO moderation_votes VALUES(?,'member-2','confirm',?,?)").bind(id,reason,now),
+  ]);
+  return {id,operationId,reason};
+}
+it('one reviewer delists with a durable audit, keeps direct sharing, and can request restoration', async () => {
+  const lists = ['?zone=all&sort=day', '?zone=all&q=Synthetic'].map(q => 'https://c.test/v1/cards'+q);
+  for (const url of lists) {
+    expect((await SELF.fetch(url).then(r=>r.json()) as any).items).toHaveLength(1);
+    expect((await SELF.fetch(url)).headers.get('X-Cache')).toBe('hit');
+  }
+  const suggestions = () => SELF.fetch('https://c.test/v1/suggest?zone=all&q=Synthetic').then(r=>r.json()) as Promise<{cards: unknown[]}>;
+  expect((await suggestions()).cards).toHaveLength(1);
+  const body = {cardId:card, action:'delist', confirmImmediateDelist:true, reason:'  Specific quality issue  ', operationId:crypto.randomUUID()};
+  const res = await request('/cases','r1',body);
+  expect(res.status).toBe(201);
   const c = await res.json() as any;
+  expect(c.createdAt).toBeGreaterThan(0);
+  expect(c).toMatchObject({status:'confirmed', reason:'Specific quality issue', decidedAt:c.createdAt, createdByMe:true});
+  expect(await env.DB.prepare('SELECT created_by,reason,decided_at FROM moderation_cases WHERE id=?').bind(c.id).first()).toEqual({
+    created_by:'member-2', reason:'Specific quality issue', decided_at:c.createdAt,
+  });
+  expect(await env.DB.prepare('SELECT member_id,vote,created_at FROM moderation_votes WHERE case_id=?').bind(c.id).all().then(r=>r.results))
+    .toEqual([{member_id:'member-2',vote:'confirm',created_at:c.createdAt}]);
+  expect(await request('/cases','r1',body).then(r=>r.json())).toEqual(c);
+  expect((await request(`/cases/${c.id}/vote`,'r2',{vote:'confirm',reason:'Extra vote'})).status).toBe(409);
+  expect((await request('/cases','r2').then(r=>r.json()) as any).items).toHaveLength(0);
+  for (const url of lists) {
+    const removed = await SELF.fetch(url);
+    expect(removed.headers.get('X-Cache')).toBe('miss');
+    expect((await removed.json() as any).items).toHaveLength(0);
+  }
+  expect((await suggestions()).cards).toHaveLength(0);
   expect((await SELF.fetch('https://c.test/v1/cards/reviewed')).status).toBe(200);
-  expect((await request(`/cases/${c.id}/vote`,'r1',{vote:'confirm',reason:'again'})).status).toBe(409);
-  expect((await request(`/cases/${c.id}/vote`,'r2',{vote:'confirm',reason:'Agreed'})).status).toBe(200);
-  expect((await SELF.fetch('https://c.test/v1/cards?zone=all').then(r=>r.json()) as any).items).toHaveLength(0);
-  expect((await SELF.fetch('https://c.test/v1/cards/reviewed')).status).toBe(200);
-  expect((await request(`/cards/${card}`)).status).toBe(200);
+  expect((await request(`/cards/${card}`).then(r=>r.json()) as any).card).toMatchObject({boardHidden:true,publicBlocked:false});
+  expect(await SELF.fetch('https://c.test/metrics').then(r=>r.text())).toContain('hearthroom_moderation_requests_total{operation="propose",outcome="success"}');
+  const restore = await proposal('restore_listing').then(r=>r.json()) as any;
+  expect(restore.status).toBe('pending');
+  expect((await request(`/cases/${restore.id}/vote`,'r1',{vote:'confirm',reason:'Same reviewer'})).status).toBe(409);
+  expect((await request(`/cases/${restore.id}/vote`,'r2',{vote:'confirm',reason:'Issue resolved'})).status).toBe(200);
+  expect((await SELF.fetch(lists[0]).then(r=>r.json()) as any).items).toHaveLength(1);
+});
+it('rejects a stale workbench request that did not confirm immediate delisting', async () => {
+  const body = {cardId:card, action:'delist', reason:'Expected peer approval', operationId:crypto.randomUUID()};
+  const res = await request('/cases','r1',body);
+  expect(res.status).toBe(409);
+  expect(await res.json()).toMatchObject({error:'moderation_conflict'});
+  expect(await env.DB.prepare('SELECT board_hidden FROM cards WHERE id=?').bind(card).first()).toEqual({board_hidden:0});
+  expect(await env.DB.prepare('SELECT count(*) n FROM moderation_cases').first()).toEqual({n:0});
+});
+it('requires a fresh explicit delist to replace a pre-existing pending proposal', async () => {
+  const legacy = await legacyDelist();
+  expect((await request('/cases','r1',{...legacy,cardId:card,action:'delist'}).then(r=>r.json()) as any).status).toBe('pending');
+  expect(await env.DB.prepare('SELECT board_hidden FROM cards WHERE id=?').bind(card).first()).toEqual({board_hidden:0});
+  const res = await proposal('delist');
+  expect(res.status).toBe(201);
+  const applied = await res.json() as any;
+  expect(applied).toMatchObject({status:'confirmed',reason:'A specific review reason'});
+  expect(applied.id).not.toBe(legacy.id);
+  expect(await env.DB.prepare('SELECT status,reason,resolved_by,resolution FROM moderation_cases WHERE id=?').bind(legacy.id).first()).toEqual({
+    status:'dismissed', reason:legacy.reason, resolved_by:'member-2', resolution:'moderation.resolution.replacedByDelist',
+  });
+  expect((await request('/cases','r2').then(r=>r.json()) as any).items).toHaveLength(0);
+});
+it('keeps the existing manager resolution path for a disputed legacy delist', async () => {
+  const legacy = await legacyDelist();
+  expect((await request(`/cases/${legacy.id}/vote`,'r2',{vote:'oppose',reason:'Needs resolution'})).status).toBe(200);
+  expect((await proposal('delist')).status).toBe(409);
+  expect(await env.DB.prepare('SELECT status FROM moderation_cases WHERE id=?').bind(legacy.id).first()).toEqual({status:'disputed'});
+  expect(await env.DB.prepare('SELECT board_hidden FROM cards WHERE id=?').bind(card).first()).toEqual({board_hidden:0});
+});
+it('rejects a delist when the rating changes after authorization and preserves the legacy proposal', async () => {
+  const legacy = await legacyDelist();
+  let interleaved = false;
+  const db = new Proxy(env.DB,{
+    get(target,key) {
+      if(key==='withSession')return (...args:Parameters<D1Database['withSession']>)=>new Proxy(target.withSession(...args),{
+        get(session, name) {
+          if(name==='batch')return async (statements:D1PreparedStatement[])=>{
+            await target.prepare("UPDATE cards SET rating='R' WHERE id=?").bind(card).run();
+            interleaved = true;
+            return session.batch(statements);
+          };
+          const value=Reflect.get(session,name,session);
+          return typeof value==='function'?value.bind(session):value;
+        },
+      });
+      const value=Reflect.get(target,key,target);
+      return typeof value==='function'?value.bind(target):value;
+    },
+  });
+  const ctx=createExecutionContext();
+  const res=await worker.fetch(new Request('https://c.test/v1/moderation/cases',{
+    method:'POST',headers:{...bearer('r1'),'Content-Type':'application/json'},
+    body:JSON.stringify({cardId:card,action:'delist',reason:'Quality issue',operationId:crypto.randomUUID(),confirmImmediateDelist:true}),
+  }),{...env,DB:db},ctx);
+  await waitOnExecutionContext(ctx);
+  expect(interleaved).toBe(true);
+  expect(res.status).toBe(409);
+  expect(await env.DB.prepare('SELECT board_hidden,rating FROM cards WHERE id=?').bind(card).first()).toEqual({board_hidden:0,rating:'R'});
+  expect(await env.DB.prepare('SELECT status FROM moderation_cases WHERE id=?').bind(legacy.id).first()).toEqual({status:'pending'});
+});
+it('accepts just one of two simultaneous delists for the same listed card', async () => {
+  const responses = await Promise.all(['r1','r2'].map(token=>proposal('delist',token)));
+  expect(responses.map(r=>r.status).sort()).toEqual([201,409]);
+  expect(await env.DB.prepare("SELECT count(*) n FROM moderation_cases WHERE action='delist' AND status='confirmed'").first()).toEqual({n:1});
 });
 it('one severe report immediately blocks public links, a dispute stays blocked until independent manager resolution',async()=>{
   const listUrl='https://c.test/v1/cards?zone=all';
@@ -100,8 +207,9 @@ it('manager tag corrections survive source sync, compensation is scoped, audited
  expect((await SELF.fetch('https://c.test/v1/cards?zone=all&sort=day').then(r=>r.json()) as any).items).toHaveLength(1);
 });
 it('an urgent suspension can supersede a pending quality vote',async()=>{
- expect((await proposal('delist')).status).toBe(201);
+ const legacy=await legacyDelist();
  expect((await proposal('suspend','r2')).status).toBe(201);
+ expect(await env.DB.prepare('SELECT status FROM moderation_cases WHERE id=?').bind(legacy.id).first()).toEqual({status:'dismissed'});
  expect((await SELF.fetch('https://c.test/v1/cards/reviewed')).status).toBe(404);
 });
 it('suspension revokes every approved hosting decision and later approvals cannot reopen the work',async()=>{
@@ -115,7 +223,7 @@ it('suspension revokes every approved hosting decision and later approvals canno
  const approve=async()=>{const sub=await env.DB.prepare("SELECT id FROM review_submissions WHERE status='pending'").first<any>();for(const m of ['a','b']){await claim(env.DB,sub.id,m,Date.now());await stamp(env.DB,{submissionId:sub.id,memberId:m,verdict:'approve',note:'',now:Date.now()});if((await env.DB.prepare('SELECT status FROM review_submissions WHERE id=?').bind(sub.id).first<any>()).status==='approved')break;}};
  const a=await submit();await approve();const b=await submit();await approve();
  card=(await env.DB.prepare("SELECT id FROM cards WHERE source_role_id='hosted-draft'").first<any>()).id;
- const quality=await proposal('delist').then(r=>r.json()) as any;await request(`/cases/${quality.id}/vote`,'r2',{vote:'confirm',reason:'Quality'});
+ expect((await proposal('delist').then(r=>r.json()) as any).status).toBe('confirmed');
  expect((await hostingDecision(env.DB,a.versionId)).status).toBe('approved');
  expect((await hostingDecision(env.DB,b.versionId)).status).toBe('approved');
  expect((await proposal('suspend')).status).toBe(201);
@@ -133,7 +241,7 @@ it('suspension revokes every approved hosting decision and later approvals canno
  expect((await hostingDecision(env.DB,b.versionId)).status).toBe('revoked');
 });
 it('concurrent confirmations produce one decision and preserve independent voter identity',async()=>{
- const c=await proposal('delist').then(r=>r.json()) as any;
+ const c=await proposal('suspend').then(r=>r.json()) as any;
  const outcomes=await Promise.all(['r2','manager'].map(t=>request(`/cases/${c.id}/vote`,t,{vote:'confirm',reason:'Checked independently'})));
  expect(outcomes.map(r=>r.status).sort()).toEqual([200,409]);
  expect((await env.DB.prepare('SELECT count(*) n FROM moderation_votes WHERE case_id=?').bind(c.id).first<any>()).n).toBe(2);
@@ -194,6 +302,33 @@ it('requires PG restriction readback before suspension success and fences a late
  expect(change).toHaveBeenCalledTimes(3);expect(restriction).toBe('none');
  expect(await env.DB.prepare('SELECT restriction,sync_state FROM managed_work_access WHERE work_id=?').bind(work).first()).toEqual({restriction:'none',sync_state:'complete'});
 });
+it('fences a managed delist before reporting success and projects link access for the author', async () => {
+  const work = crypto.randomUUID();
+  await env.DB.prepare('INSERT INTO works(id,member_id,source_provider,source_role_id,created_at) VALUES(?,?,?,?,?)')
+    .bind(work,'member-10001','harbor','reviewed',Date.now()).run();
+  await env.DB.prepare("INSERT INTO managed_work_access(work_id,provider,source_role_id,access,epoch,restriction,approved_role_id) VALUES(?,'harbor','reviewed','public',1,'none','approved-role')").bind(work).run();
+  await env.DB.prepare("UPDATE cards SET approved_hosted_role_id='approved-role' WHERE id=?").bind(card).run();
+  let receipt: WorkPolicyReceipt = {sourceRoleId:'reviewed',workId:work,operationId:'',access:'public',restriction:'none',epoch:1,state:'complete',replayed:false};
+  vi.spyOn(workPolicyGateway,'state').mockImplementation(async()=>receipt);
+  vi.spyOn(workPolicyGateway,'operation').mockImplementation(async(_env,_provider,_source,_work,op)=>op===receipt.operationId?receipt:null);
+  vi.spyOn(workPolicyGateway,'owner').mockImplementation(async()=>({
+    ...receipt, managed:true, approvedRoleId:'approved-role', policyRevision:'owner-policy', approvalRevision:'approved-revision',
+    revisionState:'same', restorable:false, restoreReason:'not_approved', providerRestriction:'none',
+  }));
+  const change = vi.spyOn(workPolicyGateway,'change').mockImplementation(async(_env,_provider,_source,command)=>{
+    receipt = {...receipt, operationId:command.operationId, restriction:command.restriction!, epoch:receipt.epoch+1};
+    return receipt;
+  });
+  const endpoint = `https://c.test/v1/me/cards/${card}/visibility`;
+  const readOwner = () => SELF.fetch(endpoint,{headers:bearer('author')});
+  expect((await readOwner()).status).toBe(200);
+  expect(await readOwner().then(r=>r.json())).toMatchObject({workVisibility:{restriction:'none',effectiveAccess:'public'}});
+  expect(await proposal('delist').then(r=>r.json())).toMatchObject({status:'confirmed'});
+  expect(change).toHaveBeenCalledTimes(1);
+  expect(receipt.restriction).toBe('delisted');
+  expect(await readOwner().then(r=>r.json())).toMatchObject({workVisibility:{restriction:'delisted',effectiveAccess:'link',syncState:'complete'}});
+});
+
 it('manager rating correction applies directly, audits, records history and sets a floor', async () => {
  const b={rating:'PG15',reason:'分級不符',operationId:crypto.randomUUID()};
  await env.DB.prepare("UPDATE cards SET rating='PG12' WHERE id=?").bind(card).run();

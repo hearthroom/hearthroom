@@ -89,20 +89,29 @@ async function toggleFeatured(){
   }
  }finally{if(valid()){ownConfirmation=false;busy.value=false;}}
 }
-async function perform(path:string,body:unknown,label:string,effect:string){
+async function perform(path:string,body:unknown,label:string,effect:string,expectConfirmedDelist=false){
  if(busy.value||!reason.value.trim())return;
  const origin=document.activeElement as HTMLElement|null;const who=identity(),gen=selectionGeneration;busy.value=true;ownConfirmation=true;
  try{
  const ok=await confirmDialog({title:label,message:effect,detail:selected.value?.title??history.value?.card.name,confirmText:label,cancelText:t('moderation.cancel'),danger:true});if(alive&&who===identity()&&gen===selectionGeneration)ownConfirmation=false;
  if(!ok||!alive||who!==identity()||gen!==selectionGeneration)return;
  const access=await token();if(!alive||who!==identity()||gen!==selectionGeneration)return;
- error.value='';done.value='';await moderationRequest(path,access,body);
+ error.value='';done.value='';const result=await moderationRequest<ModerationCase|undefined>(path,access,body);
  if(!alive||who!==identity()||gen!==selectionGeneration)return;
+ if(expectConfirmedDelist&&result?.status!=='confirmed')throw new Error(t('moderation.error.delistRefresh'));
  done.value=t('moderation.saved');operation.value=crypto.randomUUID();clearSelection();busy.value=false;await load();await reviewer.refresh();
  }catch(e){if(who===identity()&&gen===selectionGeneration)error.value=e instanceof Error?e.message:t('moderation.error.retry');}finally{if(alive&&who===identity()&&gen===selectionGeneration){ownConfirmation=false;busy.value=false;await nextTick();if(alive&&gen===selectionGeneration)origin?.focus();}}}
 function vote(vote:'confirm'|'oppose'){if(!selected.value)return;return perform(`/cases/${selected.value.id}/vote`,{vote,reason:reason.value.trim()},t(`moderation.${vote}`),t(vote==='confirm'?`moderation.effect.${selected.value.action}`:'moderation.oppositionEffect'));}
 function resolve(decision:'confirm'|'dismiss'){if(!selected.value)return;return perform(`/cases/${selected.value.id}/resolve`,{decision,reason:reason.value.trim()},t(`moderation.${decision}`),t(decision==='confirm'?`moderation.effect.${selected.value.action}`:'moderation.dismissEffect'));}
-function propose(){if(!history.value)return;if(action.value==='reopen')return perform(`/cards/${history.value.card.id}/reopen`,{reason:reason.value.trim()},t('moderation.action.reopen'),t('moderation.effect.reopen'));return perform('/cases',{cardId:history.value.card.id,action:action.value,reason:reason.value.trim(),operationId:operation.value},t(`moderation.action.${action.value}`),t(`moderation.proposal.${action.value}`));}
+function propose(){
+ if(!history.value)return;
+ if(action.value==='reopen')return perform(`/cards/${history.value.card.id}/reopen`,{reason:reason.value.trim()},t('moderation.action.reopen'),t('moderation.effect.reopen'));
+ const delist=action.value==='delist';
+ return perform('/cases',{
+  cardId:history.value.card.id,action:action.value,reason:reason.value.trim(),operationId:operation.value,
+  ...(delist?{confirmImmediateDelist:true}:{}),
+ },t(`moderation.action.${action.value}`),t(`moderation.proposal.${action.value}`),delist);
+}
 function adjust(kind:'tags'|'compensation'|'fandom'){if(!history.value)return;const body=kind==='tags'?{tags:tagText.value.split(/[,，\n]/).map(s=>s.trim()).filter(Boolean)}:kind==='fandom'?{fandom:fandomPick.value.label.trim(),...(fandomPick.value.id?{fandomId:fandomPick.value.id}:{})}:{board:board.value,hours:hours.value};return perform(`/cards/${history.value.card.id}/${kind}`,{reason:reason.value.trim(),operationId:operation.value,...body},t(`moderation.${kind}`),kind==='compensation'?`${t('moderation.compensationEffect')} ${t(`moderation.board.${board.value}`)} · ${t('moderation.hours')}: ${hours.value}`:t(`moderation.${kind}Effect`));}
 function page(delta:number){if(busy.value)return;offset.value=Math.max(0,offset.value+delta*30);selected.value=null;history.value=null;void load();}
 // 只鎖定分級下限（rating_floor）沒有自己的動作名，用完成卡的標題「分級下限已鎖定」
