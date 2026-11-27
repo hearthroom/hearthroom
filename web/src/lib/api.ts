@@ -576,7 +576,7 @@ export interface ReviewQueueItem {
   submittedAt: number;
   /** 同一張卡第幾次送審（1＝首送）；舊版伺服器不帶 */
   attempt?: number;
-  card: { id: string; roleId: string; name: string; summary: string; avatarUrl: string | null; zone: Zone | "all"; tags: string[] };
+  card: { id: string; roleId: string; name: string; summary: string; avatarUrl: string | null; coverSensitive?: boolean; zone: Zone | "all"; tags: string[] };
   stamps: { approve: number; required: number };
   /** 作者問卷算出的級別；問卷上線前送的單是 null */
   rating?: Rating | null;
@@ -831,7 +831,7 @@ export async function fetchReviewTimeline(id: string, token: string): Promise<{ 
 
 /** 不受理清單的一列；droppedSince 是案件起點（作者原樣重送沿用第一次的時間） */
 export interface ReviewDroppedItem {
-  id: string; cardId: string; name: string; avatarUrl: string | null; adultHidden: boolean; rating: Rating | null;
+  id: string; cardId: string; name: string; avatarUrl: string | null; coverSensitive?: boolean; adultHidden: boolean; rating: Rating | null;
   source: "single" | "author_batch" | "device_batch" | "auto_same_content"; droppedSince: number; submittedAt: number; actor: string | null;
 }
 export type ReviewDroppedFilter = "all" | "single" | "batch" | "auto" | "aged";

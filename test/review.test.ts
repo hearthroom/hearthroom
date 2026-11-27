@@ -699,6 +699,14 @@ it("allows the claiming reviewer to mark the submitted cover without deciding th
   const id = (await queue("rev-a")).body.items[0].id as string;
   expect((await act(id,"claim","rev-a")).status).toBe(200);
   const input = {sensitive:true,reason:"Synthetic cover note",operationId:crypto.randomUUID()};
+  const pending = (await queue("rev-a")).body.items[0];
+  const manage = (suffix = "", body?: object) => SELF.fetch(`https://c.test/v1/moderation/cards/${pending.card.id}${suffix}`, {
+    ...(!body ? {} : { method: "POST", body: JSON.stringify(body) }),
+    headers: { ...bearer("rev-b"), "Content-Type": "application/json" },
+  });
+  const history = await (await manage()).json() as {card:object};
+  expect(history.card).not.toHaveProperty("coverUrl");
+  expect((await manage("/cover",input)).status).toBe(404);
   expect((await act(id,"cover","rev-b",input)).status).toBe(409);
   expect((await act(id,"cover","author-token",input)).status).toBe(403);
   const marked = await act(id,"cover","rev-a",input);

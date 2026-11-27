@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CoverSensitiveBadge from "@/components/CoverSensitiveBadge.vue";
 import { stageAvailable } from "@stage-site";
 /**
  * /review — 社群審核的共享佇列。
@@ -239,6 +240,7 @@ onMounted(() => {
           <div class="row__art">
             <img v-if="item.card.avatarUrl" :src="item.card.avatarUrl" alt="" loading="lazy" />
             <div v-else class="row__void" />
+            <CoverSensitiveBadge v-if="item.card.avatarUrl && item.card.coverSensitive" />
           </div>
           <div class="row__body">
             <div class="row__top">
@@ -300,7 +302,7 @@ onMounted(() => {
 .chip--batch { color: var(--warning-text); }
 .batch-banner { display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: center; justify-content: space-between; margin-bottom: var(--s-3); }
 .row--mine { box-shadow: 0 0 0 1px var(--accent), var(--shadow-sm); }
-.row__art { display: block; width: 56px; aspect-ratio: 3 / 4; border-radius: var(--r-sm); overflow: hidden; background: var(--surface-2); }
+.row__art { position: relative; display: block; width: 56px; aspect-ratio: 3 / 4; border-radius: var(--r-sm); overflow: hidden; background: var(--surface-2); }
 .row__art img { width: 100%; height: 100%; object-fit: cover; }
 .row__void { width: 100%; height: 100%; }
 .row__body { display: grid; gap: 4px; min-width: 0; }

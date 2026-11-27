@@ -1,3 +1,4 @@
+import { CLAIM_TTL_MS } from "./review";
 import { bumpOp } from './ops-metrics';
 import { HttpError } from './types';
 
@@ -32,7 +33,7 @@ export async function saveAuthorCover(db: D1Database, cardId: number, sensitive:
   if (changed.meta.changes) await bumpOp(db,'cover_sensitive','author',sensitive ? 'set' : 'clear');
 }
 
-export async function saveReviewerCover(db: D1Database, cardId: string, actor: string, cover: string | null, body: unknown) {
+export async function saveReviewerCover(db: D1Database, cardId: string, actor: string, cover: string | null, body: unknown, claim?: { id: string; generation: string }) {
   const input = body && typeof body === "object" ? body as Record<string,unknown> : {};
   const { sensitive, operationId } = input;
   const reason = typeof input.reason === 'string' ? input.reason.trim() : '';
@@ -43,12 +44,19 @@ export async function saveReviewerCover(db: D1Database, cardId: string, actor: s
   const id = crypto.randomUUID();
   const now = Date.now();
   const next = Number(sensitive);
+  const permitted = claim
+    ? `EXISTS (SELECT 1 FROM review_submissions s WHERE s.card_id=num AND s.id=? AND s.status='pending'
+      AND s.claimed_by=? AND s.claim_generation=? AND s.claimed_at IS NOT NULL
+      AND (s.claimed_at>? OR s.flip_by=s.claimed_by))`
+    : "EXISTS (SELECT 1 FROM cards c WHERE c.id=num AND c.status='approved')";
+  const claimArgs = claim ? [claim.id,actor,claim.generation,now-CLAIM_TTL_MS] : [];
   const tx = await db.batch([
     db.prepare(`INSERT INTO audit_log(id,subject_kind,subject_id,actor_member_id,actor_kind,action,reason,before_json,after_json,operation_id,created_at)
       SELECT ?,'card',CAST(num AS TEXT),?,'human','cover_mark',?,json_object('sensitive',cover_review_sensitive),json_object('sensitive',?),?,?
       FROM card_numbers WHERE num=? AND cover_review_sensitive<>?
+        AND EXISTS (SELECT 1 FROM reviewers r WHERE r.member_id=? AND r.revoked_at IS NULL) AND ${permitted}
       ON CONFLICT(actor_member_id,operation_id) DO NOTHING`)
-      .bind(id,actor,reason,next,operationId,now,cardId,next),
+      .bind(id,actor,reason,next,operationId,now,cardId,next,actor,...claimArgs),
     db.prepare(`INSERT INTO moderation_events(id,provider,source_role_id,actor,action,reason,before_value,after_value,created_at,operation_id)
       SELECT ?,provider,source_role_id,?,'cover_mark',?,CAST(cover_review_sensitive AS TEXT),?,?,?
       FROM card_numbers WHERE num=? AND EXISTS (SELECT 1 FROM audit_log WHERE id=?)`)

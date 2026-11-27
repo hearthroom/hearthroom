@@ -2374,7 +2374,7 @@ app.post("/v1/review/:id/cover", async c => {
     FROM cards c LEFT JOIN hosting_versions v ON v.submission_id=COALESCE(?2,?3) WHERE c.id=?1`)
     .bind(s.card_id,s.flip_of,s.id).first<{cover:string|null}>();
   const body = await c.req.json<Record<string,unknown>>().catch(()=>({}));
-  return c.json(await saveReviewerCover(c.env.DB,String(s.card_id),member.id,row?.cover??null,body),200,{'Cache-Control':'private, no-store'});
+  return c.json(await saveReviewerCover(c.env.DB,String(s.card_id),member.id,row?.cover??null,body,{id:s.id,generation:s.claim_generation}),200,{'Cache-Control':'private, no-store'});
 });
 
 app.get("/v1/review/:id/detail", async (c) => {

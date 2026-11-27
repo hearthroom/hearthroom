@@ -189,7 +189,7 @@ onMounted(()=>{document.title=pageTitle(t('moderation.title'));void reviewer.ref
      </section>
      <label for="case-action">{{t('moderation.chooseAction')}}</label><select id="case-action" v-model="action" class="input" :disabled="busy"><option v-for="value in actions" :key="value" :value="value">{{t(value==='cover_mark'?(history.card.coverReviewSensitive?'coverSensitive.unmark':'coverSensitive.mark'):`moderation.action.${value}`)}}</option></select>
      <CoverMark v-if="action==='cover_mark'" :key="'cover-'+history.card.id" :state="coverState" :cover="history.card.coverUrl ?? null"
-       :disabled="!reviewer.reviewer" :submit="setCover" @busy="v=>busy=v" />
+       :disabled="!reviewer.reviewer || (!!history.card.authorHandle && history.card.authorHandle===session.profile?.handle)" :submit="setCover" @busy="v=>busy=v" />
      <RatingCorrection v-else-if="action==='rating'&&isManager" :key="history.card.id" :card="history.card" :token="token" :disabled="busy" @busy="v=>busy=v" @updated="ratingUpdated" @again="ratingAgain" />
      <template v-else>
      <p class="subtle">{{t(`moderation.proposal.${action}`)}}</p><label for="card-reason">{{t('moderation.reason')}}</label><textarea autocomplete="off" id="card-reason" v-model="reason" class="input" rows="4" maxlength="2000" :disabled="busy"/>

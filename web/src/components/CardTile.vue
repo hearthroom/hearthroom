@@ -22,9 +22,12 @@ const props = defineProps<{
   card: CommunityCard;
   rank?: number;
   showZone?: boolean;
+  selectOnly?: boolean;
   /** 首屏那幾張不要懶載入：它們就是最大內容繪製 */
   eager?: boolean;
 }>();
+
+const emit = defineEmits<{ revealed: [] }>();
 
 // 沒封面的卡用角色名決定色相：同一張卡永遠同一個顏色，一排佔位卡也彼此可辨。
 const { lp, locale } = useLocalePath();
@@ -50,7 +53,8 @@ async function revealCover() {
   reveal();
   announced.value = true;
   await nextTick();
-  cardElement.value?.querySelector<HTMLElement>(".card__link")?.focus({ preventScroll: true });
+  if (props.selectOnly) emit("revealed");
+  else cardElement.value?.querySelector<HTMLElement>(".card__link")?.focus({ preventScroll: true });
 }
 const art = ref<"thumb" | "still" | "original" | "broken">("thumb");
 watch([() => props.card.avatarUrl, concealed], () => { art.value = "thumb"; announced.value = false; }, { flush: "sync" });
@@ -183,7 +187,7 @@ const adultLabel = computed(() => ratingName("R", String(locale.value)));
     </div>
 
     <span class="sr-only" role="status">{{ announced ? $t("coverSensitive.revealed") : "" }}</span>
-    <div class="card__body">
+    <div class="card__body" :inert="selectOnly || undefined">
       <h2 class="card__name" :class="{ 'card__name--designed': title.designed }" :style="title.designed ? { '--title-em': title.widestEm } : undefined">
         <RouterLink :to="href" class="card__link">{{ title.text }}</RouterLink>
       </h2>
@@ -237,7 +241,7 @@ const adultLabel = computed(() => ratingName("R", String(locale.value)));
 
 .card__art { position: relative; aspect-ratio: 3 / 4; background: var(--surface-2); overflow: hidden; container-type: inline-size; --mark-h: 26px; --mark-in: 6px; }
 .card__art img { width: 100%; height: 100%; object-fit: cover; transition: transform var(--dur-slow) var(--ease); }
-.card:hover .card__art img, .card:active .card__art img { transform: scale(1.04); }
+.card:hover .card__art:not(.card__art--concealed) img, .card:active .card__art:not(.card__art--concealed) img { transform: scale(1.04); }
 /* 圖片內緣一道極淡的線：淺色立繪的邊緣才不會跟白卡糊在一起 */
 .card__art--concealed { z-index: 1; }
 .card .card__art--concealed img { filter: blur(10cqw); transform: scale(1.16); }

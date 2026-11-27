@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import CoverEye from "./CoverEye.vue";
+import CoverSensitiveBadge from "./CoverSensitiveBadge.vue";
 import { stageAvailable } from "@stage-site";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
@@ -158,7 +158,7 @@ onBeforeUnmount(() => listen(false));
         <span v-if="card.workVisibility?.update==='rejected'" class="card__status card__status--alert">{{ $t('visibility.badge.updateRejected') }}</span>
         <span v-if="card.workVisibility ? card.workVisibility.access==='public'&&card.workVisibility.draftChanged&&card.workVisibility.update==='none' : card.draftChanged" class="card__status card__status--wait">{{ $t("mine.badge.draftChanged") }}</span>
       </span>
-      <span v-if="card.coverSensitive && artSrc" class="card__sensitive"><CoverEye /><span class="sr-only">{{ $t("coverSensitive.label") }}</span></span>
+      <CoverSensitiveBadge v-if="card.coverSensitive && artSrc" />
       <RatingMark v-if="card.registered && card.rating === 'R'" rating="R" variant="chip" class="card__flag" />
     </RouterLink>
 
@@ -240,8 +240,6 @@ onBeforeUnmount(() => listen(false));
 /* hover 只放大封面、名字變色，陰影不變：陰影淡入淡出會連同動圖封面整張重畫，GPU 吃緊的電腦會整條閃白（見 card-hover-no-repaint.test） */
 
 .card__art { position: relative; display: block; aspect-ratio: 3 / 4; background: var(--surface-2); overflow: hidden; }
-.card__sensitive { position: absolute; left: 8px; top: 8px; width: 24px; height: 24px; border-radius: var(--r-pill); background: rgba(16,16,19,.65); color: white; display: grid; place-items: center; }
-.card__sensitive svg { width: 14px; }
 .card__art img { width: 100%; height: 100%; display: block; object-fit: cover; transition: transform var(--dur-slow) var(--ease); }
 .card:hover .card__art img, .card:active .card__art img { transform: scale(1.04); }
 /* 圖片內緣一道極淡的線：淺色立繪的邊緣才不會跟白卡糊在一起 */

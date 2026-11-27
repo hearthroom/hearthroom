@@ -47,7 +47,7 @@ async function syncCase(env:Env,row:CaseRow){
 }
 async function managedCase(db:D1Database,row:CaseRow){return row.provider==='harbor'&&await managedWork(db,row.provider,row.source_role_id);}
 const publicCase=(r:CaseRow,memberId:string)=>({id:r.id,cardNumber:r.card_number,action:r.action,title:r.title,reason:r.reason,status:r.status,createdAt:r.created_at,decidedAt:r.decided_at,version:r.version_id,createdByMe:r.created_by===memberId,resolution:r.resolution});
-const projection=(r:ManagedCard,lang:string)=>({id:String(r.id),provider:r.provider,featured:r.featured_at!=null,name:pickLocale(JSON.parse(r.names) as Localized,lang),tags:JSON.parse(r.tags) as string[],fandom:r.fandom??'',fandomId:r.fandom_qid??null,status:r.status,boardHidden:!!r.board_hidden,publicBlocked:!!r.public_blocked,version:r.approved_version_id||r.reviewed_hash,rating:r.rating??null,cardNumber:r.card_number??null,coverUrl:r.background_url,...coverState(r,r.background_url)});
+const projection=(r:ManagedCard,lang:string)=>({id:String(r.id),provider:r.provider,featured:r.featured_at!=null,name:pickLocale(JSON.parse(r.names) as Localized,lang),tags:JSON.parse(r.tags) as string[],fandom:r.fandom??'',fandomId:r.fandom_qid??null,status:r.status,boardHidden:!!r.board_hidden,publicBlocked:!!r.public_blocked,version:r.approved_version_id||r.reviewed_hash,rating:r.rating??null,cardNumber:r.card_number??null,...(r.status==='approved'?{coverUrl:r.background_url,...coverState(r,r.background_url)}:{})});
 async function mutate<T>(run:()=>Promise<T>):Promise<T>{try{return await run();}catch(e){if(e instanceof HttpError)throw e;if(/moderation_conflict|UNIQUE constraint/.test(String(e)))throw new HttpError(409,'moderation_conflict');throw e;}}
 
 // 只有分享活動的設定路由（五語介紹、橫幅上傳）超過 16 KB，上限在 campaign-routes.ts 自己設；其他活動審核路由照樣受這個上限。
@@ -110,7 +110,7 @@ moderationRoutes.get('/v1/moderation/cards/:id',async c=>{
  const member=await requireReviewer(c);const db=c.env.DB;const card=await cardOf(db,c.req.param('id'));
  if(card.rating==='R'&&(await memberNsfw(db,member.id)).ageVerifiedAt===null)throw new HttpError(403,'age_verification_required');
  const cases=await db.prepare('SELECT * FROM moderation_cases WHERE provider=? AND source_role_id=? ORDER BY created_at DESC LIMIT 100').bind(card.provider,card.source_role_id).all<CaseRow>();
- const events=await db.prepare(`SELECT e.action,e.reason,e.before_value AS beforeValue,e.after_value AS afterValue,e.created_at AS at,COALESCE(NULLIF(m.display_name,''),m.handle) AS actor FROM moderation_events e LEFT JOIN members m ON m.id=e.actor WHERE e.provider=? AND e.source_role_id=? ORDER BY e.created_at DESC LIMIT 100`).bind(card.provider,card.source_role_id).all();
+ const events=await db.prepare(`SELECT e.action,e.reason,e.before_value AS beforeValue,e.after_value AS afterValue,e.created_at AS at,COALESCE(NULLIF(m.display_name,''),m.handle) AS actor FROM moderation_events e LEFT JOIN members m ON m.id=e.actor WHERE e.provider=? AND e.source_role_id=? AND (e.action<>'cover_mark' OR ?) ORDER BY e.created_at DESC LIMIT 100`).bind(card.provider,card.source_role_id,Number(card.status==='approved')).all();
  const manager=['manager','owner'].includes(String(await reviewerRole(db,member.id)));
  const reviewRows=await db.prepare(`SELECT s.id,s.kind,s.status,s.submitted_at AS submittedAt,s.decided_at AS decidedAt,COALESCE(NULLIF(s.note,''),NULLIF(s.reopen_reason,''),CASE WHEN ?2 THEN s.flip_reason ELSE '' END) AS note,s.content_hash AS version,s.reopen_of IS NOT NULL AS reopen,s.flip_of AS flipOf,${FLIP_COLUMNS('s')}
   FROM review_submissions s WHERE s.card_id=?1 ORDER BY s.submitted_at DESC LIMIT 100`).bind(card.id,manager?1:0).all<{id:string;status:string;reopen:number}&FlipColumns&Record<string,unknown>>();
@@ -126,6 +126,7 @@ moderationRoutes.get('/v1/moderation/cards/:id',async c=>{
 moderationRoutes.post('/v1/moderation/cards/:id/cover',async c=>{
  const member=await requireReviewer(c);const db=c.env.DB;
  const card=await cardOf(db,c.req.param('id'));await guardCard(db,card,member.id);
+ if(card.status!=='approved')throw new HttpError(404,'not_found');
  const body=await c.req.json<Record<string,unknown>>().catch(()=>({}));
  return c.json(await mutate(()=>saveReviewerCover(db,String(card.id),member.id,card.background_url,body)),200,{'Cache-Control':'private, no-store'});
 });

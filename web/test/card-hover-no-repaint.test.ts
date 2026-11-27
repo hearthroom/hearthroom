@@ -30,7 +30,8 @@ describe("卡片 hover 不重畫整張卡", () => {
       for (const body of card) expect(body).not.toMatch(/transition(-property)?:[^;]*(box-shadow|transform|all)/);
     });
     it(`${file}：封面放大照留`, () => {
-      expect(rules(css, ".card:hover .card__art img").join("")).toMatch(/transform:\s*scale/);
+      const hover = file.endsWith("/CardTile.vue") ? ".card:hover .card__art:not(.card__art--concealed) img" : ".card:hover .card__art img";
+      expect(rules(css, hover).join("")).toMatch(/transform:\s*scale/);
     });
   }
 });

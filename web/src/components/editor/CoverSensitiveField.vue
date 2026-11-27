@@ -27,7 +27,7 @@ const id = useId();
 <style scoped>
 .cover-field { display: flex; align-items: flex-start; gap: var(--s-3); min-height: 48px; padding-block: var(--s-2); }
 .cover-field__toggle { position: relative; flex: none; margin: var(--s-2) 2px; }
-.cover-field__toggle::after { content: ""; position: absolute; inset: -10px -3px; }
+.cover-field__toggle::before { content: ""; position: absolute; inset: -10px -3px; }
 .cover-field__text { flex: 1; min-width: 0; overflow-wrap: anywhere; padding-top: var(--s-1); }
 .cover-field__text strong { font-size: 14px; }
 .cover-field__text p { margin: var(--s-1) 0 0; font-size: 12px; color: var(--text-2); }

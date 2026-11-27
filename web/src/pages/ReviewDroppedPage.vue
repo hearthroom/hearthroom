@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CoverSensitiveBadge from "@/components/CoverSensitiveBadge.vue";
 /**
  * /review/dropped — 不受理清單（審卡 V2，ui.md §2.1）。被移出待審的卡：不是判定、不通知作者，
  * 作者那邊仍是審核中。每列可以立即復原（不確認，回到待審原位）或唯讀查看。
@@ -120,7 +121,7 @@ onMounted(() => {
       </div>
       <ul v-else class="list">
         <li v-for="item in items" :key="item.id" class="row panel" :data-dropped-row="item.id">
-          <div class="row__art"><img v-if="item.avatarUrl" :src="item.avatarUrl" alt="" loading="lazy" /></div>
+          <div class="row__art"><img v-if="item.avatarUrl" :src="item.avatarUrl" alt="" loading="lazy" /><CoverSensitiveBadge v-if="item.avatarUrl && item.coverSensitive" /></div>
           <div class="row__body">
             <div class="row__top">
               <span class="row__name">{{ item.name || "—" }}</span>
@@ -149,7 +150,7 @@ onMounted(() => {
 .filter .seg__item { flex: none; white-space: nowrap; }
 .list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-3); }
 .row { display: grid; grid-template-columns: 56px minmax(0, 1fr) 150px; gap: var(--s-3); padding: var(--s-3); align-items: center; }
-.row__art { width: 56px; aspect-ratio: 3 / 4; border-radius: var(--r-sm); overflow: hidden; background: var(--surface-2); }
+.row__art { position: relative; width: 56px; aspect-ratio: 3 / 4; border-radius: var(--r-sm); overflow: hidden; background: var(--surface-2); }
 .row__art img { width: 100%; height: 100%; object-fit: cover; }
 .row__body { display: grid; gap: 4px; min-width: 0; }
 .row__top { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; }

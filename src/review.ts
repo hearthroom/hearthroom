@@ -1,3 +1,4 @@
+import {effectiveCover,type CoverFlags} from "./cover-sensitive";
 import { RATING_RANK_SQL } from "./rating-correction";
 import { guardAuthorNote } from "./author-note-guard";
 import { auditStmtIfChanged } from './audit';
@@ -149,7 +150,7 @@ export interface QueueItem {
   attempt: number;
   /** 送審類型：首次／更新／退回後再送／重新審核（見 submissionType） */
   type: SubmissionType;
-  card: { id: string; roleId: string; name: string; summary: string; avatarUrl: string | null; zone: string; tags: string[] };
+  card: { id: string; roleId: string; name: string; summary: string; avatarUrl: string | null; coverSensitive: boolean; zone: string; tags: string[] };
   stamps: { approve: number; required: number };
   /** 作者問卷算出的級別；null＝問卷上線前送的一般卡 */
   rating: string | null;
@@ -241,6 +242,7 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
               COALESCE(json_extract(v.public_role,'$.names'),c.names) AS names,
               COALESCE(json_extract(v.public_role,'$.summaries'),c.summaries) AS summaries,
               COALESCE(NULLIF(json_extract(v.public_role,'$.backgroundUrl'),''),json_extract(v.public_role,'$.avatarUrl'),c.background_url) AS avatar_url, c.zone, c.tags,
+              cn.cover_author_sensitive, cn.cover_review_sensitive,
               (SELECT COUNT(*) FROM review_stamps st WHERE st.submission_id = s.id AND st.verdict = 'approve') AS approvals,
               (SELECT COUNT(*) FROM review_stamps st WHERE st.submission_id = s.id AND st.member_id = ?) AS mine,
               (SELECT COUNT(*) FROM review_submissions p WHERE ${EARLIER_DECIDED("p", "s")}) AS earlier,
@@ -249,7 +251,7 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
               s.flip_of, s.flip_by, s.flip_reason, COALESCE(NULLIF(fm.display_name, ''), fm.handle) AS flip_name,
               (SELECT o.decided_at FROM review_submissions o WHERE o.id = s.flip_of) AS flip_rejected_at,
               (SELECT r.role IN ('manager','owner') FROM reviewers r WHERE r.member_id = s.flip_by AND r.revoked_at IS NULL) AS flip_by_active
-       FROM review_submissions s JOIN cards c ON c.id = s.card_id
+       FROM review_submissions s JOIN cards c ON c.id = s.card_id LEFT JOIN card_numbers cn ON cn.num=c.id
        -- 改判單待審時版本列還在原本駁回的那張單上（見 0152）
        LEFT JOIN hosting_versions v ON v.submission_id IN (s.id, s.flip_of) ${HOLD_JOIN} LEFT JOIN members fm ON fm.id = s.flip_by
        LEFT JOIN review_submission_devices sd ON sd.submission_id = s.id LEFT JOIN review_submission_features f ON f.submission_id = s.id
@@ -258,7 +260,7 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
        ORDER BY s.submitted_at ASC LIMIT 200`,
     )
     .bind(memberId)
-    .all<{
+    .all<CoverFlags & {
       id: string; kind: SubmissionKind; submitted_at: number; claimed_by: string | null; claimed_at: number | null; claim_generation: string;
       card_id: string; source_role_id: string; names: string; summaries: string; avatar_url: string | null; zone: string; tags: string;
       length_exempt:number;approvals: number; mine: number; rating: string | null; earlier: number; review_length_total: number | null; review_worldbook_entries: number | null; review_regex_rules: number | null;
@@ -293,6 +295,7 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
       name: pickLocale(JSON.parse(r.names) as Localized, lang),
       summary: pickLocale(JSON.parse(r.summaries) as Localized, lang),
       avatarUrl: r.avatar_url,
+      coverSensitive: effectiveCover(r,r.avatar_url),
       zone: r.zone,
       tags: JSON.parse(r.tags) as string[],
     },

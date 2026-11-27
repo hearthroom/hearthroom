@@ -36,12 +36,13 @@ it('selects both visible and unavailable favorites without following card, tag o
  app.mount(el);await settle();
  const boxes=[...el.querySelectorAll<HTMLElement>('[role=checkbox]')];
  expect(boxes).toHaveLength(2);expect(boxes[0].getAttribute('aria-label')).toBe('合成收藏');
- expect(boxes[0].querySelector('[inert]')).not.toBeNull();
- const link=boxes[0].querySelector('a')!;
+ const cardBody=boxes[0].closest('.favorite-grid__item')!;
+ expect(cardBody.querySelector('[inert]')).not.toBeNull();
+ const link=cardBody.querySelector('a')!;
  const event=new MouseEvent('click',{bubbles:true,cancelable:true});link.dispatchEvent(event);await settle();
  expect(event.defaultPrevented).toBe(true);expect(router.currentRoute.value.path).toBe('/library');
  expect(selected.value).toEqual(['100002']);expect(boxes[0].getAttribute('aria-checked')).toBe('true');
- const otherLinks=[...boxes[0].querySelectorAll('a')].slice(1);expect(otherLinks).toHaveLength(2);
+ const otherLinks=[...cardBody.querySelectorAll('a')].slice(1);expect(otherLinks).toHaveLength(2);
  for(const other of otherLinks){const click=new MouseEvent('click',{bubbles:true,cancelable:true});other.dispatchEvent(click);await settle();expect(click.defaultPrevented).toBe(true);expect(router.currentRoute.value.path).toBe('/library');}
  expect(selected.value).toEqual(['100002']);
  boxes[1].dispatchEvent(new KeyboardEvent('keydown',{key:' ',bubbles:true,cancelable:true}));await settle();
@@ -59,4 +60,24 @@ it('blocks selection and single-card removal while the batch is locked',async()=
  box.click();box.dispatchEvent(new KeyboardEvent('keydown',{key:' ',bubbles:true}));await settle();
  expect(changed).not.toHaveBeenCalled();expect(f.request).not.toHaveBeenCalled();
  expect(box.querySelector('button')).toBeNull();
+});
+
+
+it('reveals a marked favorite while managing without navigating or selecting it',async()=>{
+ const selected=ref<string[]>([]);
+ const router=createRouter({history:createMemoryHistory(),routes:[{path:'/:pathMatch(.*)*',component:{template:'<div />'}}]});
+ await router.push('/library');
+ const card={id:'100019',name:'合成收藏封面',summary:'合成內容',tags:[],author:{name:'合成作者'},avatarUrl:'https://fixture.test/art.webp',coverSensitive:true};
+ app=createApp({render:()=>h(FavoriteGrid,{items:[card as any],managing:true,selected:selected.value,'onUpdate:selected':(ids:string[])=>selected.value=ids})}).use(router).use(i18n);
+ app.mount(el);await settle();
+ const reveal=el.querySelector<HTMLButtonElement>('.cover-reveal')!;
+ expect(reveal.closest('[inert]')).toBeNull();
+ reveal.click();await settle();
+ expect(el.querySelector('.cover-reveal')).toBeNull();
+ expect(selected.value).toEqual([]);
+ expect(router.currentRoute.value.path).toBe('/library');
+ const box=el.querySelector<HTMLElement>('[role=checkbox]')!;
+ expect(document.activeElement).toBe(box);
+ box.click();await settle();
+ expect(selected.value).toEqual(['100019']);
 });

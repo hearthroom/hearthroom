@@ -1,3 +1,4 @@
+import {effectiveCover,type CoverFlags} from "./cover-sensitive";
 import { CLAIM_TTL_MS, getSubmission } from './review';
 import { reviewerRole } from './members';
 import { queueContext, reviewEventStatement, type QueueContext } from './review-v2';
@@ -197,7 +198,7 @@ export async function restoreBatch(db: D1Database, input: { batchId: string; mem
 export type DroppedFilter = 'all' | 'single' | 'batch' | 'auto' | 'aged';
 
 export interface DroppedItem {
-  id: string; cardId: string; name: string; avatarUrl: string | null; adultHidden: boolean;
+  id: string; cardId: string; name: string; avatarUrl: string | null; coverSensitive: boolean; adultHidden: boolean;
   source: 'single' | 'author_batch' | 'device_batch' | 'auto_same_content';
   /** 案件起點：作者原樣重送沿用第一次不受理的時間 */
   droppedSince: number; submittedAt: number; actor: string | null; rating: string | null;
@@ -216,9 +217,11 @@ export async function listDropped(db: D1Database, viewer: { memberId: string; ad
   const rows = await db.prepare(`SELECT s.id, s.card_id, s.rating, s.submitted_at, d.source, k.opened_at,
       COALESCE(json_extract(v.public_role,'$.names'),c.names) AS names,
       COALESCE(NULLIF(json_extract(v.public_role,'$.backgroundUrl'),''),json_extract(v.public_role,'$.avatarUrl'),c.background_url) AS avatar_url,
-      COALESCE(NULLIF(m.display_name,''),m.handle) AS actor
+      COALESCE(NULLIF(m.display_name,''),m.handle) AS actor,
+      (SELECT cover_author_sensitive FROM card_numbers WHERE num=c.id) AS cover_author_sensitive,
+      (SELECT cover_review_sensitive FROM card_numbers WHERE num=c.id) AS cover_review_sensitive
     ${base} ORDER BY k.opened_at ASC LIMIT 200`).bind(...args)
-    .all<{ id: string; card_id: number; rating: string | null; submitted_at: number; source: DroppedItem['source']; opened_at: number; names: string; avatar_url: string | null; actor: string | null }>();
+    .all<CoverFlags & { id: string; card_id: number; rating: string | null; submitted_at: number; source: DroppedItem['source']; opened_at: number; names: string; avatar_url: string | null; actor: string | null }>();
   return {
     total: total?.n ?? 0,
     items: rows.results.map((r) => {
@@ -226,7 +229,7 @@ export async function listDropped(db: D1Database, viewer: { memberId: string; ad
       return {
         id: r.id, cardId: String(r.card_id), rating: r.rating, adultHidden: hidden,
         name: hidden ? '' : pickLocale(JSON.parse(r.names) as Localized, viewer.lang),
-        avatarUrl: hidden ? null : r.avatar_url, source: r.source, droppedSince: r.opened_at, submittedAt: r.submitted_at,
+        avatarUrl: hidden ? null : r.avatar_url, coverSensitive: !hidden && effectiveCover(r,r.avatar_url), source: r.source, droppedSince: r.opened_at, submittedAt: r.submitted_at,
         actor: r.source === 'auto_same_content' ? null : (r.actor ?? '').slice(0, 80),
       };
     }),
