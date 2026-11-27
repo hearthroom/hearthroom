@@ -10,7 +10,7 @@ const MALIANG_CODES = [
   'bh-maple-85994', 'bh-hut-maple', 'vc-maple', 'bh-maple-gal',
   'bh-sanguo-6331', 'bh-hut-sanguo', 'vc-sanguo', 'bh-sanguo-indie',
   'bh-hut-fanren', 'vc-fanren', 'bh-fanren-indie', 'dcard-fanren',
-  'bh-jinyong',
+  'bh-jinyong', 'bh-jinyong-f2',
 ];
 
 // 巴哈 AI 應用 85831 版不帶推薦碼：只驗 GA 歸因，不寫入推薦。

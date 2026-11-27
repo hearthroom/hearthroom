@@ -75,7 +75,7 @@ const MALIANG_CODES = [
   'bh-maple-85994', 'bh-hut-maple', 'vc-maple', 'bh-maple-gal',
   'bh-sanguo-6331', 'bh-hut-sanguo', 'vc-sanguo', 'bh-sanguo-indie',
   'bh-hut-fanren', 'vc-fanren', 'bh-fanren-indie', 'dcard-fanren',
-  'bh-jinyong',
+  'bh-jinyong', 'bh-jinyong-f2',
 ];
 
 it('all configured targets are safe local landings with attribution', () => {
@@ -97,6 +97,13 @@ it('all configured targets are safe local landings with attribution', () => {
     expect(url.searchParams.get('utm_medium')).toBe(medium);
     expect(url.searchParams.get('utm_campaign')).toBeTruthy();
   }
+});
+
+it.each(['GET', 'HEAD'])('serves the Jin Yong thread update short link for %s', async method => {
+  const response = await visit('/go/bh-jinyong-f2?ref=OVERRIDE&utm_campaign=other', method);
+  expect(response.status).toBe(302);
+  expect(response.headers.get('location')).toBe('/cards/101602?ref=6M9ZV5FS&utm_source=bahamut&utm_medium=forum&utm_campaign=bh-10859-jinyong-f2-20261127');
+  expect(response.headers.get('cache-control')).toBe('no-store');
 });
 
 it.each([
