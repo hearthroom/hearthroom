@@ -527,6 +527,34 @@ describe('new-card author-asset draft recovery', () => {
     expect(localStorage.getItem('hearthroom.draft.create')).toBeNull();
   });
 
+  it("keeps rule edits made by an older editor after it rewrites a compact draft", async () => {
+    await mount("/create");
+    await type($("#f-name"), "Editor version round trip");
+    await pickFile($(".rxbar input[type=file]"), ruleFile("Saved replacement"));
+    api.patchRoleWelcome.mockRejectedValueOnce(new Error("Synthetic welcome failure"));
+    await submit();
+    expect(api.saveAuthorAsset).toHaveBeenCalledTimes(1);
+    app!.unmount(); root.remove(); app = null;
+
+    const draftKey = "hearthroom.draft.create";
+    const stored = JSON.parse(localStorage.getItem(draftKey)!);
+    const { set, original, version, savedOpening, pendingRead, pendingWrite } = stored.authorAsset;
+    const scopedKey = Object.keys(localStorage).find(key => key.startsWith("hearthroom.draft.provision."))!;
+    const scope = JSON.parse(localStorage.getItem(scopedKey)!);
+    // The older editor rewrites only its known author asset fields.
+    set.rules[0].replace = "Edited in the older editor";
+    stored.authorAsset = { set, original, version, savedOpening, pendingRead, pendingWrite };
+    localStorage.setItem(draftKey, JSON.stringify(stored));
+    localStorage.setItem(scopedKey, JSON.stringify({ ...scope, authorAsset: stored.authorAsset }));
+
+    await mount("/create");
+    await submit();
+    expect(api.saveAuthorAsset).toHaveBeenCalledTimes(2);
+    expect(api.saveAuthorAsset).toHaveBeenLastCalledWith("r1", expect.objectContaining({
+      version: 1, rules: [expect.objectContaining({ replace: "Edited in the older editor" })],
+    }), "tok");
+  });
+
   it('loads the saved asset for legacy partial drafts rather than overwriting it with an empty version zero', async () => {
     localStorage.setItem('hearthroom.draft.create', JSON.stringify({
       draft: { ...makeDraft('zh-Hant'), roleName: 'Legacy partial', roleWelcome: 'Opening' },
@@ -2449,6 +2477,49 @@ describe("MMD 三件套批次選檔", () => {
     }
   });
 
+  it("can finish saving an imported card without storing duplicate copies of its saved display rules", async () => {
+    const capacity = 5 * 1024 * 1024;
+    const storage = localStorage;
+    const setItem = (key: string, value: string) => {
+      const occupied = Object.keys(storage)
+        .filter((storedKey) => storedKey !== key)
+        .reduce((size, storedKey) => size + storedKey.length + (storage.getItem(storedKey)?.length ?? 0), 0);
+      if (occupied + key.length + value.length > capacity) throw new DOMException("Storage is full", "QuotaExceededError");
+      storage.setItem(key, value);
+    };
+    vi.stubGlobal("localStorage", new Proxy(storage, {
+      get: (target, property) => property === "setItem" ? setItem : Reflect.get(target, property),
+    }));
+    try {
+      await mount("/create");
+      byText(i18n.global.t("import.kind.mmd")).click();
+      await flush();
+
+      const rules = Array.from({ length: 4 }, (_, i) => ({
+        scriptName: `Synthetic rule ${i}`,
+        findRegex: `synthetic-${i}`,
+        replaceString: "x".repeat(400_000),
+      }));
+      await pickFile($(".import input[type=file]"),
+        new File([JSON.stringify({ regex_scripts: rules })], "rules.json"),
+        new File([JSON.stringify({ name: "Synthetic world", entries: { "0": { key: '["test"]', content: "Synthetic entry" } } })], "book.json"),
+        new File(["Synthetic character"], "Synthetic.txt"));
+      byText("套用到表單").click();
+      await flush();
+      await submit();
+
+      expect(api.provisionRole).toHaveBeenCalledTimes(1);
+      expect(api.saveAuthorAsset).toHaveBeenCalledTimes(1);
+      expect(api.patchWorldbookDocument).toHaveBeenCalledTimes(1);
+      expect(api.completeRoleProvision).toHaveBeenCalledTimes(1);
+      expect(api.registerCardIdentity).toHaveBeenCalledTimes(1);
+      expect(root.querySelector(".body__scroll > [role=alert]")).toBeNull();
+      expect(localStorage.getItem("hearthroom.draft.create")).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it.each([false, true])("套用明確的名稱與開場，TXT 只有在選取時才替換人設（%s）", async (hasDefinition) => {
     await mount("/create");
     await type($("#f-name"), "手填名稱");
@@ -3259,6 +3330,39 @@ it.each([null, 507, 503])('keeps the card image and classifies optional library 
   expect(field.querySelector('img')?.getAttribute('src')).toContain('/card-media/');
   expect(root.textContent).toContain(i18n.global.t('editor.image.libraryCopyFailed',{why:reason}));
  } finally {gen.imageGen=null;gen.create.mockReset();gen.save.mockReset();}
+});
+
+it("explains a browser draft write failure and finishes the same card after storage becomes available", async () => {
+  const storage = localStorage;
+  let blocked = true;
+  const setItem = (key: string, value: string) => {
+    if (blocked && key.startsWith("hearthroom.draft.") && value.includes('"completionAttempted":true')) {
+      throw new DOMException("Storage is full", "QuotaExceededError");
+    }
+    storage.setItem(key, value);
+  };
+  vi.stubGlobal("localStorage", new Proxy(storage, {
+    get: (target, property) => property === "setItem" ? setItem : Reflect.get(target, property),
+  }));
+  try {
+    await mount("/create");
+    await type($("#f-name"), "Synthetic draft");
+    await submit();
+
+    expect(api.patchRoleDocument).toHaveBeenCalled();
+    expect(api.completeRoleProvision).not.toHaveBeenCalled();
+    const alert = root.querySelector(".body__scroll > [role=alert]")?.textContent;
+    expect(alert).toContain(i18n.global.t("editor.image.draftStorageUnavailable"));
+    expect(alert).not.toContain(i18n.global.t("state.saveFailed"));
+    expect($<HTMLInputElement>("#f-name").value).toBe("Synthetic draft");
+
+    blocked = false;
+    await submit();
+    expect(api.provisionRole).toHaveBeenCalledTimes(1);
+    expect(api.completeRoleProvision).toHaveBeenCalledWith("r1", expect.objectContaining({ roleName: "Synthetic draft" }), "tok");
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });
 
 it('resumes a completed provision after a lost reply without completing it again or losing local edits', async () => {

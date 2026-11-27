@@ -815,7 +815,16 @@ interface StoredDraft {
   savedAt: number;
   pendingCreate?: PendingCreate;
   visibility?: "private" | "unlisted";
-  authorAsset?: { set: RegexRuleSet; original: RegexRuleSet; version: number; savedOpening: OpeningMode; pendingRead?: boolean; pendingWrite?: { set: RegexRuleSet; version: number } | null };
+  authorAsset?: {
+    set: RegexRuleSet;
+    original: RegexRuleSet;
+    originalRulesMatchDraft?: boolean;
+    version: number;
+    savedOpening: OpeningMode;
+    pendingRead?: boolean;
+    pendingWrite?: { set: RegexRuleSet; version: number } | null;
+    pendingRulesMatchDraft?: boolean;
+  };
 }
 function provisionCompletionKey() {
   return `hearthroom.draft.provision.${editorProvider.value}.${visibilityActor.value}.${roleId.value}`;
@@ -833,14 +842,33 @@ function clearProvisionCompletion() {
   } catch { /* best effort */ }
 }
 function authorAssetDraft(): NonNullable<StoredDraft["authorAsset"]> {
-  return { set: regexSet.value, original: regexOriginal.value, version: regexVersion.value, savedOpening: savedOpening.value,
-    pendingRead: pendingRegexRead.value, pendingWrite: pendingRegexWrite.value };
+  const set = regexSet.value;
+  const original = regexOriginal.value;
+  const pending = pendingRegexWrite.value;
+  const rules = JSON.stringify(set.rules);
+  const matches = (snapshot: RegexRuleSet) => snapshot.rules.length > 0 && JSON.stringify(snapshot.rules) === rules;
+  const originalRulesMatchDraft = matches(original);
+  const pendingRulesMatchDraft = pending ? matches(pending.set) : false;
+  // Keep the current rules readable by older editors. They drop these markers
+  // when they rewrite a draft, so a later upgrade still sees their edits.
+  return {
+    set, original: originalRulesMatchDraft ? { ...original, rules: [] } : original,
+    originalRulesMatchDraft, version: regexVersion.value, savedOpening: savedOpening.value,
+    pendingRead: pendingRegexRead.value, pendingRulesMatchDraft,
+    pendingWrite: pending && { version: pending.version, set: pendingRulesMatchDraft ? { ...pending.set, rules: [] } : pending.set },
+  };
 }
 function restoreAuthorAssetDraft(asset: StoredDraft["authorAsset"]) {
-  if (!asset || !Array.isArray(asset.set?.rules) || !Array.isArray(asset.original?.rules) || !Number.isFinite(asset.version)) return false;
-  regexSet.value = asset.set; regexOriginal.value = asset.original; regexVersion.value = asset.version;
+  const pending = asset?.pendingWrite;
+  if (!asset || !Array.isArray(asset.set?.rules) || !Array.isArray(asset.original?.rules)
+    || !Number.isFinite(asset.version) || (pending && !Array.isArray(pending.set?.rules))) return false;
+  regexSet.value = asset.set;
+  regexOriginal.value = asset.originalRulesMatchDraft ? { ...asset.original, rules: copied(asset.set.rules) } : asset.original;
+  regexVersion.value = asset.version;
   savedOpening.value = asset.savedOpening; pendingRegexRead.value = asset.pendingRead === true;
-  pendingRegexWrite.value = asset.pendingWrite ?? null;
+  pendingRegexWrite.value = pending && asset.pendingRulesMatchDraft
+    ? { version: pending.version, set: { ...pending.set, rules: copied(asset.set.rules) } }
+    : pending ?? null;
   return true;
 }
 function resumeProvisionCompletion() {
@@ -869,11 +897,12 @@ function storeDraft() {
   if (original.value) return false;
   if (pendingCreate.value?.provider && (pendingCreate.value.provider !== editorProvider.value || pendingCreate.value.actor !== visibilityActor.value)) return false;
   try {
+    const authorAsset = authorAssetDraft();
     // Both /create and a reopened unfinished card need the same card-scoped
     // image snapshot. Another create-page draft must not replace its pictures.
     if (creationPending.value && roleId.value && pendingCreate.value) {
       const images = Object.fromEntries(provisionImageFields.map(field => [field, draft.value[field]]));
-      localStorage.setItem(provisionCompletionKey(), JSON.stringify({ completionAttempted: pendingCreate.value.completionAttempted === true, images, authorAsset: authorAssetDraft() }));
+      localStorage.setItem(provisionCompletionKey(), JSON.stringify({ completionAttempted: pendingCreate.value.completionAttempted === true, images, authorAsset }));
     }
     if (!onCreatePage.value) return creationPending.value && !!roleId.value && !!pendingCreate.value;
     // 新卡預設的沙箱模式仍須首次寫入，但不是作者已輸入的草稿；清空後也不能自行復活。
@@ -891,7 +920,7 @@ function storeDraft() {
       visibility: newCardVisibility.value,
       tagsText: tagsText.value,
       worldbook: wb.stored(),
-      authorAsset: authorAssetDraft(),
+      authorAsset,
       savedAt: Date.now(),
       // 建好但沒存完的卡：把編號一起記下來，下一次存回同一張
       ...(pendingCreate.value ? { pendingCreate: { ...pendingCreate.value, ...(roleId.value ? { roleId: roleId.value } : {}) } } : {}),
@@ -1925,7 +1954,11 @@ async function save() {
     if (wasNew) {
       if (!pendingCreate.value) throw new Error(t("editor.image.pageOutdated"));
       pendingCreate.value.completionAttempted = true;
-      if (!storeDraft()) throw new Error(t("state.saveFailed"));
+      if (!storeDraft()) {
+        track("card_create", { ok: false });
+        error.value = t("editor.image.draftStorageUnavailable");
+        return;
+      }
       await completeRoleProvision(targetRoleId, { roleName: sent.roleName.trim(), language: sent.language, visibility: newCardVisibility.value }, token);
     }
     cardNumber.value = (await registerCardIdentity(targetRoleId, token, editorProvider.value)).num;
