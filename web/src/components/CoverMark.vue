@@ -75,7 +75,7 @@ function again() {
       <p v-if="!next && state.coverAuthorSensitive">{{ t("coverSensitive.remainsBlurred") }}</p>
       <p v-if="disabled" class="notice">{{ t("coverSensitive.noPermission") }}</p>
       <label class="cover-mark__reason">{{ t("moderation.reason") }}
-        <textarea v-model="reason" class="input" rows="3" maxlength="500" :disabled="busy || disabled" />
+        <textarea autocomplete="off" v-model="reason" class="input" rows="3" maxlength="500" :disabled="busy || disabled" />
       </label>
       <p v-if="failed" class="notice notice--error" role="alert">{{ t("coverSensitive.saveFailed") }}</p>
       <button type="button" class="btn btn--primary" :disabled="busy || disabled || !reason.trim() || (next && !cover)" @click="save">

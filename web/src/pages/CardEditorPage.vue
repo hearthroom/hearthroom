@@ -2006,7 +2006,9 @@ async function save() {
     }
     const coverFlag = (sent.coverSensitive !== (original.value?.coverSensitive ?? false)) && coverFlagLoaded.value
       ? sent.coverSensitive : undefined;
-    const registered = await registerCardIdentity(targetRoleId, token, editorProvider.value,coverFlag);
+    const registered = coverFlag === undefined
+      ? await registerCardIdentity(targetRoleId, token, editorProvider.value)
+      : await registerCardIdentity(targetRoleId, token, editorProvider.value, coverFlag);
     cardNumber.value = registered.num;
     reviewerCoverMark.value = registered.coverReviewSensitive === true;
     coverFlagLoaded.value = typeof registered.coverAuthorSensitive === "boolean";

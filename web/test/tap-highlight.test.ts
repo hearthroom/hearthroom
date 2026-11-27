@@ -45,7 +45,8 @@ describe("手機點擊不出現系統藍框", () => {
   for (const file of ["src/components/CardTile.vue", "src/components/MyCardTile.vue"]) {
     it(`${file}：按下卡片時封面跟 hover 一樣放大`, () => {
       const css = read(file).match(/<style[^>]*>([\s\S]*)<\/style>/)?.[1] ?? "";
-      expect(rules(css, ".card:active .card__art img").join("")).toMatch(/transform:\s*scale/);
+      const active = file.endsWith("/CardTile.vue") ? ".card:active .card__art:not(.card__art--concealed) img" : ".card:active .card__art img";
+      expect(rules(css, active).join("")).toMatch(/transform:\s*scale/);
     });
   }
 });

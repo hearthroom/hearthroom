@@ -56,6 +56,7 @@ vi.mock('../src/lib/authoring-platforms', () => ({
 
 const api = vi.hoisted(() => ({
   fetchCardDeletion: vi.fn(async (): Promise<{ deletion: unknown }> => ({ deletion: null })),
+  fetchAuthorCover: vi.fn(async () => ({coverAuthorSensitive:false,coverReviewSensitive:false,coverSensitive:false})),
   registerCardIdentity: vi.fn(async () => ({ id: '100021', num: 100021, provider: 'harbor', sourceRoleId: 'r1' })),
   fetchCard: vi.fn(async () => ({ id: '100021', num: 100021, provider: 'harbor', sourceRoleId: 'r1', roleId: 'frozen-r1' })),
   createRole: vi.fn(async () => ({ roleId: 'r1' })),

@@ -40,7 +40,10 @@ const api = vi.hoisted(() => ({
  fetchApprovedDraft:vi.fn(async()=>({operationId:'00000000-0000-4000-8000-000000000001',approvedRoleId:"approved-r1",approvalRevision:"approval",policyRevision:"draft"})),
  saveApprovedDraft:vi.fn(async()=>({approvedRoleId:"approved-r1",approvalRevision:"approval",policyRevision:"saved"})),
  fetchCardDeletion:vi.fn(async():Promise<{deletion:any}>=>({deletion:null})),
-  registerCardIdentity: vi.fn(async () => ({id:"100021",num:100021,provider:"harbor",sourceRoleId:"r1"})),
+  fetchAuthorCover: vi.fn(async () => ({coverAuthorSensitive:false,coverReviewSensitive:false,coverSensitive:false})),
+  registerCardIdentity: vi.fn(async (_roleId?:string,_token?:string,_provider?:string,flag?:boolean) => ({
+    id:"100021",num:100021,provider:"harbor",sourceRoleId:"r1",coverAuthorSensitive:!!flag,coverReviewSensitive:false,coverSensitive:!!flag,
+  })),
   fetchCard: vi.fn(async () => ({id:"100021",num:100021,provider:"harbor",sourceRoleId:"r1",roleId:"frozen-r1"})),
   fetchEditorCardReference: vi.fn(async () => ({num:100021,provider:"harbor",sourceRoleId:"r1"})),
   createRole: vi.fn(async () => ({ roleId: "r1" })),
@@ -4055,4 +4058,21 @@ describe("還原上架版：大開場網頁", () => {
     $<HTMLButtonElement>("[data-opening-file] [data-opening-download]").click(); await flush();
     expect(api.fetchOpeningPage).toHaveBeenLastCalledWith(draftUrl, "tok", expect.anything());
   });
+});
+
+it("saves the author's cover mark alone without superseding a card review", async () => {
+  api.fetchRoleDetail.mockResolvedValueOnce({
+    roleName:"Synthetic cover",roleBackground:"https://fixture.test/cover.webp",roleDetailDesc:"Synthetic setting",language:"zh-Hant",
+  });
+  api.fetchRoleWorldbooks.mockResolvedValueOnce([]);
+  await mount("/cards/r1/edit");
+  const toggle = root.querySelector<HTMLButtonElement>(".cover-field [role=switch]")!;
+  expect(toggle.disabled).toBe(false);
+  toggle.click();
+  await nextTick();
+  expect(root.querySelector(".cover-field__preview")).not.toBeNull();
+  await submit();
+  expect(api.registerCardIdentity).toHaveBeenCalledWith("r1","tok","harbor",true);
+  expect(api.beginCardEdit).not.toHaveBeenCalled();
+  expect(api.patchRoleDocument).not.toHaveBeenCalled();
 });

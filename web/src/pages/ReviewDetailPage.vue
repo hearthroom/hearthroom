@@ -1682,7 +1682,7 @@ onMounted(() => { void load(); });
 .review-cover { position: relative; width: fit-content; }
 .review-cover > svg { position: absolute; top: 8px; left: 8px; width: 24px; height: 24px; padding: 4px; border-radius: var(--r-pill); background: rgba(16,16,19,.68); color: white; }
 .review-cover__actions { display: flex; gap: var(--s-2); flex-wrap: wrap; align-items: center; padding-top: var(--s-2); }
-.review-cover__dialog { width: min(calc(100% - 24px), 480px); max-height: 90dvh; padding: 0; overflow: auto; color: var(--text); }
+.review-cover__dialog { width: min(calc(100% - 24px), 480px); max-height: 90dvh; padding: 0; overflow: auto; border: 1px solid var(--line); color: var(--text); }
 .review-cover__dialog::backdrop { background: var(--modal-scrim); }
 .review-cover__dialog-body { padding: var(--s-4); }
 .review-cover__close { display: flex; margin-inline-start: auto; margin-bottom: var(--s-2); }
