@@ -1812,7 +1812,7 @@
   "resource.gen.chooseOne": "Use image {n}",
   "resource.gen.chooseNone": "Not now",
   "resource.gen.error.reauth": "This sign-in doesn’t allow image generation yet, and signing in again will let you continue.",
-  "resource.gen.error.credits": "You don’t have enough purchased credits for this, and gifted credits can’t be used for images.",
+  "resource.gen.error.credits": "You don’t have enough credits for this image. Of your month pass credits, only the ones you receive at purchase can pay for images.",
   "resource.gen.error.policy": "This model can’t make an image from that description, so nothing was charged and you can reword it or pick another model.",
   "resource.gen.error.storage": "Your image is ready but your file storage is full, so free up space to save it or download it within 7 days.",
   "resource.gen.error.save": "Your image is ready but didn’t make it into the folder, so please try again.",

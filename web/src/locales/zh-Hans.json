@@ -1812,7 +1812,7 @@
   "resource.gen.chooseOne": "用第 {n} 张",
   "resource.gen.chooseNone": "先不填",
   "resource.gen.error.reauth": "这次登录没有生成图片的授权，重新登录允许之后就能继续。",
-  "resource.gen.error.credits": "充值的点数不够这次生成，赠送的点数不能用来生成图片。",
+  "resource.gen.error.credits": "这次生成图片的可用点数不足。月卡只有购买时收到的点数可用于生成图片。",
   "resource.gen.error.policy": "这段描述不能用这个模型生成，这次没有扣点，换个说法或换个模型再试。",
   "resource.gen.error.storage": "图片已经生成，但文件空间满了放不进去，释放空间后可以重新保存，7 天内也能直接下载。",
   "resource.gen.error.save": "图片已经生成，这次没有放进文件夹，请再试一次。",

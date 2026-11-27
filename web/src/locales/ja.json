@@ -1812,7 +1812,7 @@
   "resource.gen.chooseOne": "{n} 枚目を使う",
   "resource.gen.chooseNone": "今は選ばない",
   "resource.gen.error.reauth": "今のログインには画像生成の許可がないので、もう一度ログインして許可すると続けられます。",
-  "resource.gen.error.credits": "購入したポイントが足りず、プレゼントされたポイントは画像の生成に使えません。",
+  "resource.gen.error.credits": "画像の生成に使えるポイントが足りません。30日パスのポイントは、購入時にもらえる分だけ画像の生成に使えます。",
   "resource.gen.error.policy": "この説明ではこのモデルで生成できず、ポイントは使われていないので、言い方かモデルを変えてお試しください。",
   "resource.gen.error.storage": "画像はできましたがファイルの容量がいっぱいなので、空きを作って保存し直すか、7 日以内にダウンロードしてください。",
   "resource.gen.error.save": "画像はできましたがフォルダに入らなかったので、もう一度お試しください。",

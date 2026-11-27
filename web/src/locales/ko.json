@@ -1812,7 +1812,7 @@
   "resource.gen.chooseOne": "{n}번째 사용",
   "resource.gen.chooseNone": "나중에",
   "resource.gen.error.reauth": "지금 로그인에는 이미지 생성 권한이 없어서, 다시 로그인해 허용하면 계속할 수 있어요.",
-  "resource.gen.error.credits": "구매한 포인트가 부족하고, 선물받은 포인트는 이미지 생성에 쓸 수 없어요.",
+  "resource.gen.error.credits": "이미지 생성에 쓸 수 있는 포인트가 부족해요. 30일 패스는 구매할 때 받은 포인트만 이미지 생성에 쓸 수 있어요.",
   "resource.gen.error.policy": "이 설명으로는 이 모델이 생성할 수 없어 포인트가 차감되지 않았으니, 표현이나 모델을 바꿔 다시 시도해 주세요.",
   "resource.gen.error.storage": "이미지는 완성됐지만 파일 공간이 가득 차서, 공간을 비운 뒤 다시 저장하거나 7일 안에 다운로드해 주세요.",
   "resource.gen.error.save": "이미지는 완성됐지만 폴더에 들어가지 않았으니 다시 시도해 주세요.",
