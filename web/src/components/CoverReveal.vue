@@ -18,7 +18,7 @@ const emit = defineEmits<{ reveal: [] }>();
   position: absolute; z-index: 1; inset: 0;
   display: grid; place-items: center;
   padding: var(--s-2); border: 0;
-  color: white; background: rgba(16, 16, 19, .52);
+  color: white; background: rgba(16, 16, 19, .62);
   font: inherit; cursor: pointer;
 }
 .cover-reveal:focus-visible { outline: 2px solid white; outline-offset: -3px; }
