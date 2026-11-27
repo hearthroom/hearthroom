@@ -83,7 +83,7 @@ it("the conversation workshop identifies each layer and waits for a successful t
   await settle();
   expect(toggle.getAttribute("aria-checked")).toBe("true");
   expect(toggle.disabled).toBe(true);
-  expect(ws.applyConversationMod).toHaveBeenCalledWith("one-save", "rev1", { action: "toggle", workshopId: "d", enabled: false }, "tok");
+  expect(ws.applyConversationMod).toHaveBeenCalledWith("one-save", "rev1", { action: "toggle", workshopId: "d", enabled: false }, "tok", undefined);
   finish(view({ version: "rev2", items: [{ ...current.items[0]!, enabled: false, status: "disabled" }, current.items[1]!] }));
   await settle();
   expect(toggle.getAttribute("aria-checked")).toBe("false");
@@ -114,7 +114,7 @@ it("joins an owned universal extension from the current save and waits for confi
   expect(dialog.querySelector("#play-universal-title")?.textContent).toBe("加入通用擴充");
   dialog.querySelector<HTMLButtonElement>(".mod-window__universal-join")!.click();
   await settle();
-  expect(ws.applyConversationMod).toHaveBeenCalledWith("one-save", "rev1", { action: "join_universal", workshopId: "universal" }, "tok");
+  expect(ws.applyConversationMod).toHaveBeenCalledWith("one-save", "rev1", { action: "join_universal", workshopId: "universal" }, "tok", undefined);
   expect(dialog.querySelector(".mod-window__universal-join")).toBeNull();
   dialog.querySelector<HTMLButtonElement>("[data-universal-back]")!.click();
   await settle();
