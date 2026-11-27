@@ -1,0 +1,20 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "draft": true,
+  "try": "/mine/workshops/new",
+  "title": {
+    "zh-Hant": "作者 DLC 現在可以容納 10,000 個分包。",
+    "zh-Hans": "作者 DLC 现在可容纳 10,000 个分包。",
+    "en": "Author DLCs can hold up to 10,000 packages.",
+    "ja": "作者 DLC に最大 10,000 個のパッケージを追加できます。",
+    "ko": "작가 DLC에 패키지를 최대 10,000개까지 추가할 수 있어요."
+  },
+  "body": {
+    "zh-Hant": "作者可以搜尋分包並一次移動多筆條目。",
+    "zh-Hans": "作者可以搜索分包并一次移动多条条目。",
+    "en": "Search packages and move several Lorebook entries at once.",
+    "ja": "パッケージを検索して、複数のロアブック項目をまとめて移動できます。",
+    "ko": "패키지를 검색하고 세계관 항목을 여러 개 한꺼번에 옮길 수 있어요."
+  }
+}

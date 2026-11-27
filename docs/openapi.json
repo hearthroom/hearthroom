@@ -22540,6 +22540,15 @@
         "parameters": [
           {
             "in": "query",
+            "name": "trialWorkshopId",
+            "description": "Require the conversation to be the signed-in DLC author’s trial of this draft. Trial writes support package switches only.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "query",
             "name": "conversationId",
             "required": true,
             "schema": {
@@ -22568,6 +22577,17 @@
         "security": [
           {
             "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "trialWorkshopId",
+            "description": "Require the conversation to be the signed-in DLC author’s trial of this draft. Trial writes support package switches only.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "requestBody": {
@@ -22743,6 +22763,15 @@
         "parameters": [
           {
             "in": "query",
+            "name": "trialWorkshopId",
+            "description": "Require the conversation to be the signed-in DLC author’s trial of this draft. Trial writes support package switches only.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "query",
             "name": "conversationId",
             "required": true,
             "schema": {
@@ -22773,6 +22802,17 @@
         "operationId": "writeConversationExtensions",
         "summary": "Update conversation extension settings",
         "description": "Requires chat.play and conversation ownership. Selection changes apply at the next send.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "trialWorkshopId",
+            "description": "Require the conversation to be the signed-in DLC author’s trial of this draft. Trial writes support package switches only.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {

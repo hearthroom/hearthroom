@@ -12,6 +12,7 @@ import { useLocalePath } from "@/lib/use-locale";
 const props = defineProps<{
   open: boolean;
   conversationId: string;
+  trialWorkshopId?: string;
   token: () => Promise<string | null>;
   browseHref: string;
   acceptedTurn: number;
@@ -58,13 +59,14 @@ async function auth() {
 async function load() {
   const sequence = ++loadSequence;
   const id = props.conversationId;
+  const trial = props.trialWorkshopId;
   loading.value = true;
   loadFailed.value = false;
   try {
-    const next = await fetchConversationMods(id, await auth());
+    const next = await fetchConversationMods(id, await auth(), trial);
     if (sequence === loadSequence) {
       view.value = next;
-      if (!next.workshopClosed) void loadUniversalChoices();
+      if (!trial && !next.workshopClosed) void loadUniversalChoices();
     }
   } catch {
     if (sequence === loadSequence) loadFailed.value = true;
@@ -73,7 +75,7 @@ async function load() {
   }
 }
 
-watch(() => props.conversationId, () => {
+watch(() => [props.conversationId, props.trialWorkshopId], () => {
   loadSequence++;
   refreshAfterWrite = false;
   loading.value = false;
@@ -117,16 +119,18 @@ function expand(item: ConversationMod) {
 }
 
 async function mutate(action: ModAction, row: string, version = view.value?.version) {
-  if (!version || busy.value || loading.value) return false;
+  const trial = props.trialWorkshopId;
+  if (!version || busy.value || loading.value || (trial && action.action !== "packs")) return false;
   const id = props.conversationId;
+  const sameScope = () => id === props.conversationId && trial === props.trialWorkshopId;
   const accepted = props.acceptedTurn;
   busy.value = true;
   pendingRow.value = row;
   failure.value = undefined;
   refreshed.value = false;
   try {
-    const next = await applyConversationMod(id, version, action, await auth());
-    if (id !== props.conversationId) return false;
+    const next = await applyConversationMod(id, version, action, await auth(), trial);
+    if (!sameScope()) return false;
     loadSequence++;
     loading.value = false;
     view.value = next;
@@ -134,7 +138,7 @@ async function mutate(action: ModAction, row: string, version = view.value?.vers
     emit("changed", next);
     return true;
   } catch (err) {
-    if (id !== props.conversationId) return false;
+    if (!sameScope()) return false;
     if (err instanceof ApiError && err.status === 409) {
       await load();
       refreshed.value = !loadFailed.value;
@@ -143,7 +147,7 @@ async function mutate(action: ModAction, row: string, version = view.value?.vers
     }
     return false;
   } finally {
-    if (id === props.conversationId) {
+    if (sameScope()) {
       busy.value = false;
       pendingRow.value = "";
       if (refreshAfterWrite && props.open) void load();
@@ -219,7 +223,7 @@ async function saveNotice() {
       @cancel.prevent="emit('close')" @click.self="emit('close')"
     >
       <PlayPrivateModEntries
-        v-if="conversationId" v-show="privateOpen && !view?.workshopClosed"
+        v-if="conversationId && !trialWorkshopId" v-show="privateOpen && !view?.workshopClosed"
         :key="conversationId" :shown="open && privateOpen && !view?.workshopClosed"
         :conversation-id="conversationId" :auth="auth" :change-entry="mutate" :settings-busy="busy || loading"
         :version="view?.version" @back="returnToList" @close="emit('close')" @saved="saveNotice"
@@ -277,12 +281,12 @@ async function saveNotice() {
           <template v-else-if="view">
             <p v-if="view.workshopClosed" class="mod-window__notice" data-mod-paused>{{ tr("notice.closed") }}</p>
             <template v-else>
-              <p v-if="capacityPending" class="mod-window__notice">
+              <p v-if="capacityPending && !trialWorkshopId" class="mod-window__notice">
                 {{ tr("notice.overCapacity") }} <button class="btn" type="button" @click="emit('capacity')">{{ tr("notice.overCapacityAction") }}</button>
               </p>
               <p v-if="view.triggeredCount" class="mod-window__notice">{{ tr("notice.demoted", { n: view.triggeredCount }) }}</p>
               <p v-if="view.openingName && noticeCount < 2" class="mod-window__notice">{{ tr("notice.openingFrom", { name: view.openingName }) }}</p>
-              <div v-if="view.availableCount && slotsAfterOpening" class="mod-window__notice">
+              <div v-if="!trialWorkshopId && view.availableCount && slotsAfterOpening" class="mod-window__notice">
                 {{ tr("notice.newlyAdded", { n: view.availableCount }) }}
                 <button class="btn" type="button" :disabled="busy || loading" @click="mutate({ action: 'add' }, 'add')">{{ tr("notice.newlyAddedAction") }}</button>
                 <p v-if="failure?.row === 'add'" role="alert">
@@ -295,13 +299,13 @@ async function saveNotice() {
             <div v-if="!items.length && !view.workshopClosed" class="mod-window__empty">
               <strong>{{ tr("empty.title") }}</strong>
               <p>{{ tr("empty.body") }}</p>
-              <a v-if="browseHref" class="btn btn--primary" :href="browseHref" target="_blank" rel="noopener">
+              <a v-if="browseHref && !trialWorkshopId" class="btn btn--primary" :href="browseHref" target="_blank" rel="noopener">
                 {{ tr("footer.browse") }} <span class="sr-only">{{ tr("footer.newTabSr") }}</span>
               </a>
             </div>
             <div v-if="items.length || view.workshopClosed" class="mod-window__list-head">
               <strong>{{ view.workshopClosed ? tr("list.paused") : tr("list.count", { on: onCount, total: items.length }) }}</strong>
-              <button class="btn btn--ghost" type="button" :disabled="busy || loading || view.workshopClosed || items.length < 2" @click="sorted = !sorted">
+              <button v-if="!trialWorkshopId" class="btn btn--ghost" type="button" :disabled="busy || loading || view.workshopClosed || items.length < 2" @click="sorted = !sorted">
                 {{ tr(sorted ? "list.sortDone" : "list.sort") }}
               </button>
             </div>
@@ -336,11 +340,11 @@ async function saveNotice() {
                     <button class="btn btn--ghost mod-window__icon" type="button" :aria-label="tr('a11y.moveDown', { name: item.name })" :disabled="busy || loading || index === items.length - 1" @click="move(index, 1)">↓</button>
                   </template>
                   <button
-                    v-else-if="item.status === 'removed'" class="btn btn--ghost" type="button" :disabled="busy || loading || view.workshopClosed"
+                    v-else-if="!trialWorkshopId && item.status === 'removed'" class="btn btn--ghost" type="button" :disabled="busy || loading || view.workshopClosed"
                     @click="mutate({ action: 'remove', workshopId: item.workshopId }, item.workshopId)"
                   >{{ tr("row.removeAction") }}</button>
                   <button
-                    v-else class="mod-window__switch" role="switch" type="button" :aria-checked="item.enabled"
+                    v-else-if="!trialWorkshopId" class="mod-window__switch" role="switch" type="button" :aria-checked="item.enabled"
                     :aria-label="tr('a11y.toggle', { name: item.name })" :disabled="busy || loading || view.workshopClosed"
                     @click="mutate({ action: 'toggle', workshopId: item.workshopId, enabled: !item.enabled }, item.workshopId)"
                   ><span /></button>
@@ -367,7 +371,7 @@ async function saveNotice() {
                   <button class="btn btn--ghost" type="button" :disabled="busy || loading" @click="mutate(failure.action, item.workshopId)">{{ tr("state.retry") }}</button>
                 </p>
               </li>
-              <li v-if="!sorted || view.workshopClosed">
+              <li v-if="!trialWorkshopId && (!sorted || view.workshopClosed)">
                 <button class="mod-window__private" type="button" data-mod-private :disabled="view.workshopClosed" @click="openPrivate">
                   <span class="mod-window__expand-space" aria-hidden="true" />
                   <span class="mod-window__cover mod-window__private-cover" aria-hidden="true">
@@ -383,13 +387,13 @@ async function saveNotice() {
                   <span aria-hidden="true">›</span>
                 </button>
               </li>
-              <li v-if="!sorted && !view.workshopClosed && (items.length || universalChoices.length)">
+              <li v-if="!trialWorkshopId && !sorted && !view.workshopClosed && (items.length || universalChoices.length)">
                 <button type="button" class="btn" data-mod-universal @click="openUniversal">{{ tr("universal.addEntry") }}</button>
               </li>
             </ul>
           </template>
         </div>
-        <footer v-if="browseHref && view && !view.workshopClosed && items.length" class="mod-window__foot">
+        <footer v-if="browseHref && !trialWorkshopId && view && !view.workshopClosed && items.length" class="mod-window__foot">
           <a :href="browseHref" target="_blank" rel="noopener">
             {{ tr("footer.browse") }} <span aria-hidden="true">↗</span><span class="sr-only">{{ tr("footer.newTabSr") }}</span>
           </a>

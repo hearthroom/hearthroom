@@ -373,6 +373,7 @@ watch(locale, () => { void remergeStageMessages(); });
     <PlayInfoPanel />
     <PlayModWindow
       :open="playModWindow.open" :conversation-id="playModWindow.conversationId" :token="workshopToken"
+      :trial-workshop-id="workshopProps.wsTrial"
       :browse-href="workshopHref" :accepted-turn="playModWindow.acceptedTurn"
       :settings-changed="playModWindow.settingsChanged" :capacity-pending="!!playModWindow.showCapacity"
       @close="playModWindow.open = false" @capacity="showWorkshopCapacity"
