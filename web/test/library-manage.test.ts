@@ -112,7 +112,7 @@ it('keeps the selected count on one line with reachable actions across five mobi
  expect(chrome,'Chrome is required for actual selection-bar layout').toBeTruthy();
  mock.other.mockResolvedValue({items:Array.from({length:24},(_,n)=>({unavailable:true,bookmarkId:String(n)})),hasNext:false});
  await router.push('/library?tab=favorites');await settle();await click('[data-favorite-select]');
- await click('[role="checkbox"]');await click('[role="checkbox"]:nth-child(2)');
+ await click('[role="checkbox"]');await click('.favorite-grid__item:nth-child(2) [role="checkbox"]');
  const styles=['src/styles/tokens.css','src/styles/base.css','src/pages/LibraryPage.vue'].map(file=>{const text=readFileSync(file,'utf8');return file.endsWith('.css')?text:[...text.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map(m=>m[1]).join('\n');}).join('\n');
  const frames:string[]=[];
  for(const n of [2,24]){
