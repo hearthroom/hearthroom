@@ -6,15 +6,19 @@
  * class、loading 這些照樣傳到 <img>；全掛了換成同 class 的空 <span>，佔位樣式照用。
  */
 import { computed, ref, watch } from "vue";
-import { thumbChain } from "@/lib/card-thumb";
+import { cardStill, thumbChain } from "@/lib/card-thumb";
 
-const props = defineProps<{ src: string }>();
-const urls = computed(() => thumbChain(props.src));
+const props = defineProps<{ src: string; sensitive?: boolean }>();
+const urls = computed(() => props.sensitive ? (props.src ? [cardStill(props.src)] : []) : thumbChain(props.src));
 const step = ref(0);
-watch(() => props.src, () => { step.value = 0; });
+watch(urls, () => { step.value = 0; });
 </script>
 
 <template>
-  <img v-if="step < urls.length" :key="urls[step]" :src="urls[step]" alt="" @error="step += 1" />
+  <img v-if="step < urls.length" :key="urls[step]" :src="urls[step]" :class="{ 'cover-img--sensitive': sensitive }" alt="" @error="step += 1" />
   <span v-else />
 </template>
+
+<style scoped>
+.cover-img--sensitive { filter: blur(4px); clip-path: inset(0 round var(--r-sm)); }
+</style>

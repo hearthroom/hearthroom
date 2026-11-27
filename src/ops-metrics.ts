@@ -7,6 +7,7 @@ import { flushMetrics, recordOpsMetric } from "./metrics-buffer";
  * 表裡多出來的列（舊版本、手動寫入）不會變成 Prometheus 標籤。
  */
 const METRICS = {
+  cover_sensitive:{name:'hearthroom_cover_sensitive_flag_total',help:'Committed sensitive cover flag changes.',label:'source',operations:['author','review'],outcomes:['set','clear']},
   review_status:{name:'hearthroom_review_status_reads_total',help:'Author-only review summary reads.',label:'operation',operations:['read'],outcomes:['success','denied','error']},
   comment_pin:{name:'hearthroom_comment_pins_total',help:'Card author pin and unpin requests by bounded result.',label:'action',operations:['pin','unpin'],outcomes:['ok','limit','forbidden','error']},
   promo_attribution:{name:'hearthroom_promo_attributions_total',help:'Per-post promotion attribution: login binding of a registered post campaign and the attributed member\'s first chat; no campaign or member identifiers.',label:'operation',operations:['bind','first_play'],outcomes:['bound','unknown','existing','not_new','excluded','recorded']},

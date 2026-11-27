@@ -368,3 +368,24 @@ it('a manager can lock the current rating as a floor without changing the card',
  // 分級和下限都一樣了：沒有改變
  expect((await request(`/cards/${card}/rating`,'manager',{...b,operationId:crypto.randomUUID()})).status).toBe(409);
 });
+
+it('records reviewer cover changes once, independently of the author setting', async () => {
+  const path = '/cards/'+card+'/cover';
+  const body = { sensitive:true, reason:'  Synthetic review reason  ', operationId:crypto.randomUUID() };
+  expect((await request(path,'author',body)).status).toBe(403);
+  const marked = await request(path,'r1',body);
+  expect(marked.status).toBe(200);
+  expect(await marked.json()).toMatchObject({coverReviewSensitive:true, coverSensitive:true});
+  expect((await request(path,'r1',body)).status).toBe(200);
+  expect((await request(path,'r1',{...body,sensitive:false})).status).toBe(409);
+  const history = await request('/cards/'+card).then(r=>r.json()) as {events:unknown[]};
+  expect(history.events).toEqual([expect.objectContaining({action:'cover_mark',reason:'Synthetic review reason',actor:expect.any(String),at:expect.any(Number)})]);
+  expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action='cover_mark'").first()).toEqual({n:1});
+  await env.DB.prepare('UPDATE card_numbers SET cover_author_sensitive=1 WHERE num=?').bind(card).run();
+  const cleared = await request(path,'r1',{...body,sensitive:false,operationId:crypto.randomUUID()});
+  expect(await cleared.json()).toMatchObject({coverAuthorSensitive:true,coverReviewSensitive:false,coverSensitive:true});
+  const metrics = await env.DB.prepare("SELECT outcome,value FROM ops_metrics WHERE metric='cover_sensitive' AND operation='review' ORDER BY outcome").all();
+  expect(metrics.results).toEqual([{outcome:'clear',value:1},{outcome:'set',value:1}]);
+  const exposition=await SELF.fetch('https://c.test/metrics').then(r=>r.text());
+  expect(exposition).toContain('hearthroom_cover_sensitive_flag_total{source="review",outcome="set"} 1');
+});

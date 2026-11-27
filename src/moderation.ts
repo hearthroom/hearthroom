@@ -3,6 +3,7 @@ import {syncManagedRestriction} from './work-fence';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { requireReviewer, requireMember, isReviewer, memberNsfw, memberByHandle, memberProfile, reviewerRole } from './members';
+import { coverState, saveReviewerCover, type CoverFlags } from './cover-sensitive';
 import { correctRating, floorForCard } from './rating-correction';
 import { badgeCollection } from './community/badges';
 import { quotaForMember, PACK_MAX } from './quota';
@@ -19,8 +20,9 @@ export const moderationRoutes = new Hono<{ Bindings: Env }>();
 type Action = 'delist' | 'suspend' | 'restore_listing' | 'restore_public';
 type StaffRole = 'reviewer' | 'manager' | 'owner';
 interface CaseRow { card_number:number;rating:string|null;public_evidence:string;id:string; provider:string; source_role_id:string; version_id:string; title:string; author_member_id:string; action:Action; reason:string; created_by:string; status:string; created_at:number; decided_at:number|null; resolution:string|null;resolved_by:string|null }
-interface ManagedCard { fandom:string;fandom_qid:string|null;featured_at:number|null; summaries:string;background_url:string|null;search_text:string;card_number:number;id:string; provider:string; source_role_id:string; approved_version_id:string|null; reviewed_hash:string; names:string; tags:string; status:string; board_hidden:number; public_blocked:number; rating:string|null; author_member_id:string }
-const CARD = `SELECT c.*,(SELECT num FROM card_numbers WHERE provider=c.provider AND source_role_id=c.source_role_id) AS card_number,COALESCE(w.member_id,ac.owner_member_id,ai.member_id,'') AS author_member_id FROM cards c
+interface ManagedCard extends CoverFlags { fandom:string;fandom_qid:string|null;featured_at:number|null; summaries:string;background_url:string|null;search_text:string;card_number:number;id:string; provider:string; source_role_id:string; approved_version_id:string|null; reviewed_hash:string; names:string; tags:string; status:string; board_hidden:number; public_blocked:number; rating:string|null; author_member_id:string }
+const CARD = `SELECT c.*,cn.cover_author_sensitive,cn.cover_review_sensitive,cn.cover_review_url,(SELECT num FROM card_numbers WHERE provider=c.provider AND source_role_id=c.source_role_id) AS card_number,COALESCE(w.member_id,ac.owner_member_id,ai.member_id,'') AS author_member_id FROM cards c
+ LEFT JOIN card_numbers cn ON cn.num=c.id
  LEFT JOIN works w ON w.source_provider=c.provider AND w.source_role_id=c.source_role_id
  LEFT JOIN member_connections ac ON ac.provider=c.provider AND ac.external_id=CAST(c.author_num_id AS TEXT)
  LEFT JOIN member_identities ai ON ai.provider=c.provider AND ai.external_id=CAST(c.author_num_id AS TEXT)`;
@@ -45,7 +47,7 @@ async function syncCase(env:Env,row:CaseRow){
 }
 async function managedCase(db:D1Database,row:CaseRow){return row.provider==='harbor'&&await managedWork(db,row.provider,row.source_role_id);}
 const publicCase=(r:CaseRow,memberId:string)=>({id:r.id,cardNumber:r.card_number,action:r.action,title:r.title,reason:r.reason,status:r.status,createdAt:r.created_at,decidedAt:r.decided_at,version:r.version_id,createdByMe:r.created_by===memberId,resolution:r.resolution});
-const projection=(r:ManagedCard,lang:string)=>({id:String(r.id),provider:r.provider,featured:r.featured_at!=null,name:pickLocale(JSON.parse(r.names) as Localized,lang),tags:JSON.parse(r.tags) as string[],fandom:r.fandom??'',fandomId:r.fandom_qid??null,status:r.status,boardHidden:!!r.board_hidden,publicBlocked:!!r.public_blocked,version:r.approved_version_id||r.reviewed_hash,rating:r.rating??null,cardNumber:r.card_number??null});
+const projection=(r:ManagedCard,lang:string)=>({id:String(r.id),provider:r.provider,featured:r.featured_at!=null,name:pickLocale(JSON.parse(r.names) as Localized,lang),tags:JSON.parse(r.tags) as string[],fandom:r.fandom??'',fandomId:r.fandom_qid??null,status:r.status,boardHidden:!!r.board_hidden,publicBlocked:!!r.public_blocked,version:r.approved_version_id||r.reviewed_hash,rating:r.rating??null,cardNumber:r.card_number??null,coverUrl:r.background_url,...coverState(r,r.background_url)});
 async function mutate<T>(run:()=>Promise<T>):Promise<T>{try{return await run();}catch(e){if(e instanceof HttpError)throw e;if(/moderation_conflict|UNIQUE constraint/.test(String(e)))throw new HttpError(409,'moderation_conflict');throw e;}}
 
 // 只有分享活動的設定路由（五語介紹、橫幅上傳）超過 16 KB，上限在 campaign-routes.ts 自己設；其他活動審核路由照樣受這個上限。
@@ -108,7 +110,7 @@ moderationRoutes.get('/v1/moderation/cards/:id',async c=>{
  const member=await requireReviewer(c);const db=c.env.DB;const card=await cardOf(db,c.req.param('id'));
  if(card.rating==='R'&&(await memberNsfw(db,member.id)).ageVerifiedAt===null)throw new HttpError(403,'age_verification_required');
  const cases=await db.prepare('SELECT * FROM moderation_cases WHERE provider=? AND source_role_id=? ORDER BY created_at DESC LIMIT 100').bind(card.provider,card.source_role_id).all<CaseRow>();
- const events=await db.prepare('SELECT action,reason,before_value AS beforeValue,after_value AS afterValue,created_at AS at FROM moderation_events WHERE provider=? AND source_role_id=? ORDER BY created_at DESC LIMIT 100').bind(card.provider,card.source_role_id).all();
+ const events=await db.prepare(`SELECT e.action,e.reason,e.before_value AS beforeValue,e.after_value AS afterValue,e.created_at AS at,COALESCE(NULLIF(m.display_name,''),m.handle) AS actor FROM moderation_events e LEFT JOIN members m ON m.id=e.actor WHERE e.provider=? AND e.source_role_id=? ORDER BY e.created_at DESC LIMIT 100`).bind(card.provider,card.source_role_id).all();
  const manager=['manager','owner'].includes(String(await reviewerRole(db,member.id)));
  const reviewRows=await db.prepare(`SELECT s.id,s.kind,s.status,s.submitted_at AS submittedAt,s.decided_at AS decidedAt,COALESCE(NULLIF(s.note,''),NULLIF(s.reopen_reason,''),CASE WHEN ?2 THEN s.flip_reason ELSE '' END) AS note,s.content_hash AS version,s.reopen_of IS NOT NULL AS reopen,s.flip_of AS flipOf,${FLIP_COLUMNS('s')}
   FROM review_submissions s WHERE s.card_id=?1 ORDER BY s.submitted_at DESC LIMIT 100`).bind(card.id,manager?1:0).all<{id:string;status:string;reopen:number}&FlipColumns&Record<string,unknown>>();
@@ -121,6 +123,13 @@ moderationRoutes.get('/v1/moderation/cards/:id',async c=>{
  * 更正分級（owner 2026-11-24）：管理員直接生效、不走提案投票。改卡片、上架版本與待審單的分級，
  * 寫稽核與卡片歷程，並設成分級下限（作者之後送審不會低於它）。可升可降；不通知作者。
  */
+moderationRoutes.post('/v1/moderation/cards/:id/cover',async c=>{
+ const member=await requireReviewer(c);const db=c.env.DB;
+ const card=await cardOf(db,c.req.param('id'));await guardCard(db,card,member.id);
+ const body=await c.req.json<Record<string,unknown>>().catch(()=>({}));
+ return c.json(await mutate(()=>saveReviewerCover(db,String(card.id),member.id,card.background_url,body)),200,{'Cache-Control':'private, no-store'});
+});
+
 moderationRoutes.post('/v1/moderation/cards/:id/rating',async c=>{
  const member=await requireReviewer(c);const db=c.env.DB;
  const role=await reviewerRole(db,member.id);if(role!=='manager'&&role!=='owner')throw new HttpError(403,'review_manager_required');

@@ -11,6 +11,8 @@ import { useLocalePath } from "@/lib/use-locale";
 import { cardStill, cardThumb } from "@/lib/card-thumb";
 import { displayName } from "@/lib/display-name";
 import type { CommunityCard } from "@/lib/types";
+import CoverReveal from "./CoverReveal.vue";
+import { useCoverReveal } from "@/lib/cover-reveal";
 import RankBadge from "./RankBadge.vue";
 import { fitCoverHonors } from "@/lib/cover-honor-fit";
 import { coverHonors, HONOR_COLORS } from "@/lib/honors";
@@ -37,16 +39,31 @@ const href = computed(() => lp(`/cards/${props.card.num ?? props.card.id}`));
  * 先用縮到卡片大小的圖（動圖照樣會動，見 card-thumb）；動圖太大轉不了就用縮好的第一格（不動）；
  * 那也拿不到才用原圖；原圖也掛了（上游換圖、刪圖）就當沒圖：退回單字佔位，不留一個破圖
  */
+const { concealed, reveal } = useCoverReveal(
+  () => String(props.card.num ?? props.card.id),
+  () => props.card.avatarUrl ?? "",
+  () => props.card.coverSensitive === true,
+);
+const cardElement = ref<HTMLElement>();
+const announced = ref(false);
+async function revealCover() {
+  reveal();
+  announced.value = true;
+  await nextTick();
+  cardElement.value?.querySelector<HTMLElement>(".card__link")?.focus({ preventScroll: true });
+}
 const art = ref<"thumb" | "still" | "original" | "broken">("thumb");
-watch(() => props.card.avatarUrl, () => { art.value = "thumb"; });
+watch([() => props.card.avatarUrl, concealed], () => { art.value = "thumb"; announced.value = false; }, { flush: "sync" });
 const hasArt = computed(() => !!props.card.avatarUrl && art.value !== "broken");
 const artSrc = computed(() => {
   const url = props.card.avatarUrl ?? "";
+  if (concealed.value) return cardStill(url);
   return art.value === "thumb" ? cardThumb(url) : art.value === "still" ? cardStill(url) : url;
 });
 function onArtError() {
   const url = props.card.avatarUrl;
-  if (art.value === "thumb" && artSrc.value !== url) art.value = "still";
+  if (concealed.value) art.value = "broken";
+  else if (art.value === "thumb" && artSrc.value !== url) art.value = "still";
   else if (art.value === "still" && artSrc.value !== url) art.value = "original";
   else art.value = "broken";
 }
@@ -107,8 +124,8 @@ const adultLabel = computed(() => ratingName("R", String(locale.value)));
     名字的連結用 ::after 撐滿整張卡，標籤與作者疊在它上面。
   -->
   <!-- 進場用 settle 不用 rise：卡片就是首屏最大的內容，要一出現就看得見（見 base.css） -->
-  <article class="card settle">
-    <div class="card__art">
+  <article ref="cardElement" class="card settle">
+    <div class="card__art" :class="{ 'card__art--concealed': concealed && hasArt }">
       <img
         v-if="hasArt"
         :src="artSrc"
@@ -124,6 +141,7 @@ const adultLabel = computed(() => ratingName("R", String(locale.value)));
       >
         <span>{{ initial }}</span>
       </div>
+      <CoverReveal v-if="concealed && hasArt" @reveal="revealCover" />
       <!-- 名次是個小徽章，前三名用慣例的金銀銅；不搶立繪的戲 -->
       <!-- 分級與精選都標在立繪角上：不跟名字搶那兩行的寬度 -->
       <span v-if="card.rating === 'R'" class="card__flag" role="img" :aria-label="adultLabel" :title="adultLabel">R</span>
@@ -164,6 +182,7 @@ const adultLabel = computed(() => ratingName("R", String(locale.value)));
       </div>
     </div>
 
+    <span class="sr-only" role="status">{{ announced ? $t("coverSensitive.revealed") : "" }}</span>
     <div class="card__body">
       <h2 class="card__name" :class="{ 'card__name--designed': title.designed }" :style="title.designed ? { '--title-em': title.widestEm } : undefined">
         <RouterLink :to="href" class="card__link">{{ title.text }}</RouterLink>
@@ -220,6 +239,8 @@ const adultLabel = computed(() => ratingName("R", String(locale.value)));
 .card__art img { width: 100%; height: 100%; object-fit: cover; transition: transform var(--dur-slow) var(--ease); }
 .card:hover .card__art img, .card:active .card__art img { transform: scale(1.04); }
 /* 圖片內緣一道極淡的線：淺色立繪的邊緣才不會跟白卡糊在一起 */
+.card__art--concealed { z-index: 1; }
+.card .card__art--concealed img { filter: blur(10cqw); transform: scale(1.16); }
 .card__art::after { content: ""; position: absolute; inset: 0; box-shadow: inset 0 0 0 1px rgba(16, 16, 24, 0.05); pointer-events: none; }
 .card__void { display: grid; place-items: center; width: 100%; height: 100%; }
 .card__void span { font-size: 40px; font-weight: 600; color: rgba(255, 255, 255, 0.9); }
@@ -230,7 +251,7 @@ const adultLabel = computed(() => ratingName("R", String(locale.value)));
  */
 @container (max-width: 150px) { .card__marks, .card__flag { --mark-h: 24px; --mark-in: 5px; } .card__marks { gap: 1px; } .card__rank { margin-right: 1px; } }
 .card__marks {
-  position: absolute; top: var(--mark-in); left: var(--mark-in); z-index: 1; pointer-events: none;
+  position: absolute; top: var(--mark-in); left: var(--mark-in); z-index: 2; pointer-events: none;
   display: flex; align-items: center; gap: 1.5px; height: var(--mark-h); max-width: calc(100% - var(--mark-in) * 2);
 }
 /* 目前名次在封面上是和徽章同高的圓（兩位數以上撐成膠囊），和第一枚徽章之間多留一點，兩者長相不同 */
@@ -268,7 +289,7 @@ const adultLabel = computed(() => ratingName("R", String(locale.value)));
 
 .card__body { display: grid; gap: 5px; padding: 10px 12px 11px; container-type: inline-size; }
 .card__corner {
-  position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 1; pointer-events: none;
+  position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 2; pointer-events: none;
   display: flex; align-items: center; gap: 4px;
 }
 /* block 而不是 inline-flex：文字直接當 flex 項目時省略號不會出現 */
@@ -290,7 +311,7 @@ const adultLabel = computed(() => ratingName("R", String(locale.value)));
 .card__kind--new { background: var(--accent-deep); color: var(--on-accent); }
 /* 限制級：R 圓角方塊，底色取官方標識的紅（和 RatingMark 的 chip 同色） */
 .card__flag {
-  position: absolute; top: var(--mark-in); right: var(--mark-in); z-index: 1; pointer-events: none;
+  position: absolute; top: var(--mark-in); right: var(--mark-in); z-index: 2; pointer-events: none;
   display: flex; align-items: center; justify-content: center; width: var(--mark-h); height: var(--mark-h);
   border-radius: var(--r-sm); background: #e5141e; color: #fff; font-size: 13px; font-weight: 800; line-height: 1;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);

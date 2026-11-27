@@ -29,6 +29,9 @@ import { pageTitle } from "@/lib/i18n";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
 import { readTags, readTalkExample } from "@/lib/role-draft";
+import CoverMark from "@/components/CoverMark.vue";
+import CoverEye from "@/components/CoverEye.vue";
+import { markReviewCover, type ReviewerCoverState } from "@/lib/api";
 import RatingMark from "@/components/RatingMark.vue";
 import ReviewAuthorPanel from '@/components/ReviewAuthorPanel.vue';
 import ReviewAuthorProfile from '@/components/ReviewAuthorProfile.vue';
@@ -58,6 +61,23 @@ const session = useSession();
 
 const id = computed(() => String(route.params.id || ""));
 const data = ref<ReviewDetail | null>(null);
+const coverMarkOpen = ref(false);
+const coverMarkDialog = ref<HTMLDialogElement>();
+async function openCoverMark() {
+  coverMarkOpen.value=true;
+  await nextTick();
+  coverMarkDialog.value?.showModal();
+}
+watch(() => data.value?.submission.id, () => { coverMarkOpen.value=false; });
+async function submitCoverMark(body:{sensitive:boolean;reason:string;operationId:string}){
+  const id=data.value?.submission.id;
+  const token=await session.accessToken();
+  if(!id || data.value?.submission.id!==id || !token)throw new Error("review_changed");
+  return markReviewCover(id,token,body);
+}
+function updateCoverMark(state:ReviewerCoverState){
+  if(data.value?.coverMark)Object.assign(data.value.coverMark,state);
+}
 const lengthParams = computed(()=>data.value?.detail.reviewLength?formatReviewLength(data.value.detail.reviewLength,String(locale.value)):{});
 const loading = ref(true);
 const error = ref("");
@@ -1211,7 +1231,28 @@ onMounted(() => { void load(); });
             </div>
           </template>
         </div>
-        <div v-if="doc.roleBackground || doc.roleAvatar" class="field"><label>{{ $t("editor.section.media") }}</label><img class="art" :src="doc.roleBackground || doc.roleAvatar" alt="" /></div>
+        <div v-if="doc.roleBackground || doc.roleAvatar" class="field">
+          <label>{{ $t("editor.section.media") }}</label>
+          <div class="review-cover"><img class="art" :src="doc.roleBackground || doc.roleAvatar" alt="" /><CoverEye v-if="data?.coverMark?.coverSensitive" /></div>
+          <template v-if="data?.coverMark">
+            <div class="review-cover__actions">
+              <span class="chip">{{ $t("coverSensitive.authorState", {status:$t(data.coverMark.coverAuthorSensitive ? "coverSensitive.on" : "coverSensitive.off")}) }}</span>
+              <span class="chip">{{ $t("coverSensitive.reviewState", {status:$t(data.coverMark.coverReviewSensitive ? "coverSensitive.on" : "coverSensitive.off")}) }}</span>
+              <button type="button" class="btn" :disabled="!data.coverMark.canMark" @click="openCoverMark">{{ $t(data.coverMark.coverReviewSensitive ? "coverSensitive.unmark" : "coverSensitive.mark") }}</button>
+            </div>
+            <p v-if="!data.coverMark.canMark" class="notice">{{ $t("coverSensitive.noPermission") }}</p>
+            <p v-if="data.coverMark.coverChanged" class="notice">{{ $t("coverSensitive.coverChanged") }}</p>
+            <Teleport to="body">
+              <dialog v-if="coverMarkOpen" ref="coverMarkDialog" class="panel review-cover__dialog" :aria-label="$t('coverSensitive.mark')" @click.self="coverMarkDialog?.close()" @close="coverMarkOpen = false">
+                <div class="review-cover__dialog-body">
+                  <button type="button" class="btn btn--ghost review-cover__close" @click="coverMarkDialog?.close()">{{ $t("dialog.close") }}</button>
+                  <CoverMark :key="data.submission.id" :state="data.coverMark" :cover="doc.roleBackground || doc.roleAvatar"
+                    :disabled="!data.coverMark.canMark" :submit="submitCoverMark" @updated="updateCoverMark" />
+                </div>
+              </dialog>
+            </Teleport>
+          </template>
+        </div>
         <!-- 分享圖（選填）也是訪客看得到的內容：貼連結時的預覽大圖 -->
         <div v-if="doc.roleShareImage" class="field"><label>{{ $t("editor.shareImage") }}</label><img class="art art--share" :src="doc.roleShareImage" alt="" /></div>
       </section>
@@ -1638,6 +1679,15 @@ onMounted(() => { void load(); });
 </template>
 
 <style scoped>
+.review-cover { position: relative; width: fit-content; }
+.review-cover > svg { position: absolute; top: 8px; left: 8px; width: 24px; height: 24px; padding: 4px; border-radius: var(--r-pill); background: rgba(16,16,19,.68); color: white; }
+.review-cover__actions { display: flex; gap: var(--s-2); flex-wrap: wrap; align-items: center; padding-top: var(--s-2); }
+.review-cover__dialog { width: min(calc(100% - 24px), 480px); max-height: 90dvh; padding: 0; overflow: auto; color: var(--text); }
+.review-cover__dialog::backdrop { background: var(--modal-scrim); }
+.review-cover__dialog-body { padding: var(--s-4); }
+.review-cover__close { display: flex; margin-inline-start: auto; margin-bottom: var(--s-2); }
+@media (max-width: 480px) { .review-cover__dialog { inset-block: auto 0; width: 100%; max-width: none; border-radius: 24px 24px 0 0; } }
+
 .link { display: inline-flex; align-items: center; min-height: var(--h-lg); }
 .link, .link:hover { color: var(--accent-text); }
 .correction-error { scroll-margin-block-start: calc(var(--header-h) + var(--s-4)); }

@@ -1,8 +1,8 @@
 import { currentProvider } from './provider';
-import { ApiError } from './api';
+import { ApiError, type ReviewerCoverState } from './api';
 import { i18n } from './i18n';
 export interface ModerationCase {id:string;cardNumber:number;title:string;action:string;reason:string;status:string;createdAt:number;decidedAt:number|null;version:string;resolution?:string;canVote:boolean;canResolve:boolean;votes:{vote:string;reason:string;at:number}[]}
-export interface ManagedCard {provider:import("./provider").ProviderId;featured:boolean;id:string;name:string;tags:string[];status:string;boardHidden:boolean;publicBlocked:boolean;version:string;authorHandle?:string|null;fandom?:string;fandomId?:string|null;rating?:string|null;cardNumber?:number|null;ratingFloor?:string|null}
+export interface ManagedCard extends Partial<ReviewerCoverState> {coverUrl?:string|null;provider:import("./provider").ProviderId;featured:boolean;id:string;name:string;tags:string[];status:string;boardHidden:boolean;publicBlocked:boolean;version:string;authorHandle?:string|null;fandom?:string;fandomId?:string|null;rating?:string|null;cardNumber?:number|null;ratingFloor?:string|null}
 export interface RegistrationPack {id:string;member:string;granted:number;remaining:number;reason:string;grantedBy:string;at:number}
 export interface MemberDetail {
  member:{handle:string;displayName:string;avatarUrl:string;memberSince:number;providers:string[];role:'reviewer'|'manager'|'owner'|null};
@@ -13,7 +13,7 @@ export interface MemberDetail {
 }
 export interface CardHistory {card:ManagedCard;cases:ModerationCase[];reviews:{id:string;kind:string;status:string;note:string;submittedAt:number;version:string;reopen?:boolean|number;
  /** 改判單（駁回改判為通過）改判的是哪一張；flip：這張駁回單的改判狀態與管理員入口。舊版伺服器不帶 */
- flipOf?:string|null;flip?:{pendingId:string|null;approvedId:string|null;canStart:boolean}}[];events:{action:string;reason:string;beforeValue:string;afterValue:string;at:number}[]}
+ flipOf?:string|null;flip?:{pendingId:string|null;approvedId:string|null;canStart:boolean}}[];events:{action:string;reason:string;beforeValue:string;afterValue:string;at:number;actor?:string}[]}
 export async function moderationRequest<T>(path:string,token:string,body?:unknown):Promise<T>{
  const res=await fetch(`/v1/moderation${path}`,{method:body===undefined?'GET':'POST',headers:{Authorization:`Bearer ${token}`,'X-Provider':currentProvider(),'Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)})});
  const data=await res.json().catch(()=>({})) as {error?:string};

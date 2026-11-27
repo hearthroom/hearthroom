@@ -9,6 +9,7 @@
  */
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useRouter } from "vue-router";
+import CoverImg from "@/components/CoverImg.vue";
 import { fetchSuggest, type Suggestions } from "@/lib/api";
 import { contentLang, defaultZone } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
@@ -19,7 +20,7 @@ const emit = defineEmits<{ "update:modelValue": [value: string]; submit: [] }>()
 const router = useRouter();
 const { locale, lp } = useLocalePath();
 
-type Item = { kind: "search"; label: string } | { kind: "tag"; label: string; n: number } | { kind: "fandom"; label: string; key: string; n: number } | { kind: "card"; label: string; num: number; avatar: string | null };
+type Item = { kind: "search"; label: string } | { kind: "tag"; label: string; n: number } | { kind: "fandom"; label: string; key: string; n: number } | { kind: "card"; label: string; num: number; avatar: string | null; sensitive?: boolean };
 const input = ref<HTMLInputElement | null>(null);
 const open = ref(false);
 const active = ref(0);
@@ -34,7 +35,7 @@ const items = computed<Item[]>(() => {
     { kind: "search", label: q },
     ...(f?.tags ?? []).map((t) => ({ kind: "tag" as const, label: t.tag, n: t.n })),
     ...(f?.fandoms ?? []).map((t) => ({ kind: "fandom" as const, label: fandomLabel(t.labels, locale.value) || t.fandom, key: t.key, n: t.n })),
-    ...(f?.cards ?? []).map((c) => ({ kind: "card" as const, label: c.name, num: c.num, avatar: c.avatarUrl })),
+    ...(f?.cards ?? []).map((c) => ({ kind: "card" as const, label: c.name, num: c.num, avatar: c.avatarUrl, sensitive: c.coverSensitive })),
   ];
 });
 /** 分組標題只在那一組的第一列前面畫 */
@@ -126,7 +127,7 @@ defineExpose({ focus: () => input.value?.focus() });
         <li :id="`${id}-${i}`" class="suggest__item" :class="{ 'is-active': i === active, [`suggest__item--${item.kind}`]: true }" role="option" :aria-selected="i === active" @pointermove="active = i" @mousedown.prevent @click="choose(i)">
           <template v-if="item.kind === 'search'">{{ $t("search.suggest.search", { q: item.label }) }}</template>
           <template v-else-if="item.kind === 'card'">
-            <img v-if="item.avatar" class="suggest__avatar" :src="item.avatar" alt="" loading="lazy" />
+            <CoverImg v-if="item.avatar" class="suggest__avatar" :src="item.avatar" :sensitive="item.sensitive" loading="lazy" />
             <span class="suggest__avatar suggest__avatar--blank" v-else aria-hidden="true" />
             <span class="suggest__label">{{ item.label }}</span>
           </template>

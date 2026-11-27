@@ -188,7 +188,7 @@ watch(() => session.me?.accountNumId, (now, before) => { if (before !== undefine
 
       <template v-else-if="intent === 'roll'">
         <RouterLink v-if="rolled" :to="lp(`/cards/${rolled.num ?? rolled.id}`)" class="home__rolled">
-          <CoverImg v-if="rolled.avatarUrl" class="home__cover" :src="rolled.avatarUrl" />
+          <CoverImg v-if="rolled.avatarUrl" class="home__cover" :src="rolled.avatarUrl" :sensitive="rolled.coverSensitive" />
           <span v-else class="home__cover" />
           <span class="home__rolledtext"><b>{{ displayName(rolled.name, locale) }}</b><small>{{ rolled.summary }}</small></span>
         </RouterLink>

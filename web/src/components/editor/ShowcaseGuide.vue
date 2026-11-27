@@ -4,6 +4,8 @@
  * 以及各自怎麼寫。示意圖用作者正在寫的內容填（名字、簡介、封面、標籤），沒填就用灰條代替，
  * 一眼看出自己的字會落在哪裡、會被截在哪裡。
  */
+import CoverEye from "@/components/CoverEye.vue";
+import CoverImg from "@/components/CoverImg.vue";
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 
 const props = defineProps<{
@@ -12,6 +14,7 @@ const props = defineProps<{
   summary: string;
   tags: string[];
   cover: string;
+  coverSensitive?: boolean;
   banner: string;
   /** 建議長度（跟編輯器的提醒同一個數） */
   advise: number;
@@ -55,7 +58,9 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
             <figure class="shot">
               <figcaption>{{ $t("editor.showcase.tile") }}</figcaption>
               <div class="tile">
-                <div class="tile__cover" :style="cover ? { backgroundImage: `url(${cover})` } : undefined" />
+                <div class="tile__cover" :class="{ 'tile__cover--sensitive': cover && coverSensitive }" :style="cover && !coverSensitive ? { backgroundImage: `url(${cover})` } : undefined">
+                  <template v-if="cover && coverSensitive"><CoverImg :src="cover" sensitive /><CoverEye /></template>
+                </div>
                 <div class="tile__text">
                   <strong class="tile__name">{{ name || $t("editor.showcase.sampleName") }}</strong>
                   <div class="mark mark--1"><span class="pin">1</span>
@@ -159,6 +164,10 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
 .mark > .pin { position: absolute; top: -9px; right: -9px; }
 
 .tile { border-radius: var(--r-md); overflow: hidden; background: var(--surface); box-shadow: 0 0 0 1px var(--line); }
+.tile__cover--sensitive { position: relative; overflow: hidden; container-type: inline-size; }
+.tile__cover--sensitive img { width: 100%; height: 100%; object-fit: cover; filter: blur(10cqw); transform: scale(1.16); }
+.tile__cover--sensitive::after { content: ""; position: absolute; inset: 0; background: rgba(16,16,19,.52); }
+.tile__cover--sensitive svg { position: absolute; inset: 0; margin: auto; z-index: 1; width: 13px; color: white; }
 .tile__cover { aspect-ratio: 3 / 4; background: var(--surface-2) center / cover; }
 .tile__text { display: grid; gap: 8px; padding: 10px; }
 .tile__name { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

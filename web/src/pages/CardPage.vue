@@ -700,7 +700,7 @@ watch(
             </h2>
             <h2 v-else id="more-h" class="sr-only">{{ card.author.name }}</h2>
             <RouterLink v-for="m in more" :key="m.id" :to="lp(`/cards/${m.num ?? m.id}`)" class="role__mini">
-              <CoverImg v-if="m.avatarUrl" :src="m.avatarUrl" loading="lazy" />
+              <CoverImg v-if="m.avatarUrl" :src="m.avatarUrl" :sensitive="m.coverSensitive" loading="lazy" />
               <span v-else class="role__mini-void" :style="{ background: `hsl(${hueFrom(m.name)} 40% 62%)` }" />
               <span class="role__mini-text">
                 <strong>{{ displayName(m.name, locale) }}</strong>

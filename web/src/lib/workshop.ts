@@ -60,7 +60,7 @@ export type Availability = "open" | "hidden" | "removed";
 export interface ExtensionDetail extends ExtensionSummary {
   readme: string;
   commentCount: number;
-  card: { id: string; num: number; name: string; avatarUrl?: string; roleId: string; provider?: string };
+  card: { id: string; num: number; name: string; avatarUrl?: string; coverSensitive?: boolean; roleId: string; provider?: string };
   contents: { loreCount: number; ruleCount: number; openingCount: number };
   residentChars: number;
   availability: Availability;

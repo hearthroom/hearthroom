@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CoverSensitiveField from "@/components/editor/CoverSensitiveField.vue";
 /**
  * 角色卡編輯器。建立與編輯共用同一頁——兩者的差別只有「有沒有 roleId」。
  *
@@ -41,6 +42,7 @@ import {
   fetchEditorCardReference,
   fetchFandomLookup,
   registerCardIdentity,
+  fetchAuthorCover,
   deleteRole,
   fetchCardDeletion,
   fetchAuthorAsset,
@@ -588,15 +590,20 @@ function onScroll() {
   if (!spyFrame) spyFrame = requestAnimationFrame(spy);
 }
 
-const dirty = computed(
+const otherEdits = computed(
   () =>
     Boolean(pendingRevert.value) ||
-    JSON.stringify(draft.value) !== JSON.stringify(original.value ?? pristine.value) ||
+    JSON.stringify({ ...draft.value, coverSensitive: undefined }) !== JSON.stringify({ ...(original.value ?? pristine.value), coverSensitive: undefined }) ||
     wb.dirty() ||
     memberBooksDirty() ||
     presentationDirty.value,
 );
 
+
+const coverFlagLoaded = ref(true);
+const reviewerCoverMark = ref(false);
+const coverFlagDirty = computed(() => draft.value.coverSensitive !== (original.value ?? pristine.value)?.coverSensitive);
+const dirty = computed(() => otherEdits.value || coverFlagDirty.value);
 
 const coverAlerted = ref(false);
 const serverCoverRejected = ref(false);
@@ -1115,9 +1122,15 @@ onMounted(async () => {
       cardFandomId.value = card.fandomKey?.startsWith("wd:") ? card.fandomKey.slice(3) : "";
       roleId.value = card.sourceRoleId;
     }
-    const raw = await fetchRoleDetail(roleId.value, token ?? undefined);
+    const [raw,coverFlags] = await Promise.all([
+      fetchRoleDetail(roleId.value, token),
+      fetchAuthorCover(roleId.value,token,editorProvider.value).catch(() => null),
+    ]);
+    coverFlagLoaded.value = !!coverFlags;
+    reviewerCoverMark.value = coverFlags?.coverReviewSensitive === true;
     roleVisibility.value = String((raw as { roleVisibility?: unknown }).roleVisibility ?? "");
     draft.value = draftFromRoleDetail(raw, locale.value);
+    draft.value.coverSensitive = coverFlags?.coverAuthorSensitive === true;
     tagsText.value = formatTags(draft.value.roleTag);
     creationPending.value = (raw as { provisioning?: boolean }).provisioning === true;
     if (!creationPending.value) clearProvisionCompletion();
@@ -1625,6 +1638,7 @@ async function readEditorSnapshot(source:string,token:string){
  const [raw,asset]=await Promise.all([fetchRoleDetail(source,token),fetchAuthorAsset(source,token),book.loadBound(token,source)]);
  if(book.loadFailed)throw new Error(t('state.loadFailed'));
  const next=draftFromRoleDetail(raw,locale.value);
+ next.coverSensitive=original.value?.coverSensitive ?? draft.value.coverSensitive;
  const members=await Promise.all((next.world?.characters??[]).map(async c=>{
   const member=useWorldbookDraft({untitled:()=>t('wb.entry.untitled'),fallbackName:()=>c.name,language:()=>next.language});
   if(c.lorebookId)await member.load(token,c.lorebookId);
@@ -1754,10 +1768,39 @@ function validatePresentationBeforeSave(snapshot: RegexRuleSet | null): boolean 
   return true;
 }
 
+async function saveCoverFlagOnly() {
+  const source = roleId.value;
+  const originalDraft = original.value;
+  if (!source || !originalDraft) return;
+  const sensitive = draft.value.coverSensitive;
+  saving.value = true;
+  error.value = "";
+  saved.value = false;
+  try {
+    const token = await session.accessToken();
+    if (!token) throw new Error(t("auth.expired"));
+    const result = await registerCardIdentity(source,token,editorProvider.value,sensitive);
+    if (original.value !== originalDraft || roleId.value !== source) return;
+    cardNumber.value = result.num;
+    reviewerCoverMark.value = result.coverReviewSensitive;
+    original.value = { ...originalDraft, coverSensitive: sensitive };
+    saved.value = true;
+    flash(t("edit.saved"));
+  } catch {
+    error.value = t("state.saveFailed");
+  } finally {
+    saving.value = false;
+  }
+}
+
 async function save() {
   if (pendingImages.value.size > 0) return;
   if (saving.value || loading.value || visibilityBusy.value) return;
   if (initializationFailed.value) { error.value = t("state.loadFailed"); return; }
+  if (!isNew.value && coverFlagDirty.value && !otherEdits.value && original.value) {
+    await saveCoverFlagOnly();
+    return;
+  }
   if (booksUnavailable.value) { error.value = t("state.loadFailed"); return; }
   if (replyDefaultsEditor.value && !replyDefaultsEditor.value.validate()) {
     error.value = replyDefaultsEditor.value.errorMessage();
@@ -1961,7 +2004,16 @@ async function save() {
       }
       await completeRoleProvision(targetRoleId, { roleName: sent.roleName.trim(), language: sent.language, visibility: newCardVisibility.value }, token);
     }
-    cardNumber.value = (await registerCardIdentity(targetRoleId, token, editorProvider.value)).num;
+    const coverFlag = (sent.coverSensitive !== (original.value?.coverSensitive ?? false)) && coverFlagLoaded.value
+      ? sent.coverSensitive : undefined;
+    const registered = await registerCardIdentity(targetRoleId, token, editorProvider.value,coverFlag);
+    cardNumber.value = registered.num;
+    reviewerCoverMark.value = registered.coverReviewSensitive === true;
+    coverFlagLoaded.value = typeof registered.coverAuthorSensitive === "boolean";
+    if (coverFlag === undefined && coverFlagLoaded.value) {
+      if (draft.value.coverSensitive === sent.coverSensitive) draft.value.coverSensitive = registered.coverAuthorSensitive;
+      sent.coverSensitive = registered.coverAuthorSensitive;
+    }
     if (openingMode.value === mode) {
       if (clearGreeting && draft.value.roleWelcome === welcomeBeforeClearing) draft.value.roleWelcome = "";
       if (clearGreeting && JSON.stringify(draft.value.alternates) === alternatesBeforeClearing) draft.value.alternates = [];
@@ -2403,6 +2455,8 @@ async function exportCard(format: "png" | "json") {
                         :clear-label="$t('editor.image.clear')" :library-label="$t('editor.image.library')"
                         :uploading="$t('editor.image.uploading')" ratio="tall" safe-zone :imported-file="importedPortrait" @pending="imagePending('roleBackground', $event)" @busy="imageBusy('roleBackground', $event)" @pick="onPickImage" @adopt="onAdoptImage" :ready="!!draft.roleName.trim()" @needs-name="requireImageName"
                         :generate-label="genLabel('roleBackground')" @generate="openGenerate('roleBackground')" />
+            <CoverSensitiveField v-model="draft.coverSensitive" :cover="draft.roleBackground"
+              :reviewed="reviewerCoverMark" :disabled="saving || !coverFlagLoaded" />
             <button type="button" class="disclosure" :aria-expanded="mediaMoreOpen" aria-controls="media-more" @click="mediaMoreOpen = !mediaMoreOpen">
               <svg class="disclosure__chev" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4l4 4-4 4" /></svg>
               <span class="disclosure__label">{{ $t("editor.media.more") }}</span>
@@ -2479,7 +2533,7 @@ async function exportCard(format: "png" | "json") {
             </div>
           </div>
           <ShowcaseGuide :open="guideOpen" :name="draft.roleName" :summary="draft.roleDesc" :tags="draft.roleTag"
-                         :cover="draft.roleBackground" :banner="draft.roleBackgroundLandscape" :advise="SUMMARY_ADVISE"
+                         :cover="draft.roleBackground" :cover-sensitive="draft.coverSensitive || reviewerCoverMark" :banner="draft.roleBackgroundLandscape" :advise="SUMMARY_ADVISE"
                          @close="guideOpen = false" />
         </section>
 

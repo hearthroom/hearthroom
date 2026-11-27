@@ -1,3 +1,4 @@
+import { effectiveCover, type CoverFlags } from "./cover-sensitive";
 import { countByAuthor, listCards, toCard, registeredAmong } from "./cards";
 import { searchForm } from "./search-text";
 import { resolveMember } from "./members";
@@ -49,7 +50,7 @@ const LISTED_SEARCH_LIMIT = 1000;
 const DRAFT_CHECK_LIMIT = 24;
 export interface MinePage {
   /** registered＝本站有這張卡的登記（不論審到哪）；status 只在 registered 時有；note 是最近一次駁回的說明。 */
-  items: (Omit<MyRole, "contentHash"> & { registered: boolean; status?: CardStatus; updateStatus?: string; reReview?: boolean; note?: string; rating?: string | null; draftChanged?: boolean;workVisibility?:WorkVisibility })[];
+  items: (Omit<MyRole, "contentHash"> & { registered: boolean; coverSensitive?: boolean; status?: CardStatus; updateStatus?: string; reReview?: boolean; note?: string; rating?: string | null; draftChanged?: boolean;workVisibility?:WorkVisibility })[];
   /** 符合條件的卡一共幾張（翻頁用）。全部／未上架由上游算；已上架由本站的庫算。 */
   total: number | null;
   /** 已登記幾張。**全域**的數字，不是這一頁數出來的——見 countByAuthor。 */
@@ -146,6 +147,7 @@ export async function loadMine(
             name: card.name,
             summary: card.summary,
             avatarUrl: card.avatarUrl,
+            coverSensitive: card.coverSensitive,
             backgroundUrl: card.backgroundUrl,
             // 上游的可見性不在本站的庫裡，而畫面上也不顯示它。
             visibility: "",
@@ -190,7 +192,13 @@ export async function loadMine(
   const [[registeredTotal, quota], { roles, source }] = await Promise.all([counted, listed]);
 
   const ids = roles.items.map((r) => r.roleId);
-  const [registered, statuses] = await Promise.all([registeredAmong(env.DB, ids, provider), statusAmong(env.DB, ids)]);
+  const [registered, statuses, coverRows] = await Promise.all([
+    registeredAmong(env.DB, ids, provider), statusAmong(env.DB, ids),
+    env.DB.prepare(`SELECT source_role_id,cover_author_sensitive,cover_review_sensitive FROM card_numbers
+      WHERE provider=? AND source_role_id IN (SELECT value FROM json_each(?))`)
+      .bind(provider,JSON.stringify(ids)).all<CoverFlags & {source_role_id:string}>(),
+  ]);
+  const covers = new Map(coverRows.results.map(row=>[row.source_role_id,row]));
   // 清單只帶 contentHash：記得過審整份內容版本的卡另外逐張問 revisionHash（才看得出只改了規則或世界書），一頁最多 DRAFT_CHECK_LIMIT 張
   const deep = ids.filter((id) => { const s = statuses.get(id); return comparable(s) && !!s.approvedRevision; }).slice(0, DRAFT_CHECK_LIMIT);
   const versions = deep.length ? await upstream.fetchDraftVersions(env, bearer, deep, provider) : new Map<string, DraftVersion>();
@@ -200,6 +208,7 @@ export async function loadMine(
       const current = versions.get(r.roleId) ?? (contentHash ? { content: contentHash } : undefined);
       return {
         ...r, registered: registered.has(r.roleId),
+        coverSensitive: effectiveCover(covers.get(r.roleId) ?? {},r.backgroundUrl || r.avatarUrl),
         ...(s ? { status: s.status, updateStatus: s.updateStatus, ...(s.reReview ? { reReview: true } : {}), note: s.note, rating: s.rating } : {}),
         ...(draftChanged(s, current) ? { draftChanged: true } : {}),
       };

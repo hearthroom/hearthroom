@@ -390,7 +390,7 @@ export async function fetchFandomLookup(q: string): Promise<{ id: string; label:
   return res.items;
 }
 
-export interface Suggestions { tags: { tag: string; n: number }[]; fandoms: FandomItem[]; cards: { num: number; name: string; avatarUrl: string | null }[] }
+export interface Suggestions { tags: { tag: string; n: number }[]; fandoms: FandomItem[]; cards: { num: number; name: string; avatarUrl: string | null; coverSensitive?: boolean }[] }
 /** 搜尋框打字時的建議。只有一般內容；看的人藏起來的類型照榜單的規則排除。 */
 export async function fetchSuggest(zone: Zone | "all", q: string, lang?: string): Promise<Suggestions> {
   const params = new URLSearchParams({ zone, q });
@@ -705,6 +705,7 @@ export interface ReviewHold { holder: string; at: number; byMe: boolean; canRele
 
 /** 送審當下本站替這張單存的整份設定（快照）。作者身分不在快照裡，另放在 author。partial＝同步開的重審單，只有公開資料。 */
 export interface ReviewDetail {
+  coverMark?: ReviewerCoverState & { canMark: boolean };
   submission: {
     lengthExempt?:boolean;
     id: string; kind: "first" | "re"; status: string; contentHash: string; submittedAt: number;
@@ -932,6 +933,10 @@ export async function fetchAuthorReviewResult(id:string,token:string,lang:string
 export const updateReviewTags = (id: string, token: string, body: { tags: string[]; fandom?: string; fandomId?: string; generation?: string }) =>
   reviewAction<{ tags: string[]; fandom?: string; fandomId?: string }>(id, "tags", token, body);
 
+export function markReviewCover(id: string, token: string, body: { sensitive: boolean; reason: string; operationId: string }): Promise<ReviewerCoverState> {
+  return reviewAction(id,"cover",token,body);
+}
+
 export async function fetchReviewDetail(id: string, token: string): Promise<ReviewDetail> {
   return json(await fetch(`${COMMUNITY_API}/review/${encodeURIComponent(id)}/detail`, { headers: { ...from(), ...authHeaders(token) } }));
 }
@@ -1055,9 +1060,22 @@ export async function fetchSiteMe(token: string): Promise<SiteMe> {
   return json<SiteMe>(await fetch(`${COMMUNITY_API}/me`, { headers: { ...from(), language: String(i18n.global.locale.value), ...authHeaders(token) } }));
 }
 
-export async function registerCardIdentity(roleId: string, token: string, provider: ProviderId = currentProvider()): Promise<{id:string;num:number;provider:ProviderId;sourceRoleId:string}> {
+export interface AuthorCoverState {
+  coverAuthorSensitive: boolean;
+  coverReviewSensitive: boolean;
+  coverSensitive: boolean;
+}
+export interface ReviewerCoverState extends AuthorCoverState { coverChanged: boolean }
+
+export async function fetchAuthorCover(roleId: string, token: string, provider: ProviderId = currentProvider()): Promise<AuthorCoverState> {
+  return json(await fetch(`${COMMUNITY_API}/me/cards/${encodeURIComponent(roleId)}/cover`, {
+    headers: {...from(),'X-Provider':provider,...authHeaders(token)},
+  }));
+}
+
+export async function registerCardIdentity(roleId: string, token: string, provider: ProviderId = currentProvider(), coverSensitive?: boolean): Promise<AuthorCoverState & {id:string;num:number;provider:ProviderId;sourceRoleId:string}> {
   return json(await fetch(`${COMMUNITY_API}/me/card-identities`, {
-    method:'POST', headers:{...from(),'X-Provider':provider,...authHeaders(token),'Content-Type':'application/json'}, body:JSON.stringify({roleId}),
+    method:'POST', headers:{...from(),'X-Provider':provider,...authHeaders(token),'Content-Type':'application/json'}, body:JSON.stringify({roleId,coverSensitive}),
   }));
 }
 
@@ -1099,6 +1117,7 @@ export async function fetchDraftState(roleId: string, token: string, provider: P
 }
 
 export interface MyCard {
+  coverSensitive?: boolean;
   num?: number;
   provider?: import("./provider").ProviderId;
   workId?: string;

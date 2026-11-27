@@ -14,6 +14,9 @@ import { fetchFandomLookup } from '@/lib/api';
 import { pageTitle } from '@/lib/i18n';
 import { useLocalePath } from '@/lib/use-locale';
 import ReviewLengthExemptionControl from '@/components/ReviewLengthExemptionControl.vue';
+import CoverMark from "@/components/CoverMark.vue";
+import CoverEye from "@/components/CoverEye.vue";
+import type { ReviewerCoverState } from "@/lib/api";
 import RatingCorrection from '@/components/RatingCorrection.vue';
 import { isRating } from '../../../shared/content-rating';
 import { ratingName } from '@/lib/rating';
@@ -31,7 +34,7 @@ function findExemption(){exemptionTarget.value=exemptionNumber.value.trim();exem
 watch(()=>[session.me?.accountNumId,reviewer.role,tab.value],()=>{exemptionTarget.value='';exemptionNumber.value='';});
 // 重新審核：已發布、還沒在重審的卡才有；它不是處置案件，送到審核清單（伺服器另一支端點）
 const reopening=computed(()=>!!history.value?.reviews.some(r=>!!r.reopen&&r.status==='pending'));
-const actions=computed(()=>history.value?[history.value.card.boardHidden?'restore_listing':'delist',history.value.card.publicBlocked?'restore_public':'suspend',...(history.value.card.status==='approved'&&!reopening.value?['reopen']:[]),...(isManager.value?['rating']:[])]:[]);
+const actions=computed(()=>history.value?[history.value.card.boardHidden?'restore_listing':'delist',history.value.card.publicBlocked?'restore_public':'suspend',...(history.value.card.status==='approved'&&!reopening.value?['reopen']:[]),...((history.value.card.coverUrl || history.value.card.coverReviewSensitive)?['cover_mark']:[]),...(isManager.value?['rating']:[])]:[]);
 const operation=ref(crypto.randomUUID());
 const identity=()=>`${currentProvider()}:${session.me?.accountNumId??''}`;
 let generation=0, selectionGeneration=0, alive=true;
@@ -115,14 +118,32 @@ function propose(){
 function adjust(kind:'tags'|'compensation'|'fandom'){if(!history.value)return;const body=kind==='tags'?{tags:tagText.value.split(/[,，\n]/).map(s=>s.trim()).filter(Boolean)}:kind==='fandom'?{fandom:fandomPick.value.label.trim(),...(fandomPick.value.id?{fandomId:fandomPick.value.id}:{})}:{board:board.value,hours:hours.value};return perform(`/cards/${history.value.card.id}/${kind}`,{reason:reason.value.trim(),operationId:operation.value,...body},t(`moderation.${kind}`),kind==='compensation'?`${t('moderation.compensationEffect')} ${t(`moderation.board.${board.value}`)} · ${t('moderation.hours')}: ${hours.value}`:t(`moderation.${kind}Effect`));}
 function page(delta:number){if(busy.value)return;offset.value=Math.max(0,offset.value+delta*30);selected.value=null;history.value=null;void load();}
 // 只鎖定分級下限（rating_floor）沒有自己的動作名，用完成卡的標題「分級下限已鎖定」
-function eventTitle(item:CardHistory['events'][number]){return t(item.action==='rating_floor'?'moderation.ratingCorrection.lockDoneTitle':`moderation.${item.action}`);}
+function eventTitle(item:CardHistory['events'][number]){return t(item.action==='cover_mark'?'coverSensitive.mark':item.action==='rating_floor'?'moderation.ratingCorrection.lockDoneTitle':`moderation.${item.action}`);}
 function eventValue(item:CardHistory['events'][number]){
  // 更正分級的歷程存的是級別代號本身（不是 JSON）；只鎖下限時 before 是原本的下限，空字串＝沒有下限
  const name=(r:string)=>isRating(r)?ratingName(r,String(locale.value)):(r||'—');
+ if(item.action==='cover_mark')return t(item.afterValue==='1'?'coverSensitive.marked':'coverSensitive.cleared');
  if(item.action==='rating')return `${name(item.beforeValue)} → ${name(item.afterValue)}`;
  if(item.action==='rating_floor')return t('moderation.ratingCorrection.floorChange',{from:item.beforeValue?name(item.beforeValue):t('moderation.ratingCorrection.noFloor'),to:name(item.afterValue)});
  try{const after=JSON.parse(item.afterValue);if(item.action==='fandom')return `${item.beforeValue||'—'} → ${after.fandom||'—'}`;if(item.action==='tags')return `${JSON.parse(item.beforeValue).join(', ')} → ${after.join(', ')}`;return `${t(`moderation.board.${after.board}`)} · ${t('moderation.hours')}: ${after.milliseconds/3600000}`;}catch{return '';}}
 // 更正分級完成：換上新的卡片詳情（分級與歷程），清單裡同一張也跟著換，選取不清掉
+const coverState = computed(() => ({
+ coverAuthorSensitive: !!history.value?.card.coverAuthorSensitive,
+ coverReviewSensitive: !!history.value?.card.coverReviewSensitive,
+ coverSensitive: !!history.value?.card.coverSensitive,
+ coverChanged: !!history.value?.card.coverChanged,
+}));
+async function setCover(body:{sensitive:boolean;reason:string;operationId:string}){
+ const card=history.value?.card;
+ if(!card)throw new Error(t('state.loadFailed'));
+ const access=await token();
+ const state=await moderationRequest<ReviewerCoverState>(`/cards/${card.id}/cover`,access,body);
+ if(history.value?.card.id===card.id){
+  Object.assign(history.value.card,state);
+  void moderationRequest<CardHistory>(`/cards/${card.id}?lang=${locale.value}`,access).then(ratingUpdated).catch(()=>{});
+ }
+ return state;
+}
 function ratingUpdated(fresh:CardHistory){if(!history.value||history.value.card.id!==fresh.card.id)return;history.value=fresh;cards.value=cards.value.map(item=>item.id===fresh.card.id?{...item,...fresh.card}:item);}
 async function ratingAgain(){action.value=actions.value[0]??'delist';await nextTick();document.getElementById('case-action')?.focus();}
 onMounted(()=>{document.title=pageTitle(t('moderation.title'));void reviewer.refresh();void load();});
@@ -166,8 +187,10 @@ onMounted(()=>{document.title=pageTitle(t('moderation.title'));void reviewer.ref
       <button data-feature-card class="btn" :disabled="busy||(!history.card.featured&&featureFull)" @click="toggleFeatured">{{t(history.card.featured?'card.unfeatureAction':'card.featureAction')}}</button>
       <p v-if="!history.card.featured&&featureFull" class="subtle">{{t('card.featureQuotaFull')}}</p>
      </section>
-     <label for="case-action">{{t('moderation.chooseAction')}}</label><select id="case-action" v-model="action" class="input" :disabled="busy"><option v-for="value in actions" :key="value" :value="value">{{t(`moderation.action.${value}`)}}</option></select>
-     <RatingCorrection v-if="action==='rating'&&isManager" :key="history.card.id" :card="history.card" :token="token" :disabled="busy" @busy="v=>busy=v" @updated="ratingUpdated" @again="ratingAgain" />
+     <label for="case-action">{{t('moderation.chooseAction')}}</label><select id="case-action" v-model="action" class="input" :disabled="busy"><option v-for="value in actions" :key="value" :value="value">{{t(value==='cover_mark'?(history.card.coverReviewSensitive?'coverSensitive.unmark':'coverSensitive.mark'):`moderation.action.${value}`)}}</option></select>
+     <CoverMark v-if="action==='cover_mark'" :key="'cover-'+history.card.id" :state="coverState" :cover="history.card.coverUrl ?? null"
+       :disabled="!reviewer.reviewer" :submit="setCover" @busy="v=>busy=v" />
+     <RatingCorrection v-else-if="action==='rating'&&isManager" :key="history.card.id" :card="history.card" :token="token" :disabled="busy" @busy="v=>busy=v" @updated="ratingUpdated" @again="ratingAgain" />
      <template v-else>
      <p class="subtle">{{t(`moderation.proposal.${action}`)}}</p><label for="card-reason">{{t('moderation.reason')}}</label><textarea autocomplete="off" id="card-reason" v-model="reason" class="input" rows="4" maxlength="2000" :disabled="busy"/>
      <button class="btn btn--danger work-submit" :disabled="busy||!reason.trim()" @click="propose">{{t(`moderation.action.${action}`)}}</button>
@@ -175,7 +198,7 @@ onMounted(()=>{document.title=pageTitle(t('moderation.title'));void reviewer.ref
      <details v-if="isManager" class="work-tools"><summary>{{t('moderation.tools')}}</summary><label for="card-tags">{{t('moderation.tagsLabel')}}</label><input id="card-tags" v-model="tagText" class="input" :disabled="busy"/><button class="btn" :disabled="busy||!reason.trim()" @click="adjust('tags')">{{t('moderation.tags')}}</button><label for="card-fandom">{{t('moderation.fandomLabel')}}</label><LookupField v-model="fandomPick" input-id="card-fandom" :lookup="(q)=>fetchFandomLookup(q)" :disabled="busy" :placeholder="t('editor.fandom.placeholder')" /><button class="btn" :disabled="busy||!reason.trim()" @click="adjust('fandom')">{{t('moderation.fandom')}}</button><p class="subtle">{{t('moderation.fandomEffect')}}</p><label for="comp-board">{{t('moderation.board')}}</label><select id="comp-board" v-model="board" class="input"><option v-for="value in ['day','week','month']" :key="value" :value="value">{{t(`moderation.board.${value}`)}}</option></select><label for="comp-hours">{{t('moderation.hours')}}</label><input id="comp-hours" v-model.number="hours" class="input" type="number" min="0.25" max="720" step="0.25"/><button class="btn" :disabled="busy||!reason.trim()||!hours" @click="adjust('compensation')">{{t('moderation.compensation')}}</button><p class="subtle">{{t('moderation.compensationEffect')}}</p></details>
      <h3>{{t('moderation.tab.history')}}</h3><ol class="work-timeline"><li v-for="item in history.cases" :key="item.id"><strong>{{t(`moderation.action.${item.action}`)}}</strong> · {{t(`moderation.status.${item.status}`)}}<p>{{item.reason}}</p><time>{{dateTime(item.createdAt)}}</time></li><li v-for="item in history.reviews" :key="item.id" :data-history-review="item.id"><strong>{{t(item.reopen?'moderation.reReview':item.flipOf?'review.flipApprove.detailChip':'moderation.reviewQueue')}}</strong> · {{item.flip?.pendingId?t('review.history.flipPending'):item.flip?.approvedId?t('review.history.flippedToApproved'):t(`moderation.status.${item.status}`)}}<p>{{item.note}}</p><time>{{dateTime(item.submittedAt)}}</time>
       <!-- 駁回改判為通過（限管理員）：到審核詳情的結果卡填理由（ui-flip-approve.md） -->
-      <RouterLink v-if="item.flip?.canStart" class="btn btn--sm" data-flip-entry :to="lp(`/review/${item.id}?flip=1`)">{{t('review.flipApprove.action')}}</RouterLink></li><li v-for="(item,i) in history.events" :key="i"><strong>{{eventTitle(item)}}</strong><p>{{item.reason}}</p><p class="subtle">{{eventValue(item)}}</p><time>{{dateTime(item.at)}}</time></li></ol><p v-if="!history.cases.length&&!history.reviews.length&&!history.events.length" class="subtle">{{t('moderation.noHistory')}}</p>
+      <RouterLink v-if="item.flip?.canStart" class="btn btn--sm" data-flip-entry :to="lp(`/review/${item.id}?flip=1`)">{{t('review.flipApprove.action')}}</RouterLink></li><li v-for="(item,i) in history.events" :key="i"><strong>{{eventTitle(item)}}</strong><p>{{item.reason}}</p><p class="subtle">{{eventValue(item)}}</p><p v-if="item.actor" class="subtle">{{item.actor}}</p><time>{{dateTime(item.at)}}</time></li></ol><p v-if="!history.cases.length&&!history.reviews.length&&!history.events.length" class="subtle">{{t('moderation.noHistory')}}</p>
     </template>
     <div v-else class="work-empty"><h2>{{t('moderation.select')}}</h2><p class="subtle">{{t('moderation.selectHint')}}</p></div>
    </section>

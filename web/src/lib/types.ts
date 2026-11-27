@@ -30,6 +30,7 @@ export interface CommunityCard {
   names: Localized;
   summaries: Localized;
   avatarUrl: string | null;
+  coverSensitive?: boolean;
   backgroundUrl: string | null;
   /** 作者畫的分享圖（1.91:1，連結預覽用）；null 或不帶＝沒有 */
   shareImageUrl?: string | null;

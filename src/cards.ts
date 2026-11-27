@@ -1,3 +1,4 @@
+import { effectiveCover, type CoverFlags } from "./cover-sensitive";
 import type { ProviderId } from "./providers";
 import type { UpstreamRole, Zone } from "./upstream";
 import { buildSearchBody, buildSearchName, buildSearchText } from "./upstream";
@@ -12,7 +13,7 @@ import {COVER_HONORS} from './rank-honors';
 import {NOV_20_COMPENSATION_DEPLOYED_AT,NOV_20_DAILY_COHORT_START,NOV_20_OUTAGE_BOARD_SINCE,NOV_20_OUTAGE_START,RANK_DURATION} from './rank-settlement';
 import type {RankHonor} from '../shared/rank-honors';
 
-export interface CardRow {
+export interface CardRow extends CoverFlags {
   honors?:string;
   update_kind?: 'minor'|'major';
   update_note?: string;
@@ -96,7 +97,7 @@ const UPDATED_AT = `COALESCE((SELECT COALESCE(v.published_at, r.decided_at, v.cr
 const LATEST_ANNOUNCED_UPDATE = `(SELECT MAX(e.published_at) FROM works w JOIN card_update_events e ON e.work_id=w.id AND e.state='published' WHERE w.source_provider=c.provider AND w.source_role_id=c.source_role_id)`;
 const FEED_EVENT_AT = `MAX(c.registered_at, COALESCE(${LATEST_ANNOUNCED_UPDATE}, 0))`;
 
-const CARD_METADATA = "(SELECT update_kind FROM hosting_versions WHERE version_id=c.approved_version_id) AS update_kind, (SELECT update_note FROM hosting_versions WHERE version_id=c.approved_version_id) AS update_note, CAST(c.id AS TEXT) AS id, " + UPDATED_AT + " AS updated_at, fe.labels AS fandom_labels, am.handle AS author_handle, am.is_official AS author_official, am.tip_links AS author_tip_links, am.display_name AS community_name, CASE WHEN am.display_name IS NOT NULL THEN am.avatar_url END AS community_avatar, cn.num AS num, (SELECT COUNT(*) FROM member_favorites mf WHERE mf.card_id=c.id) AS favorite_count";
+const CARD_METADATA = "cn.cover_author_sensitive, cn.cover_review_sensitive, (SELECT update_kind FROM hosting_versions WHERE version_id=c.approved_version_id) AS update_kind, (SELECT update_note FROM hosting_versions WHERE version_id=c.approved_version_id) AS update_note, CAST(c.id AS TEXT) AS id, " + UPDATED_AT + " AS updated_at, fe.labels AS fandom_labels, am.handle AS author_handle, am.is_official AS author_official, am.tip_links AS author_tip_links, am.display_name AS community_name, CASE WHEN am.display_name IS NOT NULL THEN am.avatar_url END AS community_avatar, cn.num AS num, (SELECT COUNT(*) FROM member_favorites mf WHERE mf.card_id=c.id) AS favorite_count";
 const CARD_COLUMNS = COVER_HONORS + " AS honors, c.*, " + CARD_METADATA;
 // Capture card content and the visibility binding together, without presentation joins.
 const LIST_CARD_COLUMNS = "CAST(c.id AS TEXT) AS id, " + [
@@ -182,6 +183,7 @@ export function toCard(row: CardRow, lang: string) {
     names,
     summaries,
     avatarUrl: row.background_url,
+    coverSensitive: effectiveCover(row,row.background_url),
     backgroundUrl: row.background_url,
     /** 作者畫的分享圖（1.91:1）；null＝沒有 */
     shareImageUrl: row.share_image_url ?? null,

@@ -1,3 +1,4 @@
+import { effectiveCover } from "./cover-sensitive";
 import { applyWorkshopPublication,applyWorkshopUnpublication,isBaseUnlisted } from "./workshop-publication";
 import { readWorkshopPolicy, upsertWorkshopPolicyProjection } from "./workshop-policy";
 import { applyWorkshopOwnerProjection } from './workshop-owner-projection';
@@ -533,6 +534,7 @@ export async function getWorkshopDetail(c: Ctx, workshopId: string, lang: string
         num: Number(card.id),
         name: pickLocale(JSON.parse(card.names || "{}") as Localized, lang),
         avatarUrl: cardAvatarOf(card),
+      coverSensitive: effectiveCover(card,cardAvatarOf(card)),
         roleId: cardPlayRoleId(card),
         provider: card.provider,
       },
@@ -570,6 +572,7 @@ export async function getWorkshopDetail(c: Ctx, workshopId: string, lang: string
       num: Number(card.id),
       name: pickLocale(JSON.parse(card.names || "{}") as Localized, lang),
       avatarUrl: cardAvatarOf(card),
+      coverSensitive: effectiveCover(card,cardAvatarOf(card)),
       roleId: cardPlayRoleId(card),
       provider: card.provider,
     },

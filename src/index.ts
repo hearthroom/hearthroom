@@ -36,6 +36,7 @@ import { cardLink, linkPreview } from './card-link';
 import { cardStateRoutes } from './card-state-routes';
 import { boardKey, readBoardCache, supportsSharedFirstScreen, writeBoardCache } from "./board-cache";
 export { boardCache } from "./board-cache";
+import { coverState, readCoverFlags, saveAuthorCover, saveReviewerCover } from "./cover-sensitive";
 import { moderationRoutes, normalizeTags, reviewSummary } from "./moderation";
 import { listReviewDecisions, correctReview, correctionEligibility } from './review-correction';
 import { flipDetail, startFlip, withdrawFlip } from './review-flip';
@@ -95,7 +96,7 @@ import { blogGroupUrl, blogIndexMeta, blogUrl, postMeta } from "./blog-head";
 import { campaignLocale, campaignMeta, campaignUrl, cardRewardMeta, inviteMeta, isInviteLink } from "./campaign-head";
 import { getRewardCampaign } from "./card-reward";
 import { getCampaign } from "./campaign";
-import { authorLine, cardArtPreloads, downloadMeta, guideMeta, homeMeta, preloadImageTag, renderDefaultShareHead, renderHead, updatesMeta } from "./head";
+import { authorLine, cardArtPreloads, downloadMeta, guideMeta, homeMeta, preloadImageTag, renderDefaultShareHead, renderHead, siteOgImage, updatesMeta } from "./head";
 import { aliasTarget, HOST, canonicalUrl, isPlayHost } from "./site";
 import { cardThumbUrl, landingZone } from "../shared/card-thumb";
 import { PRIMARY_HOST, siteRootOf } from "../shared/site-hosts";
@@ -103,6 +104,7 @@ import { draftStateOf, loadMine, type MineFilter } from "./mine";
 import { PRESET_TAG_CATALOG, TAG_GROUPS, tagNamesFor } from "../shared/tag-catalog";
 import { bearerOf, blogWriterHint } from "./community-admin";
 import {reconcileWorkAccess} from './work-reconcile';
+import {workPolicyGateway} from "./work-policy";
 import {filterPublicRows,currentCardAccess,unlistedCardRow,proveCachedPublicAggregates,type VisibilityReadSurface} from './work-read';
 import { providerOf, requestIdentity, reviewerRole, isHumanReviewer, isReviewAgent, memberByHandle, memberNsfw, memberProfile, missingMemberStatements, requireMember, requireReviewer, resolveMember, updateMemberNsfw, viewerAllowsNsfw, memberHiddenTags, updateMemberHiddenTags } from "./members";
 import { followList, ownFollowVisibility, parseFollowVisibility, publicFollowStats, updateFollowVisibility } from "./follow-visibility";
@@ -715,7 +717,7 @@ app.get("/v1/suggest", async (c) => {
       topFandoms(c.env.DB, zone, 5, q, 0, l),
       listCards(c.env.DB, { zone, q, excludeTags, sort: "relevance", limit: 5, offset: 0, allowNsfw: false }),
     ]);
-    const items = cards.rows.map((r) => { const card = toCard(r, l); return { num: card.num, name: card.name, avatarUrl: card.avatarUrl }; });
+    const items = cards.rows.map((r) => { const card = toCard(r, l); return { num: card.num, name: card.name, avatarUrl: card.avatarUrl, coverSensitive: card.coverSensitive }; });
     // 建議有沒有幫上忙，看的是空結果率有沒有跟著降：記成自己的事件，跟搜尋分開數
     note(c, { resultCount: tags.length + fandoms.length + items.length, outcome: tags.length + fandoms.length + items.length ? "ok" : "empty" });
     return { tags, fandoms, cards: items };
@@ -986,20 +988,41 @@ app.get("/v1/cards/:id/:file{(icon-[0-9]+|touch-icon)\\.png}", async (c) => {
  * 這條路刻意收到伺服器端而不是讓前端直接打上游：只有在這裡才有地方放邊緣快取，
  * 也才能把回應裁成畫面真的需要的欄位。細節見 src/mine.ts。
  */
-app.post('/v1/me/card-identities', async c => {
+async function ownedCardIdentity(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>, roleId: string) {
   const me = await requireAuthor(c);
   const provider = providerOf(c);
-  const body = await c.req.json().catch(() => null) as {roleId?:unknown}|null;
-  if (typeof body?.roleId !== 'string' || !body.roleId || body.roleId.length > 128) throw new HttpError(400,'invalid_arguments');
   const token = c.req.header('Authorization')!.replace(/^Bearer\s+/i,'');
-  const role = await hostGateway.read(c.env,token,body.roleId,provider);
+  const role = await hostGateway.read(c.env,token,roleId,provider);
   if (role.authorNumId !== me.accountNumId) throw new HttpError(403,'not the author of this card');
   if (role.creationMethod !== CREATION_METHOD) throw new HttpError(403,'only cards created on this site can be listed');
   const work = await workFor(c.env.DB,provider,role.roleId);
   const sourceProvider = work?.source_provider ?? provider;
   const sourceRoleId = work?.source_role_id ?? role.roleId;
+  return {sourceProvider,sourceRoleId,cover:role.backgroundUrl || role.avatarUrl};
+}
+
+app.get('/v1/me/cards/:roleId/cover', async c => {
+  const {sourceProvider,sourceRoleId,cover} = await ownedCardIdentity(c,c.req.param('roleId'));
+  const row = await c.env.DB.prepare('SELECT num,cover_author_sensitive,cover_review_sensitive FROM card_numbers WHERE provider=? AND source_role_id=?')
+    .bind(sourceProvider,sourceRoleId).first<{num:number;cover_author_sensitive:number;cover_review_sensitive:number}>();
+  const {coverChanged:_coverChanged,...flags} = coverState(row ?? {},cover);
+  return c.json(flags,200,{'Cache-Control':'private, no-store'});
+});
+
+app.post('/v1/me/card-identities', async c => {
+  const body = await c.req.json().catch(() => null) as {roleId?:unknown;coverSensitive?:unknown}|null;
+  if (typeof body?.roleId !== 'string' || !body.roleId || body.roleId.length > 128) throw new HttpError(400,'invalid_arguments');
+  if (body.coverSensitive !== undefined && typeof body.coverSensitive !== 'boolean') throw new HttpError(400,'invalid_arguments');
+  const {sourceProvider,sourceRoleId,cover} = await ownedCardIdentity(c,body.roleId);
+  if (typeof body.coverSensitive === 'boolean') {
+    const token = c.req.header('Authorization')!.slice(7);
+    await workPolicyGateway.owner(c.env,sourceProvider,sourceRoleId,token,true);
+    if (body.coverSensitive && !cover) throw new HttpError(409,'cover_mark_missing');
+  }
   const num = await ensureCardNumber(c.env.DB,sourceProvider,sourceRoleId);
-  return c.json({id:String(num),num,provider:sourceProvider,sourceRoleId},200,{'Cache-Control':'private, no-store'});
+  if (typeof body.coverSensitive === 'boolean') await saveAuthorCover(c.env.DB,num,body.coverSensitive);
+  const {coverChanged:_coverChanged,...flags} = coverState(await readCoverFlags(c.env.DB,num),cover);
+  return c.json({id:String(num),num,provider:sourceProvider,sourceRoleId,...flags},200,{'Cache-Control':'private, no-store'});
 });
 
 app.get("/v1/me/cards", async (c) => {
@@ -2327,6 +2350,33 @@ app.get("/v1/review/:id/timeline", async (c) => {
   return c.json(await reviewTimeline(c.env.DB, s.id, member.id), 200, { "Cache-Control": "private, no-store" });
 });
 
+function reviewCoverOf(document:unknown) {
+  if (!document || typeof document !== 'object') return null;
+  const {roleBackground,roleAvatar} = document as Record<string,unknown>;
+  return typeof roleBackground === 'string' && roleBackground ? roleBackground : typeof roleAvatar === 'string' ? roleAvatar : null;
+}
+
+async function canMarkReviewCover(db:D1Database,s:Awaited<ReturnType<typeof getSubmission>>,memberId:string) {
+  if (s.status !== 'pending' || s.claimed_by !== memberId || !claimIsLive(s,Date.now())) return false;
+  const own = await db.prepare(`SELECT 1 FROM cards c WHERE c.id=? AND (
+    EXISTS(SELECT 1 FROM member_identities i WHERE i.member_id=?2 AND i.provider=c.provider AND i.external_id=CAST(c.author_num_id AS TEXT))
+    OR EXISTS(SELECT 1 FROM member_connections m WHERE m.owner_member_id=?2 AND m.provider=c.provider AND m.external_id=CAST(c.author_num_id AS TEXT))
+    OR EXISTS(SELECT 1 FROM hosting_versions v WHERE v.card_id=c.id AND v.member_id=?2)
+  )`).bind(s.card_id,memberId).first();
+  return !own;
+}
+
+app.post("/v1/review/:id/cover", async c => {
+  const {member,s,droppedNow} = await claimedSubmission(c);
+  if (droppedNow || !await canMarkReviewCover(c.env.DB,s,member.id)) throw new HttpError(403,'cover_mark_forbidden');
+  const row = await c.env.DB.prepare(`SELECT COALESCE(NULLIF(json_extract(v.public_role,'$.backgroundUrl'),''),
+    NULLIF(json_extract(v.public_role,'$.avatarUrl'),''),c.background_url) AS cover
+    FROM cards c LEFT JOIN hosting_versions v ON v.submission_id=COALESCE(?2,?3) WHERE c.id=?1`)
+    .bind(s.card_id,s.flip_of,s.id).first<{cover:string|null}>();
+  const body = await c.req.json<Record<string,unknown>>().catch(()=>({}));
+  return c.json(await saveReviewerCover(c.env.DB,String(s.card_id),member.id,row?.cover??null,body),200,{'Cache-Control':'private, no-store'});
+});
+
 app.get("/v1/review/:id/detail", async (c) => {
   const { member, s, stampedByMe, droppedNow } = await claimedSubmission(c);
   const retainUntil = s.status === 'pending' ? null : await retainedUntil(c.env.DB, s.id, Date.now());
@@ -2407,6 +2457,10 @@ app.get("/v1/review/:id/detail", async (c) => {
       },
       // 審核人可能改過這一版的標籤（見 /v1/review/:id/tags）：審核頁看的是過審時會上榜的那一份
       card: { id: String(s.card_id), roleId: s.source_role_id, ...(await versionMeta(c.env.DB, s.id)) },
+      coverMark: {
+        ...coverState(await readCoverFlags(c.env.DB,s.card_id),reviewCoverOf(detail.document)),
+        canMark: !droppedNow && await canMarkReviewCover(c.env.DB,s,member.id),
+      },
       // 原作者：Harbor 帳號名稱、數字帳號 ID、本站代號與卡數。只有審核頁給，作者端與玩家端不變
       author: await reviewAuthor(c.env.DB, s.card_id),
       // 審卡 V2：作者標記與依據（只給審核員）、不受理狀態、送審特徵（快速審的重點檢查用）、駁回理由
@@ -2937,11 +2991,11 @@ app.get("*", async (c) => {
     // 所以排最後。只有分享圖註明尺寸（作者照 1200×630 畫的）；兩張背景的尺寸不知道，就不寫。
     const res = renderHead(shell, {
       lang: locale, title: `${card.name} · ${siteName(locale)}`, description: card.summary, url: canonical, type: "profile",
-      image: card.shareImageUrl || card.landscapeUrl || card.avatarUrl,
-      ...(card.shareImageUrl ? { imageSize: { width: 1200, height: 630 } } : {}),
+      image: card.coverSensitive ? siteOgImage("default",locale) : card.shareImageUrl || card.landscapeUrl || card.avatarUrl,
+      ...(card.coverSensitive || card.shareImageUrl ? { imageSize: { width: 1200, height: 630 } } : {}),
       preload: cardArtPreloads(card),
     });
-    res.headers.set("Cache-Control", access?.managed?'private, no-store':`public, max-age=${PAGE_TTL}`);
+    res.headers.set("Cache-Control", access?.managed ? "private, no-store" : "no-store");
     return res;
   }
   const [memberId, moderation] = await Promise.all([memberByHandle(c.env.DB, m[3]!), moderationRevision(c)]);

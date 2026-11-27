@@ -11,7 +11,7 @@
  * 加入、成人門、登入、toast 都走 useExtensionJoin，跟卡片頁工坊分頁同一套。
  * 站方管理員（manager／owner）在按鈕列下面多一塊「站方管理」：依擴充 id 撤下，不必先有申訴案件（§3.9 ②）。
  */
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import AdultGate from "@/components/AdultGate.vue";
@@ -28,7 +28,9 @@ import UndoToast from "@/components/workshop/UndoToast.vue";
 import WorkshopIcon from "@/components/workshop/WorkshopIcon.vue";
 import { ApiError } from "@/lib/api";
 import { confirmState, settleConfirm } from "@/lib/confirm";
-import { cardThumb } from "@/lib/card-thumb";
+import CoverReveal from "@/components/CoverReveal.vue";
+import { useCoverReveal } from "@/lib/cover-reveal";
+import { cardStill, cardThumb } from "@/lib/card-thumb";
 import { renderReadme } from "@/lib/card-readme";
 import { cardWorkshop, isJoined, loadCardWorkshop } from "@/lib/card-workshop";
 import { displayHtml, displayName } from "@/lib/display-name";
@@ -160,7 +162,23 @@ const meta = computed(() => {
   });
 });
 const cardName = computed(() => displayName(ext.value?.card.name ?? "", locale.value));
-const cardArt = computed(() => (ext.value?.card.avatarUrl ? cardThumb(ext.value.card.avatarUrl) : ""));
+const {concealed: cardArtConcealed, reveal: revealCardArt} = useCoverReveal(
+  () => String(ext.value?.card.num ?? ext.value?.card.id ?? ""),
+  () => ext.value?.card.avatarUrl ?? "",
+  () => ext.value?.card.coverSensitive === true,
+);
+const cardArt = computed(() => {
+  const url = ext.value?.card.avatarUrl;
+  return url ? (cardArtConcealed.value ? cardStill(url) : cardThumb(url)) : "";
+});
+const hostCard = ref<HTMLElement>();
+const revealedCard = ref(false);
+async function showCardArt() {
+  revealCardArt();
+  revealedCard.value=true;
+  await nextTick();
+  hostCard.value?.querySelector("a")?.focus({preventScroll:true});
+}
 const cardArtFailed = ref(false);
 watch(cardArt, () => { cardArtFailed.value = false; });
 const readmeHtml = computed(() => {
@@ -258,12 +276,16 @@ const resident = computed(() => {
         </div>
       </header>
 
-      <RouterLink :to="lp(cardPath)" class="panel ext__card">
-        <img v-if="cardArt && !cardArtFailed" class="ext__card-art" :src="cardArt" alt="" loading="lazy" @error="cardArtFailed = true" />
+      <div ref="hostCard" class="panel ext__card">
+        <div v-if="cardArt && !cardArtFailed" class="ext__card-art ext__card-frame" :class="{ 'ext__card-art--large': ext.card.coverSensitive, 'ext__card-art--concealed':cardArtConcealed }">
+          <img :src="cardArt" alt="" loading="lazy" @error="cardArtFailed = true" />
+          <CoverReveal v-if="cardArtConcealed" @reveal="showCardArt" />
+        </div>
         <span v-else class="mono ext__card-art" :style="{ '--h': hueFrom(ext.card.name || '?') }" aria-hidden="true">{{ [...(cardName || "?")][0] }}</span>
-        <span class="ext__card-text ws-text">{{ $t("workshop.detail.forCard", { card: cardName }) }}</span>
+        <RouterLink :to="lp(cardPath)" class="ext__card-text ws-text">{{ $t("workshop.detail.forCard", { card: cardName }) }}</RouterLink>
         <svg class="ext__card-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
-      </RouterLink>
+        <span class="sr-only" role="status">{{ revealedCard ? $t("coverSensitive.revealed") : "" }}</span>
+      </div>
 
       <p v-if="mode === 'hidden'" class="notice ext__notice" role="status" data-ext-note="hidden">
         <WorkshopIcon name="lock" /><span class="ws-text">{{ $t("workshop.detail.hidden.note") }}</span>
@@ -366,9 +388,15 @@ const resident = computed(() => {
 .ext__meta { margin: 0; font-size: 13px; color: var(--text-3); overflow-wrap: anywhere; }
 .ext__chips { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 
-.ext__card { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-2) var(--s-3); color: var(--text); border-radius: var(--r-lg); transition: background var(--dur) var(--ease); }
+.ext__card { position: relative; display: flex; align-items: center; gap: var(--s-3); padding: var(--s-2) var(--s-3); color: var(--text); border-radius: var(--r-lg); transition: background var(--dur) var(--ease); }
 .ext__card:hover { background: var(--surface-2); }
 .ext__card-art { width: 40px; height: 40px; flex: none; border-radius: var(--r-sm); object-fit: cover; font-size: 16px; }
+.ext__card-frame { position: relative; overflow: hidden; }
+.ext__card-frame img { width: 100%; height: 100%; object-fit: cover; }
+.ext__card-art--large { width: 120px; height: 104px; container-type: inline-size; }
+.ext__card-art--concealed { z-index: 1; }
+.ext__card-art--concealed img { filter: blur(10cqw); transform: scale(1.16); }
+.ext__card-text::after { content: ""; position: absolute; inset: 0; }
 .ext__card-text { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
 .ext__card-go { width: 18px; height: 18px; flex: none; color: var(--text-3); }
 

@@ -690,3 +690,20 @@ describe("審核工具第一批：字數門檻、結果、搜尋", () => {
     });
   });
 });
+
+it("allows the claiming reviewer to mark the submitted cover without deciding the review", async () => {
+  const res = await submit("role-1");
+  expect(res.status).toBe(201);
+  await makeReviewer(REVIEWER_A);
+  await makeReviewer(REVIEWER_B);
+  const id = (await queue("rev-a")).body.items[0].id as string;
+  expect((await act(id,"claim","rev-a")).status).toBe(200);
+  const input = {sensitive:true,reason:"Synthetic cover note",operationId:crypto.randomUUID()};
+  expect((await act(id,"cover","rev-b",input)).status).toBe(409);
+  expect((await act(id,"cover","author-token",input)).status).toBe(403);
+  const marked = await act(id,"cover","rev-a",input);
+  expect(marked.status).toBe(200);
+  expect(await marked.json()).toMatchObject({coverReviewSensitive:true,coverAuthorSensitive:false,coverSensitive:true});
+  expect(await env.DB.prepare("SELECT status FROM review_submissions WHERE id=?").bind(id).first()).toEqual({status:"pending"});
+  expect((await board())).toHaveLength(0);
+});

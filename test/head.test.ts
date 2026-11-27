@@ -278,3 +278,12 @@ it.each(["/guide", "/guide/", "/en/guide"])("asset routing runs guide metadata b
   expect(html).toContain(path.startsWith("/en") ? '<meta property="og:title" content="Card authoring guide · SukiSuki">' : '<meta property="og:title" content="寫卡指南 · 綺夢社">');
   expect(html.match(/property="og:title"/g)).toHaveLength(1);
 });
+
+it('uses the default share image for a sensitive cover while preserving detail art', async () => {
+  await env.DB.prepare("UPDATE card_numbers SET cover_review_sensitive=1 WHERE source_role_id='r-1'").run();
+  const { html, headers } = await page('/en/cards/r-1');
+  expect(html).toContain('<meta property="og:image" content="' + siteOgImage('default','en') + '">');
+  expect(html).not.toContain('<meta property="og:image" content="https://assets.harperharbor.com/bg.png">');
+  expect(html).toContain(cardThumbUrl(PRIMARY_HOST, 'https://assets.harperharbor.com/bg.png'));
+  expect(headers.get('Cache-Control')).toBe('no-store');
+});

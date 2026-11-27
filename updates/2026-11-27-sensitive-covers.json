@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "draft": true,
+  "try": "/",
+  "title": {
+    "zh-Hant": "卡片列表會先模糊標有敏感內容的封面。",
+    "zh-Hans": "卡片列表会先模糊标有敏感内容的封面。",
+    "en": "Card lists now blur covers marked as sensitive.",
+    "ja": "センシティブなカバーは一覧でぼかして表示されます。",
+    "ko": "민감한 콘텐츠로 표시된 커버는 목록에서 흐리게 보여요."
+  },
+  "body": {
+    "zh-Hant": "你可以先點一下封面看圖，再點一下打開卡片。",
+    "zh-Hans": "你可以先点一下封面看图，再点一下打开卡片。",
+    "en": "Click or tap the cover once to reveal it, then again to open the card.",
+    "ja": "カバーを一度押すと画像を表示し、もう一度押すとカードを開きます。",
+    "ko": "커버를 한 번 누르면 이미지를 볼 수 있고, 다시 누르면 카드가 열려요."
+  }
+}
