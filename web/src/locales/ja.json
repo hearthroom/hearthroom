@@ -3183,6 +3183,7 @@
   "task.chest.title": "コンプリート宝箱",
   "task.chest.left": "あと{n}件",
   "task.weeklyChat.title": "今週{n}日会話する",
+  "task.dailyCards.title": "今日、異なる{n}枚のカードと各1ターン会話する",
   "task.weeklyCards.title": "今週{n}枚の異なるカードと各{minTurns}ターン会話する",
   "task.authorReply.title": "プレイヤーのコメントに{n}件返信する",
   "task.weeklyShare.title": "今週、共有リンクを{n}人に開いてもらう",

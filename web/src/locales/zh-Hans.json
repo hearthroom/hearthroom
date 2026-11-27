@@ -3183,6 +3183,7 @@
   "task.chest.title": "全勤宝箱",
   "task.chest.left": "还差 {n} 项",
   "task.weeklyChat.title": "本周聊天 {n} 天",
+  "task.dailyCards.title": "今天跟 {n} 张不同的卡各聊 1 回合",
   "task.weeklyCards.title": "本周跟 {n} 张不同的卡各聊满 {minTurns} 回合",
   "task.authorReply.title": "回复玩家留言 {n} 条",
   "task.weeklyShare.title": "本周有 {n} 个人打开你分享的链接",

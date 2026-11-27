@@ -3183,6 +3183,7 @@
   "task.chest.title": "All-tasks chest",
   "task.chest.left": "{n} more to go",
   "task.weeklyChat.title": "Chat on {n} days this week",
+  "task.dailyCards.title": "Chat for one turn each with {n} different cards today",
   "task.weeklyCards.title": "Chat with {n} different cards for {minTurns} turns each this week",
   "task.authorReply.title": "Reply to {n} player comments",
   "task.weeklyShare.title": "{n} people open your shared links this week",

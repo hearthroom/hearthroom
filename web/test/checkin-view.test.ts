@@ -207,6 +207,9 @@ describe("任務列", () => {
     expect(taskView({ ...base, id: "replies3", type: "distinct_work_main_turns" })).toMatchObject({
       title: "task.weeklyCards.title", progress: "task.progress.cards", cta: "task.cta.chat",
     });
+    expect(taskView({ ...base, id: "rotation", type: "daily_distinct_work_main_turns", target: 2 })).toMatchObject({
+      title: "task.dailyCards.title", progress: "task.progress.cards", cta: "task.cta.chat",
+    });
   });
   it("不適用的不出現", () => {
     expect(taskView({ ...base, id: "w3", type: "author_replies", status: "unavailable" })).toBeNull();

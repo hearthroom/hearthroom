@@ -3183,6 +3183,7 @@
   "task.chest.title": "올클리어 상자",
   "task.chest.left": "{n}개 남음",
   "task.weeklyChat.title": "이번 주 {n}일 대화하기",
+  "task.dailyCards.title": "오늘 서로 다른 카드 {n}장과 각각 1턴 대화하기",
   "task.weeklyCards.title": "이번 주 서로 다른 카드 {n}장과 각 {minTurns}턴 대화하기",
   "task.authorReply.title": "플레이어 댓글 {n}개에 답글 달기",
   "task.weeklyShare.title": "이번 주 내 공유 링크를 {n}명이 열어 보기",
