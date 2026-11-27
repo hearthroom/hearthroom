@@ -217,7 +217,7 @@ it("explains a credit shortfall with a way to top up, and keeps the order key on
   await mount();
   await type("a lighthouse");
   await generate();
-  expect(root.querySelector(".run__error")?.textContent).toContain("don’t have enough purchased credits");
+  expect(root.querySelector(".run__error")?.textContent).toContain("only the ones you receive at purchase can pay for images");
   expect(root.querySelector(".run__error a")?.textContent).toContain("Top up");
   await generate();
   const dropped = [...root.querySelectorAll(".run")].at(-1)!;
