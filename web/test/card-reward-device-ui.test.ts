@@ -348,6 +348,74 @@ it("AuthorVisibility reads quota via fetchMyCards when quotaFull/quotaShared pro
   expect(help.closest('[role="radiogroup"]')).toBeNull();
 });
 
+it("MyCardsPage can resubmit a rejected card on the same exhausted account that blocks a new card", async () => {
+  const rejected = { ...baseVisibility, review: "rejected", reviewNote: "Please revise the opening." };
+  const card = { provider: "harbor", zone: "all", summary: "", avatarUrl: null, visibility: "private", talkNum: 0 };
+  apiMocks.fetchMyCards.mockResolvedValue({
+    items: [
+      { ...card, roleId: "rejected", name: "Returned card", registered: true, status: "rejected", workVisibility: rejected },
+      { ...card, roleId: "new", name: "New card", registered: false, workVisibility: baseVisibility },
+    ],
+    total: 2,
+    quota: baseQuota({ used: 6, limit: 6, packRemaining: 0, deviceShared: true }),
+  });
+  apiMocks.readVisibility.mockImplementation(async (id: string) => ({ workVisibility: id === "rejected" ? rejected : baseVisibility }));
+  await mountWithRouter(() => h(MyCardsPage), { path: "/mine" });
+
+  async function openVisibility(name: string) {
+    const tile = [...root!.querySelectorAll("article")].find((item) => item.querySelector("h3")?.textContent === name)!;
+    tile.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]')!.click();
+    await nextTick();
+    tile.querySelector<HTMLButtonElement>('[role="menuitem"]')!.click();
+    await settle();
+    return document.querySelector<HTMLElement>(".visibility-dialog")!;
+  }
+
+  const fresh = await openVisibility("New card");
+  expect(fresh.querySelector<HTMLInputElement>('input[value="public"]')!.disabled).toBe(true);
+  expect(fresh.textContent).toContain(i18n.global.t("mine.quota.exceededDevice"));
+  fresh.querySelector<HTMLButtonElement>("header button")!.click();
+  await nextTick();
+
+  const retry = await openVisibility("Returned card");
+  const option = retry.querySelector<HTMLInputElement>('input[value="public"]')!;
+  expect(option.disabled).toBe(false);
+  expect(retry.textContent).not.toContain(i18n.global.t("mine.quota.exceededDevice"));
+  expect(retry.querySelector("[data-quota-device-help]")).toBeNull();
+  option.click();
+  await nextTick();
+  const send = retry.querySelector<HTMLButtonElement>("[data-visibility-apply]")!;
+  expect(send.disabled).toBe(false);
+  send.click();
+  await settle();
+  expect(apiMocks.registerCard).toHaveBeenCalledTimes(1);
+  expect(apiMocks.registerCard.mock.calls[0]?.[0]).toBe("rejected");
+});
+
+it("AuthorVisibility skips account quota for a previously registered private draft with no visible review", async () => {
+  apiMocks.readVisibility.mockResolvedValue({ workVisibility: { ...baseVisibility, firstRegistrationRequired: false } });
+  apiMocks.fetchMyCards.mockResolvedValue({ items: [], total: 0, quota: baseQuota({ used: 6, limit: 6, packRemaining: 0 }) });
+  const submitted = vi.fn();
+  await mountWithRouter(() => h(AuthorVisibility, {
+    id: "registered-draft",
+    provider: "harbor",
+    actor: "22",
+    name: "Previously registered",
+    token: async () => "tok-author",
+    inline: true,
+    editor: true,
+    onSubmit: submitted,
+  }));
+  expect(apiMocks.fetchMyCards).not.toHaveBeenCalled();
+  expect(root!.textContent).not.toContain(i18n.global.t("mine.quota.exceeded"));
+  const option = root!.querySelector<HTMLInputElement>('input[value="public"]')!;
+  expect(option.disabled).toBe(false);
+  option.click();
+  await nextTick();
+  root!.querySelector<HTMLButtonElement>("[data-visibility-apply]")!.click();
+  expect(submitted).toHaveBeenCalledTimes(1);
+});
+
 it("CardOwnerActions distinguishes device_shared weekly_quota_exceeded from normal weekly_quota_exceeded", async () => {
   apiMocks.readVisibility.mockResolvedValue({
     workVisibility: { ...baseVisibility, access: "public", draftChanged: true, actions: ["set_private", "set_unlisted", "submit_update"] },

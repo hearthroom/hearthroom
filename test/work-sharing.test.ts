@@ -92,6 +92,21 @@ it('returns the owner-only full restore projection without changing policy or cr
  expect((await env.DB.prepare('SELECT access FROM managed_work_access WHERE source_role_id=?').bind(source).first<{access:string}>())?.access).toBe('private');
 });
 
+it.each(['new', 'registered', 'superseded'] as const)('projects first-registration eligibility for an author’s %s source',async kind=>{
+ const {source}=await fixture(true);
+ if(kind==='registered'){
+  await env.DB.prepare("INSERT INTO card_registrations(provider,author_num_id,source_role_id,registered_at) VALUES('harbor',11,?,?)").bind(source,Date.now()-8*86400000).run();
+ }
+ if(kind==='superseded'){
+  await upsertCard(env.DB,role({roleId:source,authorNumId:11}),Date.now(),{status:'pending'});
+  const card=(await getCard(env.DB,source))!;
+  await env.DB.prepare("INSERT INTO review_submissions(id,card_id,provider,source_role_id,kind,status,submitted_at) VALUES(?,?,'harbor',?,'initial','superseded',1)").bind(crypto.randomUUID(),card.id,source).run();
+ }
+ const response=await request(`/v1/me/cards/${source}/visibility`);
+ expect(response.status).toBe(200);
+ expect(await response.json()).toMatchObject({workVisibility:{access:'private',review:'none',everPublic:false,firstRegistrationRequired:kind==='new'}});
+});
+
 it('reads approval history and update review through canonical work lineage when reviews name hosted revisions',async()=>{
  const {source,work,member,card,current}=await fixture();
  await env.DB.prepare('DELETE FROM review_submissions').run();

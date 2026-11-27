@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, ref, useId, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import {retentionText} from '@/lib/reward-retention';
-import type { WorkAccess, WorkVisibility } from '@/lib/work-visibility';
+import { requiresFirstRegistration, type WorkAccess, type WorkVisibility } from '@/lib/work-visibility';
 import QuotaDeviceHelp from './QuotaDeviceHelp.vue';
 import { noteShareLinkCreated } from '@/lib/share-ref';
 const props=withDefaults(defineProps<{value:WorkVisibility|null;phase:string;dirty?:boolean;missing?:string;previewMissing?:boolean;quotaFull?:boolean;quotaShared?:boolean;shareUrl?:string;shareRole?:string;newCard?:boolean;primary?:boolean;appealUrl?:string;resumeAction?:string;selectPublic?:number}>(),{dirty:false,quotaFull:false,quotaShared:false});
@@ -22,13 +22,14 @@ const changed=computed(()=>selected.value!==props.value?.access||cancel.value||u
 const review=computed(()=>selected.value==='public'&&!props.value?.actions.includes('restore_public'));
 const canSubmit=computed(()=>!!props.value?.actions.some(action=>action==='submit_review'||action==='submit_update'));
 const delistedReview=computed(()=>props.value?.restriction==='delisted'&&canSubmit.value&&!props.value.actions.includes('restore_public'));
-const quotaBlocked=computed(()=>!!props.value&&props.value.restriction==='none'&&!pending.value&&!props.dirty&&!props.missing&&props.quotaFull&&!props.value.actions.includes('restore_public'));
+const registrationQuotaFull=computed(()=>props.quotaFull&&!!props.value&&requiresFirstRegistration(props.value)&&!props.value.actions.includes('restore_public'));
+const quotaBlocked=computed(()=>props.value?.restriction==='none'&&!pending.value&&!props.dirty&&!props.missing&&registrationQuotaFull.value);
 function disabled(access:WorkAccess){
  if(props.newCard||busy.value||!props.value||props.value.syncState!=='complete')return true;
  if(access===props.value.access&&access!=='public')return false;
  if(access==='private')return !props.value.actions.includes('set_private');
  if(access==='unlisted')return !props.value.actions.includes('set_unlisted');
- return pending.value||(props.value.restriction!=='none'&&!delistedReview.value)||props.dirty||!!props.missing||(!props.value.actions.includes('restore_public')&&(!canSubmit.value||props.quotaFull));
+ return pending.value||(props.value.restriction!=='none'&&!delistedReview.value)||props.dirty||!!props.missing||registrationQuotaFull.value||(!props.value.actions.includes('restore_public')&&!canSubmit.value);
 }
 const effect=computed(()=>{
  const v=props.value;if(!v||!selected.value)return '';
@@ -71,7 +72,7 @@ async function copy(){try{await navigator.clipboard.writeText(props.shareUrl??''
        <span v-else-if="pending" class="visibility-option__reason">{{ t(value.update==='pending'?'visibility.badge.updatePending':'mine.badge.pending') }}</span>
        <span v-else-if="dirty" class="visibility-option__reason">{{ t('visibility.saveFirst') }}</span>
        <button v-else-if="missing" type="button" class="link visibility-missing" @click.prevent="emit('missing')">{{ t('visibility.missing',{fields:missing}) }}</button>
-       <span v-else-if="quotaFull&&!value.actions.includes('restore_public')" class="visibility-option__reason">{{ t(quotaShared?'mine.quota.exceededDevice':'mine.quota.exceeded') }}</span>
+       <span v-else-if="registrationQuotaFull" class="visibility-option__reason">{{ t(quotaShared?'mine.quota.exceededDevice':'mine.quota.exceeded') }}</span>
        <span v-else-if="value.actions.includes('restore_public')" class="visibility-option__reason">{{ t('visibility.public.restore') }}</span>
        <span v-else-if="value.revisionState==='changed'" class="visibility-option__reason">{{ t('visibility.public.changed') }}</span>
        <span v-else-if="value.everPublic" class="visibility-option__reason">{{ t('visibility.public.unknown') }}</span>

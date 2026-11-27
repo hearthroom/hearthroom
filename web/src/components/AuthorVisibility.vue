@@ -11,7 +11,7 @@ import { remaining } from '@/lib/quota';
 import { wrapTab } from '@/lib/focus-trap';
 import { createVisibilityController } from '@/lib/visibility-controller';
 import { visibilityStateKey } from '@/lib/visibility-presentation';
-import type { WorkAccess,WorkVisibility } from '@/lib/work-visibility';
+import { requiresFirstRegistration,type WorkAccess,type WorkVisibility } from '@/lib/work-visibility';
 import type { ProviderId } from '@/lib/provider';
 import {useWorkVisibilityCapability} from '@/lib/work-visibility-capability';
 import VisibilityPicker from './VisibilityPicker.vue';
@@ -29,9 +29,20 @@ const effectiveMissing=computed(()=>props.missing||(!props.editor?[...(serverMis
 let previous:HTMLElement|null=null;let generation=0;const localQuotaFull=ref(false);const localQuotaShared=ref(false);
 const fullQuota=computed(()=>props.quotaFull??localQuotaFull.value);
 const sharedQuota=computed(()=>props.quotaShared??localQuotaShared.value);
-async function readQuota(){if((props.quotaFull!==undefined&&props.quotaShared!==undefined)||!value.value||value.value.everPublic)return;try{const token=await props.token();if(!token)return;const {quota}=await fetchMyCards(token,{provider:props.provider,page:1,pageSize:1});localQuotaFull.value=!!quota&&remaining(quota)===0&&(quota.packRemaining??0)===0;localQuotaShared.value=!!quota?.deviceShared;}catch{/* Mutations still enforce quota on the server. */}}
+async function readQuota(){
+ if((props.quotaFull!==undefined&&props.quotaShared!==undefined)||!value.value||!requiresFirstRegistration(value.value))return;
+ const g=generation;
+ try{
+  const token=await props.token();if(!token||g!==generation)return;
+  const {quota}=await fetchMyCards(token,{provider:props.provider,page:1,pageSize:1});
+  if(g!==generation)return;
+  localQuotaFull.value=!!quota&&remaining(quota)===0&&(quota.packRemaining??0)===0;
+  localQuotaShared.value=!!quota?.deviceShared;
+ }catch{/* Mutations still enforce quota on the server. */}
+}
 watch(()=>[props.id,props.provider,props.actor,visibilityEnabled.value] as const,async()=>{
  const g=++generation;controller.value=null;refCode.value=null;invite.value='';serverMissingPresetTag.value=false;serverMissingCover.value=false;presetTagPromptSeq.value=0;
+ localQuotaFull.value=false;localQuotaShared.value=false;
  if(!visibilityEnabled.value||!props.id||!props.actor)return;
  const c=createVisibilityController({id:props.id,provider:props.provider,actor:props.actor,token:props.token});controller.value=c;await c.load();
  if(g!==generation)return;

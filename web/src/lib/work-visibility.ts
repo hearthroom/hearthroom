@@ -6,6 +6,8 @@ export type VisibilityAction = 'set_private' | 'set_unlisted' | 'restore_public'
 export interface WorkVisibility {
  nextMajorUpdateAt?:number;
  updateCooldownExempt?:boolean;
+ /** Author detail from the submission quota policy. Older responses and lists may omit it. */
+ firstRegistrationRequired?:boolean;
  rewardRetention?:{publicUntil:string;days:number;recoveryCredits:number};
  access: WorkAccess;
  effectiveAccess: 'owner' | 'link' | 'public' | 'denied' | 'unavailable';
@@ -29,6 +31,13 @@ export interface WorkVisibility {
  approvalRevision: string;
  actions: VisibilityAction[];
  syncState: 'complete' | 'changing' | 'unavailable';
+}
+export function requiresFirstRegistration(value: WorkVisibility): boolean {
+ return value.firstRegistrationRequired ?? !(
+  value.everPublic || value.reviewId ||
+  value.review === 'pending' || value.review === 'rejected' ||
+  value.update === 'pending' || value.update === 'rejected'
+ );
 }
 export interface VisibilityOperation { operationId: string; state: 'pending' | 'complete' | 'conflict'; error?: string }
 export interface VisibilityResult { error?: string; detail?: {missing?:string[];field?:string}; workVisibility?: WorkVisibility; operation?: VisibilityOperation }

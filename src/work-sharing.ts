@@ -9,10 +9,12 @@ import {type Env,HttpError} from './types';
 import {refreshWorkAccess} from './work-refresh';
 import {WORK_READ_BUDGET} from './work-read';
 import {bumpOp} from './ops-metrics';
+import {needsFirstRegistration} from './quota';
 
 export interface WorkVisibility {
  nextMajorUpdateAt?:number;
  updateCooldownExempt?:boolean;
+ firstRegistrationRequired?:boolean;
  rewardRetention?:{publicUntil:string;days:number;recoveryCredits:number};
  access:WorkAccess;effectiveAccess:'owner'|'link'|'public'|'denied'|'unavailable';
  review:'none'|'pending'|'rejected'|'needs_review'|'revoked';update:'none'|'pending'|'rejected';
@@ -53,13 +55,14 @@ export async function readOwnerVisibility(env:Env,source:string,token:string,row
   local=await managedWork(env.DB,'harbor',source);row=await getCard(env.DB,source,'harbor');
   if(local&&(!provider.managed||provider.workId!==local.work_id))throw new HttpError(503,'visibility_provider_unavailable');
  }
- const [reviews,history,moderation]=await Promise.all([
+ const [reviews,history,moderation,firstRegistrationRequired]=await Promise.all([
   env.DB.prepare(`SELECT s.id,s.kind,s.status,s.note,s.submitted_at,s.decided_at,s.reject_reasons,s.approve_suggestions FROM review_submissions s WHERE s.provider='harbor' AND (s.source_role_id=?1 OR s.id IN(SELECT submission_id FROM hosting_versions WHERE provider='harbor' AND source_role_id=?1)) AND NOT ${FLIP_HIDDEN('s')} ORDER BY s.submitted_at DESC,s.rowid DESC LIMIT 1`).bind(source).first<ReviewRow>(),
   env.DB.prepare("SELECT EXISTS(SELECT 1 FROM review_submissions s WHERE s.provider='harbor' AND (s.source_role_id=?1 OR s.id IN(SELECT submission_id FROM hosting_versions WHERE provider='harbor' AND source_role_id=?1)) AND s.status='approved') AS ever_public").bind(source).first<{ever_public:number}>(),
   env.DB.prepare("SELECT reason FROM moderation_events WHERE provider='harbor' AND source_role_id=? ORDER BY created_at DESC,rowid DESC LIMIT 1").bind(source).first<{reason:string}>(),
+  needsFirstRegistration(env.DB,'harbor',source),
  ]);
  const times=await sourceUpdateEligibility(env.DB,[source]);
- return {workVisibility:{...await projectOwnerVisibility(provider,local,row,reviews,history?.ever_public===1,moderation),...(times.get(source)??{nextMajorUpdateAt:0,updateCooldownExempt:false})},provider};
+ return {workVisibility:{...await projectOwnerVisibility(provider,local,row,reviews,history?.ever_public===1,moderation),firstRegistrationRequired,...(times.get(source)??{nextMajorUpdateAt:0,updateCooldownExempt:false})},provider};
 }
 
 function savedEpochAdvanced(provider:WorkOwnerView,local:ManagedWork|null):boolean{
