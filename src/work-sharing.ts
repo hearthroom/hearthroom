@@ -7,7 +7,7 @@ import {requireMember} from './members';
 import {managedWork,workPolicyGateway,type WorkAccess,type WorkOwnerView,type ManagedWork} from './work-policy';
 import {type Env,HttpError} from './types';
 import {refreshWorkAccess} from './work-refresh';
-import {WORK_READ_BUDGET} from './work-read';
+import {readLocalHarborPolicies,WORK_READ_BUDGET} from './work-read';
 import {bumpOp} from './ops-metrics';
 import {needsFirstRegistration} from './quota';
 
@@ -117,8 +117,7 @@ export async function readOwnerVisibilities(env:Env,sources:string[],token:strin
 async function ownerVisibilityBatch(env:Env,sources:string[],token:string,allowUnconfirmedFirstBind:boolean):Promise<Map<string,WorkVisibility>>{
  let provider=await workPolicyGateway.owners(env,'harbor',sources,token);
  const ids=JSON.stringify(sources);
- const before=await env.DB.prepare("SELECT * FROM managed_work_access WHERE provider='harbor' AND source_role_id IN(SELECT value FROM json_each(?))").bind(ids).all<ManagedWork>();
- const prior=new Map(before.results.map(p=>[p.source_role_id,p]));
+ const prior=await readLocalHarborPolicies(env.DB,sources);
  const refresh=sources.flatMap((source,i)=>{
   const local=prior.get(source);
   if(!local)return [];
@@ -128,11 +127,9 @@ async function ownerVisibilityBatch(env:Env,sources:string[],token:string,allowU
   return firstBindUnconfirmed||savedEpochAdvanced(provider[i],local)?[local.work_id]:[];
  });
  if(refresh.length){await refreshWorkAccess(env,refresh.length,[],refresh);provider=await workPolicyGateway.owners(env,'harbor',sources,token);}
- const [cards,policies,reviews,moderation]=await Promise.all([
+ const [cards,policyMap,reviews,moderation]=await Promise.all([
   env.DB.prepare("SELECT * FROM cards WHERE provider='harbor' AND source_role_id IN(SELECT value FROM json_each(?))").bind(ids).all<CardRow>(),
-  refresh.length
-   ? env.DB.prepare("SELECT * FROM managed_work_access WHERE provider='harbor' AND source_role_id IN(SELECT value FROM json_each(?))").bind(ids).all<ManagedWork>()
-   : Promise.resolve(before),
+  refresh.length?readLocalHarborPolicies(env.DB,sources):prior,
   env.DB.prepare(`SELECT * FROM (SELECT s.id,s.kind,s.status,s.note,s.submitted_at,s.decided_at,s.reject_reasons,s.approve_suggestions,
    COALESCE(v.source_role_id,s.source_role_id) AS source,
    ROW_NUMBER() OVER(PARTITION BY COALESCE(v.source_role_id,s.source_role_id) ORDER BY s.submitted_at DESC,s.rowid DESC) AS n,
@@ -142,7 +139,7 @@ async function ownerVisibilityBatch(env:Env,sources:string[],token:string,allowU
   env.DB.prepare(`SELECT * FROM(SELECT source_role_id,reason,ROW_NUMBER() OVER(PARTITION BY source_role_id ORDER BY created_at DESC,rowid DESC) AS n
    FROM moderation_events WHERE provider='harbor' AND source_role_id IN(SELECT value FROM json_each(?))) WHERE n=1`).bind(ids).all<{source_role_id:string;reason:string}>(),
  ]);
- const cardMap=new Map(cards.results.map(r=>[r.source_role_id,r])),policyMap=new Map(policies.results.map(r=>[r.source_role_id,r]));
+ const cardMap=new Map(cards.results.map(r=>[r.source_role_id,r]));
  const reviewMap=new Map(reviews.results.map(r=>[r.source,r])),moderationMap=new Map(moderation.results.map(r=>[r.source_role_id,r]));
  const times=await sourceUpdateEligibility(env.DB,sources);
  const out=new Map<string,WorkVisibility>();

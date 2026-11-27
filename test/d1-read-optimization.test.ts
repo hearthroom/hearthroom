@@ -5,15 +5,18 @@ import type { Env } from "../src/types";
 import { catalogTagCounts, listCardIds, ratingCounts, upsertCard } from "../src/cards";
 import { countTop, listTop, postComment, setLike, type CommentTarget } from "../src/comments";
 import { publicCandidatePage, publicCandidates } from "../src/work-pagination";
-import { filterPublicRows, provePublicAggregates } from "../src/work-read";
+import { filterPublicRows, localWorkPolicies, provePublicAggregates } from "../src/work-read";
 import { readOwnerVisibilities } from "../src/work-sharing";
-import { workPolicyGateway } from "../src/work-policy";
+import { workPolicyGateway, type ManagedWork } from "../src/work-policy";
 import { bearer, identities, makeMember, resetDb, restoreUpstream, role } from "./helpers";
 import { seal, sign } from "../src/community/crypto";
 import { cravingKey, localDay } from "../shared/suki-care";
 import { tagNamesFor } from "../shared/tag-catalog";
 
 type QueryRecord = { sql: string; reads: number; writes: number; rows: number; plan: string[] };
+
+const legacyLocalPolicySql =
+  "SELECT * FROM managed_work_access WHERE provider='harbor' AND source_role_id IN(SELECT value FROM json_each(?))";
 
 function instrumentReadsWrites(db: D1Database, explain = false): { db: D1Database; log: QueryRecord[] } {
   const log: QueryRecord[] = [];
@@ -397,7 +400,40 @@ describe("D1 read optimization (Batch 2)", () => {
     expect(aggExcl).toHaveLength(1);
   });
 
-  it("#4-2 ownerVisibilityBatch: avoids duplicate managed_work_access read when refresh is empty, still re-reads after refresh", async () => {
+  it("reads fewer local policy rows while keeping every legacy policy field and provider filter", async () => {
+    const owner = await makeMember(1002);
+    await env.DB.batch([
+      env.DB.prepare(`INSERT INTO works VALUES
+        ('public-work',?,'harbor','001',1),('fenced-work',?,'harbor','1',1),
+        ('other-work',?,'other','001',1),('other-only-work',?,'other','missing',1)`)
+        .bind(owner, owner, owner, owner),
+      env.DB.prepare(`INSERT INTO managed_work_access
+        (work_id,provider,source_role_id,access,epoch,restriction,approved_role_id,sync_state,sync_operation_id,moderation_revision)
+        VALUES ('public-work','harbor','001','public',2,'none','approved-target','complete',NULL,0),
+               ('fenced-work','harbor','1','private',3,'suspended',NULL,'changing','pending-operation',4),
+               ('other-work','other','001','private',1,'none',NULL,'complete',NULL,0),
+               ('other-only-work','other','missing','public',1,'none',NULL,'complete',NULL,0)`),
+    ]);
+    const sources = ["1", "001", "missing", ...Array.from({ length: 197 }, (_, i) => `legacy-${i}`)];
+    const legacy = await env.DB.prepare(legacyLocalPolicySql).bind(JSON.stringify(sources)).all<ManagedWork>();
+    const { db, log } = instrumentReadsWrites(env.DB);
+    const rows = [
+      ...sources.map(source_role_id => ({ provider: "harbor", source_role_id })),
+      { provider: "harbor", source_role_id: "001" },
+      { provider: "other", source_role_id: "other-ignore" },
+    ];
+    const policies = await localWorkPolicies({ ...env, DB: db } as Env, rows);
+    expect(policies).toEqual(new Map(legacy.results.map(policy => [policy.source_role_id, policy])));
+    expect(policies.size).toBe(2);
+    expect(log).toHaveLength(1);
+    expect(log[0].reads).toBeLessThanOrEqual(legacy.meta.rows_read! * 0.9);
+    await expect(localWorkPolicies({ ...env, DB: db } as Env, [
+      ...rows, { provider: "harbor", source_role_id: "one-over-limit" },
+    ])).rejects.toThrow("visibility_read_budget_exceeded");
+    expect(log).toHaveLength(1);
+  });
+
+  it("#4-2 ownerVisibilityBatch: reduces local policy reads and still re-reads after refresh", async () => {
     const owner = await makeMember(1002);
     const sources = ["src-1", "src-2", "src-3"];
     await env.DB.batch(
@@ -428,11 +464,15 @@ describe("D1 read optimization (Batch 2)", () => {
         replayed: false,
       })),
     );
+    const legacy = await env.DB.prepare(legacyLocalPolicySql).bind(JSON.stringify(sources)).all();
+    const isLocalPolicyBatch = (q: QueryRecord) => q.sql.includes("managed_work_access")
+      && q.sql.includes("json_each(?)") && !q.sql.includes("JOIN cards");
     const { db: mDb, log } = instrumentReadsWrites(env.DB, false);
-    await readOwnerVisibilities({ ...env, DB: mDb } as Env, sources, "token");
-    const mwaReads = log.filter((q) => q.sql.includes("FROM managed_work_access"));
-    console.log("OWNER_MWA_READS", mwaReads.length);
+    const visibility = await readOwnerVisibilities({ ...env, DB: mDb } as Env, sources, "token");
+    expect([...visibility.keys()]).toEqual(sources);
+    const mwaReads = log.filter(isLocalPolicyBatch);
     expect(mwaReads).toHaveLength(1);
+    expect(mwaReads[0].reads).toBeLessThanOrEqual(legacy.meta.rows_read! * 0.9);
 
     // When epoch advanced (refresh.length > 0), ownerVisibilityBatch MUST re-read managed_work_access after refresh.
     vi.spyOn(workPolicyGateway, "owners").mockResolvedValue(
@@ -457,8 +497,9 @@ describe("D1 read optimization (Batch 2)", () => {
     );
     const { db: rDb, log: rLog } = instrumentReadsWrites(env.DB, false);
     await readOwnerVisibilities({ ...env, DB: rDb } as Env, sources, "token");
-    const mwaReadsAfterRefresh = rLog.filter((q) => q.sql.includes("FROM managed_work_access WHERE provider='harbor' AND source_role_id IN"));
+    const mwaReadsAfterRefresh = rLog.filter(isLocalPolicyBatch);
     expect(mwaReadsAfterRefresh).toHaveLength(2);
+    for (const read of mwaReadsAfterRefresh) expect(read.reads).toBeLessThanOrEqual(legacy.meta.rows_read! * 0.9);
   });
 
   it("#4-3 publicCandidates: skips discarded COUNT(*) when managed_work_access is non-empty, keeps exact total when unmanaged", async () => {

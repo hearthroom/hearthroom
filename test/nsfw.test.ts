@@ -130,7 +130,7 @@ describe("榜單權限與快取", () => {
     expect(queries.filter(sql=>sql.trim().startsWith('INSERT'))).toHaveLength(1);
     expect(queries.find(sql=>sql.trim().startsWith('INSERT'))).toContain('ops_metrics');
     expect(queries.some(sql=>sql.includes('c.id IN(SELECT value FROM json_each'))).toBe(true);
-    expect(queries.some(sql=>sql.includes("source_role_id IN(SELECT value FROM json_each"))).toBe(true);
+    expect(queries.filter(sql=>sql.includes("managed_work_access")&&sql.includes("json_each(?)"))).toHaveLength(1);
     expect(queries.some(sql=>/ORDER BY/i.test(sql))).toBe(false);
     expect(identity).toHaveBeenCalledTimes(1);
   });

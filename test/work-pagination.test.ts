@@ -40,13 +40,27 @@ async function fixture(count=5, sourceIds: readonly string[] = []){
  });return {ids,denied,batches};
 }
 const testEnv=()=>({...env,HOSTING_SERVICE_KEY:'fixture-issuer',AUTH_ENABLED:'true',AUTH_ALLOWED_ORIGINS:'https://c.test',AUTH_KEYRING:JSON.stringify({active:'test',keys:{test:'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='}})});
-async function page(query='',headers:Record<string,string>={}){
- const ctx=createExecutionContext();const response=await worker.fetch(new Request('https://c.test/v1/cards?sort=new&limit=2'+query,{headers}),testEnv(),ctx);await waitOnExecutionContext(ctx);
+async function page(query='',headers:Record<string,string>={},db=env.DB){
+ const ctx=createExecutionContext();const response=await worker.fetch(new Request('https://c.test/v1/cards?sort=new&limit=2'+query,{headers}),{...testEnv(),DB:db},ctx);await waitOnExecutionContext(ctx);
  return {response,body:await response.json() as any};
 }
-it('fills a visible page before exposing a proven next page and follows an opaque continuation without duplicates',async()=>{
+it('fills a visible page and follows a cursor from the legacy local policy query without duplicates',async()=>{
  const {ids,denied}=await fixture();denied.add(ids[0]);denied.add(ids[2]);
- const first=await page();expect(first.body.items.map((r:any)=>r.sourceRoleId)).toEqual([ids[1],ids[3]]);expect(first.body.total).toBeNull();expect(first.body.hasNext).toBe(true);expect(first.body.nextCursor).toEqual(expect.any(String));
+ const legacyPolicySql="SELECT * FROM managed_work_access WHERE provider='harbor' AND source_role_id IN(SELECT value FROM json_each(?))";
+ const legacyRead=vi.fn((db:D1Database|D1DatabaseSession)=>db.prepare(legacyPolicySql));
+ function withLegacyPolicy<T extends D1Database|D1DatabaseSession>(db:T):T{
+  return new Proxy(db,{
+   get(target,key){
+    if(key==='prepare')return (sql:string)=>sql===legacyPolicySql||sql.includes('CROSS JOIN managed_work_access')
+     ?legacyRead(target):target.prepare(sql);
+    if(key==='withSession'&&'withSession' in target)return (bookmark?:string)=>withLegacyPolicy(target.withSession(bookmark));
+    const value=Reflect.get(target,key);
+    return typeof value==='function'?value.bind(target):value;
+   },
+  });
+ }
+ const first=await page('',{},withLegacyPolicy(env.DB));expect(first.response.status).toBe(200);expect(legacyRead).toHaveBeenCalled();
+ expect(first.body.items.map((r:any)=>r.sourceRoleId)).toEqual([ids[1],ids[3]]);expect(first.body.total).toBeNull();expect(first.body.hasNext).toBe(true);expect(first.body.nextCursor).toEqual(expect.any(String));
  const next=await page('&offset=2&cursor='+encodeURIComponent(first.body.nextCursor));expect(next.body.items.map((r:any)=>r.sourceRoleId)).toEqual([ids[4]]);expect(next.body.hasNext).toBe(false);
  const previous=await page('&cursor='+encodeURIComponent(next.body.previousCursor));expect(previous.body.items.map((r:any)=>r.sourceRoleId)).toEqual([ids[1],ids[3]]);
 });

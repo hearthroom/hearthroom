@@ -87,8 +87,15 @@ export async function localWorkPolicies(env:Env,rows:Pick<CardRow,'source_role_i
  const sources=[...new Set(rows.filter(row=>row.provider==='harbor').map(row=>row.source_role_id))];
  if(sources.length>WORK_READ_BUDGET)throw new HttpError(503,'visibility_read_budget_exceeded');
  if(!sources.length)return new Map();
- const result=await env.DB.prepare("SELECT * FROM managed_work_access WHERE provider='harbor' AND source_role_id IN(SELECT value FROM json_each(?))")
-  .bind(JSON.stringify(sources)).all<ManagedWork>();
+ return readLocalHarborPolicies(env.DB,sources);
+}
+
+// Callers supply unique source IDs. Drive the existing unique index from those
+// IDs directly so D1 does not materialize a second list for the IN subquery.
+export async function readLocalHarborPolicies(db:D1Database,uniqueSources:readonly string[]):Promise<Map<string,ManagedWork>>{
+ const result=await db.prepare(`SELECT p.* FROM json_each(?) j
+  CROSS JOIN managed_work_access p ON p.provider='harbor' AND p.source_role_id=j.value`)
+  .bind(JSON.stringify(uniqueSources)).all<ManagedWork>();
  return new Map(result.results.map(policy=>[policy.source_role_id,policy]));
 }
 
