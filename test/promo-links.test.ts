@@ -75,7 +75,7 @@ const MALIANG_CODES = [
   'bh-maple-85994', 'bh-hut-maple', 'vc-maple', 'bh-maple-gal',
   'bh-sanguo-6331', 'bh-hut-sanguo', 'vc-sanguo', 'bh-sanguo-indie',
   'bh-hut-fanren', 'vc-fanren', 'bh-fanren-indie', 'dcard-fanren',
-  'bh-jinyong', 'bh-jinyong-f2',
+  'bh-jinyong', 'bh-jinyong-f2', 'cn-player-jinyong-20261127',
 ];
 
 it('all configured targets are safe local landings with attribution', () => {
@@ -89,6 +89,7 @@ it('all configured targets are safe local landings with attribution', () => {
     if (NOREF_CODES.includes(code)) expect(url.searchParams.has('ref')).toBe(false);
     else expect(url.searchParams.get('ref')).toBe(authorRef);
     const [source, medium] = code === 'vocus-dnd-actions-20261113' ? ['vocus', 'social']
+      : code === 'cn-player-jinyong-20261127' ? ['player-share', 'social']
       : code.startsWith('vc-') ? ['vocus', 'blog']
       : code.startsWith('x-') ? ['x', 'social']
       : code.startsWith('dcard-') ? ['dcard', 'social']
@@ -99,11 +100,16 @@ it('all configured targets are safe local landings with attribution', () => {
   }
 });
 
-it.each(['GET', 'HEAD'])('serves the Jin Yong thread update short link for %s', async method => {
-  const response = await visit('/go/bh-jinyong-f2?ref=OVERRIDE&utm_campaign=other', method);
-  expect(response.status).toBe(302);
-  expect(response.headers.get('location')).toBe('/cards/101602?ref=6M9ZV5FS&utm_source=bahamut&utm_medium=forum&utm_campaign=bh-10859-jinyong-f2-20261127');
-  expect(response.headers.get('cache-control')).toBe('no-store');
+it.each([
+  ['bh-jinyong-f2', 'bahamut', 'forum', 'bh-10859-jinyong-f2-20261127'],
+  ['cn-player-jinyong-20261127', 'player-share', 'social', 'cn-player-jinyong-20261127'],
+])('serves the approved Jin Yong short link %s for GET and HEAD', async (code, source, medium, campaign) => {
+  for (const method of ['GET', 'HEAD']) {
+    const response = await visit(`/go/${code}?ref=OVERRIDE&utm_campaign=other`, method);
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toBe(`/cards/101602?ref=6M9ZV5FS&utm_source=${source}&utm_medium=${medium}&utm_campaign=${campaign}`);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+  }
 });
 
 it.each([

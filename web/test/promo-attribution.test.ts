@@ -10,7 +10,7 @@ const MALIANG_CODES = [
   'bh-maple-85994', 'bh-hut-maple', 'vc-maple', 'bh-maple-gal',
   'bh-sanguo-6331', 'bh-hut-sanguo', 'vc-sanguo', 'bh-sanguo-indie',
   'bh-hut-fanren', 'vc-fanren', 'bh-fanren-indie', 'dcard-fanren',
-  'bh-jinyong', 'bh-jinyong-f2',
+  'bh-jinyong', 'bh-jinyong-f2', 'cn-player-jinyong-20261127',
 ];
 
 // 巴哈 AI 應用 85831 版不帶推薦碼：只驗 GA 歸因，不寫入推薦。
@@ -38,6 +38,7 @@ it.each([
   ['bh-fate-tm', 'UVTEJ3N6', 'bh-fate-tm-20261105', 'bahamut', 'forum', '/cards/_'],
   ['vc-howto-doujin', '94A9H94Z', 'vc-howto-doujin-20261106', 'vocus', 'blog', '/guide'],
   ['vc-intro', '94A9H94Z', 'vc-intro-20261106', 'vocus', 'blog', '/'],
+  ['cn-player-jinyong-20261127', '6M9ZV5FS', 'cn-player-jinyong-20261127', 'player-share', 'social', '/cards/_'],
 ])('initializes sanitized GA4 commands for %s after referral cleanup', (code, ref, campaign, source, medium, page) => {
   const landingUrl = 'https://sukisuki.ai' + links[code as keyof typeof links];
   const cleaned = new URL(landingUrl);
