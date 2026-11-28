@@ -17,7 +17,7 @@ const { t, locale } = useI18n();
 const number = (n: number, digits = 0) => new Intl.NumberFormat(String(locale.value), { maximumFractionDigits: digits, minimumFractionDigits: digits }).format(n);
 
 const deep = computed(() => props.detail?.deepPlay ?? null);
-/* 續玩率旁的說明（問號鈕）：怎麼算、分子分母、誰算合格玩家；預設收起，換一張卡就收回去 */
+/* 續玩率旁的說明（問號鈕）：怎麼算、誰算合格玩家；不寫玩家人數（owner 2026-11-28）。預設收起，換一張卡就收回去 */
 const helpId = `cq-help-${Math.random().toString(36).slice(2, 9)}`;
 const helpOpen = ref(false);
 watch(() => props.detail, () => { helpOpen.value = false; });
@@ -78,7 +78,6 @@ const hasPlayers = computed(() => Boolean(deep.value) || stats.value.length > 0)
           </div>
           <div v-show="helpOpen" :id="helpId" class="cq__help-body">
             <p>{{ $t("quality.retention.explain", { n: deep.turns }) }}</p>
-            <p class="cq__help-count">{{ $t("quality.retention.count", { players: number(deep.players), reached: number(deep.reached) }) }}</p>
             <p class="cq__help-rules">{{ $t("quality.retention.rules") }}</p>
           </div>
         </div>
@@ -131,7 +130,6 @@ const hasPlayers = computed(() => Boolean(deep.value) || stats.value.length > 0)
 .cq__help svg { width: 16px; height: 16px; }
 .cq__help-body { display: grid; gap: 4px; margin-top: var(--s-1); font-size: 13px; line-height: 1.6; color: var(--text-2); }
 .cq__help-body p { margin: 0; }
-.cq__help-count { font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
 .cq__help-rules { font-size: 12px; color: var(--text-3); }
 .cq__deep + .cq__stats { margin-top: var(--s-2); }
 
