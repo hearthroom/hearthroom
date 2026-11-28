@@ -115,7 +115,7 @@ import { providerApiBaseFor } from "./providers";
 import { weeklyLimitAt, weeklyUsageForMember, openPack, needsFirstRegistration } from "./quota";
 import { hashDeviceToken, recordRewardDevice, trimRewardDevices } from "./reward-device";
 import {
-  CLAIM_TTL_MS, STAMPS_REQUIRED, claimIsLive, claim as claimSubmission, getSubmission, hasStamped, listQueue, queueCounts,
+  CLAIM_TTL_MS, STAMPS_REQUIRED, NOT_WITHDRAWING, assertReviewNotWithdrawn, claimIsLive, claim as claimSubmission, getSubmission, hasStamped, listQueue, queueCounts,
   release as releaseSubmission, stamp as stampSubmission, FLIP_HIDDEN, REVIEW_NOTE_MAX, submissionHistory, recordReviewLengthStatement, hold as holdSubmission, unhold as unholdSubmission, holdOf, reopenCard, withdrawReopen, recordReviewCountsStatement, reviewCounts,
 } from "./review";
 import { authorCards, reviewAuthor, submissionType } from "./review-author";
@@ -2010,7 +2010,7 @@ async function suspectedBatchGroups(db: D1Database, now: number): Promise<{ scop
   // 張數跟批次 sheet 同一個口徑（groupSubmissionIds）：排除不受理中、重新審核單與共用電腦白名單成員
   const rows = await db.prepare(`SELECT sd.device_hash, MIN(s.id) AS anchor, COUNT(*) AS n FROM review_submissions s JOIN review_submission_devices sd ON sd.submission_id=s.id
     JOIN hosting_versions v ON v.submission_id=s.id
-    WHERE s.status='pending' AND s.reopen_of IS NULL AND NOT EXISTS(SELECT 1 FROM review_drops d WHERE d.submission_id=s.id AND d.restored_at IS NULL)
+    WHERE s.status='pending' AND s.reopen_of IS NULL AND ${NOT_WITHDRAWING} AND NOT EXISTS(SELECT 1 FROM review_drops d WHERE d.submission_id=s.id AND d.restored_at IS NULL)
     AND NOT EXISTS(SELECT 1 FROM quota_device_exemptions e WHERE e.member_id=v.member_id AND e.revoked_at IS NULL)
     GROUP BY sd.device_hash HAVING COUNT(*)>=2 LIMIT 50`).all<{ device_hash: string; anchor: string; n: number }>();
   const signals = await deviceSignals(db, rows.results.map((r) => r.device_hash), now);
@@ -2128,7 +2128,7 @@ app.post("/v1/review/:id/stamp", async (c) => {
     ? finalizeTwoStage(c.env.DB, c.env, { submissionId, memberId: member.id, now: Date.now(), generation: body.generation, source: body.finalSource, decision, aiNoteTypes: body.aiNoteTypes, aiNote: body.aiNote, aiSuggestionId: body.aiSuggestionId, aiSuggestionAt: body.aiSuggestionAt, authorNote: body.authorNote, aiInaccurate: body.aiInaccurate })
         .then(async (r) => { await bumpOp(c.env.DB, "review_two_stage", "final", r.finalSource); return r; })
     : stampSubmission(c.env.DB, { submissionId, memberId: member.id, verdict: verdict!, note: noteText, now: Date.now(), generation:body.generation, reasons: body.reasons, coaching: body.coaching === true, marks: body.marks, suggestions: body.suggestions },c.env))
-    .catch(async (error) => { if (error instanceof HttpError && (error.status === 409 || error.status === 400 || error.status === 403)) await bumpOp(c.env.DB, "review_stamp", metricVerdict, error.status === 409 ? "conflict" : "denied"); throw error; });
+    .catch(async (error) => { if (error instanceof HttpError && [400, 403, 409, 410].includes(error.status)) await bumpOp(c.env.DB, "review_stamp", metricVerdict, error.status === 409 || error.status === 410 ? "conflict" : "denied"); throw error; });
   const finalVerdict = result.submission.status === "rejected" ? "reject" : "approve";
   await bumpOp(c.env.DB, "review_stamp", finalVerdict, "success");
   note(c, { event: "review_stamp", subject: result.submission.source_role_id, detail: finalVerdict === "reject" ? "reject" : result.cardStatus === "approved" ? "approved" : "approve" });
@@ -2300,6 +2300,7 @@ function closedDetail(card: ReturnType<typeof toCard>, contentHash: string) {
 async function claimedSubmission(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>) {
   const member = await requireReviewer(c);
   const s = await getSubmission(c.env.DB, c.req.param("id")!);
+  await assertReviewNotWithdrawn(c.env.DB, s.id);
   const stampedByMe = await hasStamped(c.env.DB, s.id, member.id);
   const role=await reviewerRole(c.env.DB,member.id);
   // 冷凍人回頭看自己冷凍的單也不必領：單子可能正被別人領著讀，他要能找到解凍

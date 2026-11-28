@@ -2,7 +2,7 @@ import {afterEach,it,expect,vi} from 'vitest';
 import {createApp,nextTick,type App} from 'vue';
 import {createRouter,createMemoryHistory} from 'vue-router';
 import {i18n} from '../src/lib/i18n';
-const api=vi.hoisted(()=>({claimReview:vi.fn(),fetchReviewDetail:vi.fn(),fetchReviewOriginality:vi.fn(),releaseReview:vi.fn(),stampReview:vi.fn(),ApiError:class extends Error{constructor(readonly status:number,message:string){super(message);}}}));
+const api=vi.hoisted(()=>({claimReview:vi.fn(),fetchReviewDetail:vi.fn(),fetchReviewOriginality:vi.fn(),releaseReview:vi.fn(),stampReview:vi.fn(),ApiError:class extends Error{constructor(readonly status:number,readonly code:string){super('Request failed');}}}));
 vi.mock('../src/lib/api',()=>api);
 // 結果卡下方的 AI 揭曉區自己讀網路：這裡只驗審核頁本身，揭曉區由 review-ai.test.ts 管
 vi.mock('../src/lib/review-ai-api',async(original)=>({...await original<object>(),fetchReviewAi:async()=>({suggestions:[],inaccurate:false})}));
@@ -19,10 +19,14 @@ const seg=(s:string):[number,number]=>[persona.indexOf(s),persona.indexOf(s)+s.l
 let app:App|undefined,el:HTMLElement;
 afterEach(()=>{app?.unmount();el?.remove();vi.resetAllMocks();});
 
-async function mount(){
+async function mountPage(){
  el=document.createElement('div');document.body.append(el);
- const router=createRouter({history:createMemoryHistory(),routes:[{path:'/review/:id',component:Page},{path:'/cards/:id',component:{template:'<p/>'}}]});
+ const router=createRouter({history:createMemoryHistory(),routes:[{path:'/review/:id',component:Page},{path:'/review',component:{template:'<p/>'}},{path:'/cards/:id',component:{template:'<p/>'}}]});
  await router.push('/review/s1');app=createApp(Page).use(router).use(i18n);app.mount(el);
+}
+
+async function mount(){
+ await mountPage();
  const tab=await vi.waitFor(()=>{const b=[...el.querySelectorAll('button')].find(b=>b.textContent?.startsWith(i18n.global.t('review.section.originality')));expect(b).toBeDefined();return b!;});
  tab.click();await nextTick();return tab;
 }
@@ -45,6 +49,19 @@ it('shows the overall overlap in the tab, lists sources, and highlights the matc
  await nextTick();
  expect([...el.querySelectorAll('mark.hit')].map(m=>m.textContent)).toEqual(['另一段']);
  expect(el.querySelector('mark.hit')?.closest('pre')?.textContent).toBe(persona);
+});
+
+it('keeps the review controls unavailable until the author withdrawal is confirmed',async()=>{
+ api.fetchReviewDetail
+  .mockRejectedValueOnce(new api.ApiError(409,'review_withdrawal_pending'))
+  .mockRejectedValueOnce(new api.ApiError(410,'review_author_withdrawn'));
+ await mountPage();
+ await vi.waitFor(()=>expect(el.querySelector('[role="alert"]')?.textContent).toContain(i18n.global.t('community.states.pending')));
+ expect(el.querySelector('[data-submit-approve], [data-submit-reject]')).toBeNull();
+ el.querySelector<HTMLButtonElement>('[role="alert"] button')!.click();
+ await vi.waitFor(()=>expect(el.querySelector('[role="alert"]')?.textContent).toContain(i18n.global.t('review.authorWithdrawn')));
+ expect(el.querySelector('[data-submit-approve], [data-submit-reject]')).toBeNull();
+ expect(api.claimReview).not.toHaveBeenCalled();
 });
 
 it('says why a submission cannot be checked instead of showing 0%',async()=>{

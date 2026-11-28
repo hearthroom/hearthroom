@@ -82,6 +82,8 @@ const lengthParams = computed(()=>data.value?.detail.reviewLength?formatReviewLe
 const loading = ref(true);
 const error = ref("");
 const needsClaim = ref(false);
+const withdrawalPending = ref(false);
+const withdrawalNotice = ref<HTMLElement>();
 /** 自動再領沒成功、被別人領著時的說明（這時不給領取鈕，只給回清單） */
 const claimNote = ref("");
 let autoClaimed = false;
@@ -574,9 +576,20 @@ async function token() {
   return tok;
 }
 
+function showWithdrawal(err: unknown): boolean {
+  if (!(err instanceof ApiError) || (err.code !== "review_withdrawal_pending" && err.code !== "review_author_withdrawn")) return false;
+  withdrawalPending.value = err.code === "review_withdrawal_pending";
+  data.value = null;
+  needsClaim.value = false;
+  claimNote.value = "";
+  error.value = t(withdrawalPending.value ? "community.states.pending" : "review.authorWithdrawn");
+  return true;
+}
+
 async function load() {
   const seq=++loadSequence,target=id.value;
   error.value = "";
+  withdrawalPending.value = false;
   correctionError.value = '';
   loading.value = !data.value;
   try {
@@ -594,6 +607,7 @@ async function load() {
     document.title = pageTitle(`${t("review.detail.title")} · ${data.value.detail.document.roleName}`);
   } catch (err) {
     if(!active||seq!==loadSequence||target!==id.value)return;
+    if(showWithdrawal(err))return err;
     // 伺服器原文在 code；message 是給人看的「請求失敗」
     const unclaimed=err instanceof ApiError && err.status===409 && err.code==="claim this submission first";
     // 直接開連結、或讀到一半領取逾時：自動再領一次，只在真的被別人領走時才停下來說明。
@@ -604,6 +618,7 @@ async function load() {
       try{ await claimReview(target, await token()); }
       catch(claimErr){
         if(!active||seq!==loadSequence||target!==id.value)return;
+        if(showWithdrawal(claimErr))return claimErr;
         if(claimErr instanceof ApiError&&claimErr.status===409){ claimNote.value=t("review.claim.otherNote"); return claimErr; }
         // 成人內容的單要先確認年齡：再按一次領取也不會成功，只說明怎麼辦
         if(claimErr instanceof ApiError&&claimErr.code==="age_verification_required"){ error.value=t("error.ageVerificationRequired"); return claimErr; }
@@ -658,12 +673,14 @@ function correctionReadMessage(failure:unknown){
 }
 
 async function claim() {
+  const target = id.value;
   busy.value = true;
   error.value = "";
   try {
     await claimReview(id.value, await token());
     await load();
   } catch (err) {
+    if (!active || id.value !== target || showWithdrawal(err)) return;
     error.value = err instanceof ApiError && err.status===409 ? t("review.claimChanged") : err instanceof Error ? err.message : t("state.actionFailed");
   } finally {
     busy.value = false;
@@ -808,6 +825,11 @@ async function settleStamp(target: string, status: string, stamp: { verdict: "ap
  */
 async function explainDecideError(err: unknown, target: string, guard: { at: GuardAt; final: boolean } = { at: 'top', final: false }) {
     if(!active||id.value!==target)return;
+    if(showWithdrawal(err)){
+      await nextTick();
+      withdrawalNotice.value?.focus();
+      return;
+    }
     if (err instanceof ApiError && err.code === "author_note_internal" && err.noteInternal) {
       const hits = guardHits(err.noteInternal);
       // 錯誤區自己把焦點移到第一個命中項；欄位與選擇都不動
@@ -1018,7 +1040,7 @@ onMounted(() => { void load(); });
 
 <template>
   <section class="review-detail">
-    <p v-if="error" class="notice notice--error" role="alert">{{ error }} <button v-if="data" class="btn btn--sm" :disabled="busy" @click="load">{{t('review.correction.reload')}}</button></p>
+    <p v-if="error" ref="withdrawalNotice" class="notice notice--error" role="alert" tabindex="-1">{{ error }} <button v-if="data || withdrawalPending" class="btn btn--sm" :disabled="busy" @click="load">{{t('review.correction.reload')}}</button></p>
     <div v-if="claimNote" class="notice" role="status" data-claim-taken>
       <p>{{ claimNote }}</p>
       <RouterLink class="btn btn--primary" :to="lp('/review')">{{ $t("review.backToQueue") }}</RouterLink>

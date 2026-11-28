@@ -204,6 +204,13 @@ const holdView = (h: { hold_by: string | null; hold_at: number | null; hold_name
     : { holder: (h.hold_name ?? "").slice(0, 80), at: h.hold_at, byMe: h.hold_by === memberId, canRelease: h.hold_by === memberId || manager };
 const HOLD_JOIN = "LEFT JOIN review_holds h ON h.card_id = s.card_id LEFT JOIN members hm ON hm.id = h.member_id";
 const HOLD_COLUMNS = "h.member_id AS hold_by, h.created_at AS hold_at, COALESCE(NULLIF(hm.display_name, ''), hm.handle) AS hold_name";
+export const NOT_WITHDRAWING = "NOT EXISTS (SELECT 1 FROM review_author_withdrawals w WHERE w.submission_id=s.id AND w.state='pending')";
+
+export async function assertReviewNotWithdrawn(db: D1Database, id: string): Promise<void> {
+  const withdrawal = await db.prepare("SELECT state FROM review_author_withdrawals WHERE submission_id=?").bind(id).first<{state: string}>();
+  if (withdrawal?.state === "complete") throw new HttpError(410, "review_author_withdrawn");
+  if (withdrawal?.state === "pending") throw new HttpError(409, "review_withdrawal_pending");
+}
 
 /** 各分頁的待審數（獨立計數，不受清單 200 筆上限影響） */
 // 審核頁定時重整。同一個 Worker 實例 60 秒內共用一份結果。
@@ -223,7 +230,7 @@ async function queueCountsFresh(db: D1Database): Promise<{ new: number; updates:
       COUNT(*) AS total,
       SUM(CASE WHEN ${NOT_DROPPED("s")} AND ${NEW_CARD("s", true)} THEN 1 ELSE 0 END) AS new_cards,
       SUM(CASE WHEN NOT ${NOT_DROPPED("s")} THEN 1 ELSE 0 END) AS dropped
-    FROM review_submissions s JOIN cards c ON c.id = s.card_id WHERE s.status = 'pending'`).first<{ total: number; new_cards: number | null; dropped: number | null }>();
+    FROM review_submissions s JOIN cards c ON c.id = s.card_id WHERE s.status = 'pending' AND ${NOT_WITHDRAWING}`).first<{ total: number; new_cards: number | null; dropped: number | null }>();
   const newCards = row?.new_cards ?? 0;
   const dropped = row?.dropped ?? 0;
   return { new: newCards, updates: (row?.total ?? 0) - newCards - dropped, dropped };
@@ -256,7 +263,7 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
        LEFT JOIN hosting_versions v ON v.submission_id IN (s.id, s.flip_of) ${HOLD_JOIN} LEFT JOIN members fm ON fm.id = s.flip_by
        LEFT JOIN review_submission_devices sd ON sd.submission_id = s.id LEFT JOIN review_submission_features f ON f.submission_id = s.id
        LEFT JOIN review_submission_diffs dd ON dd.submission_id = s.id
-       WHERE s.status = 'pending' AND ${NOT_DROPPED("s")} ${tab === "new" ? `AND ${NEW_CARD("s")}` : tab === "updates" ? `AND NOT ${NEW_CARD("s")}` : ""}
+       WHERE s.status = 'pending' AND ${NOT_WITHDRAWING} AND ${NOT_DROPPED("s")} ${tab === "new" ? `AND ${NEW_CARD("s")}` : tab === "updates" ? `AND NOT ${NEW_CARD("s")}` : ""}
        ORDER BY s.submitted_at ASC LIMIT 200`,
     )
     .bind(memberId)
@@ -406,6 +413,7 @@ export async function hasStamped(db: D1Database, submissionId: string, memberId:
 /** 領取。別人領著且沒逾時 → 409；自己蓋過章的不能再領。 */
 export async function claim(db: D1Database, submissionId: string, memberId: string, now: number): Promise<SubmissionRow> {
   const row = await getSubmission(db, submissionId);
+  await assertReviewNotWithdrawn(db, row.id);
   if (row.status !== "pending") throw new HttpError(409, "submission already decided");
   if (await hasStamped(db, submissionId, memberId)) throw new HttpError(409, "you already reviewed this submission");
   // 改判單只有發起的管理員能領（ui-flip-approve.md：其他審核員只看到有人在看）。發起人已不是管理員時由現任管理員接手，發起人改成他
@@ -414,13 +422,17 @@ export async function claim(db: D1Database, submissionId: string, memberId: stri
   if (!takeOver && claimIsLive(row, now) && row.claimed_by !== memberId) throw new HttpError(409, "claimed by another reviewer");
   // 不受理中的單不在佇列裡：要審就先復原
   if (await db.prepare("SELECT 1 FROM review_drops WHERE submission_id=? AND restored_at IS NULL").bind(submissionId).first()) throw new HttpError(409, "review_dropped");
-  const result=await db.prepare(`UPDATE review_submissions SET claimed_by=?1,claimed_at=?2,claim_generation=?3,flip_by=CASE WHEN ?7 THEN ?1 ELSE flip_by END
+  const result=await db.prepare(`UPDATE review_submissions AS s SET claimed_by=?1,claimed_at=?2,claim_generation=?3,flip_by=CASE WHEN ?7 THEN ?1 ELSE flip_by END
     WHERE id=?4 AND status='pending' AND claim_generation=?5
-    AND NOT EXISTS(SELECT 1 FROM review_drops d WHERE d.submission_id=review_submissions.id AND d.restored_at IS NULL)
+    AND ${NOT_WITHDRAWING}
+    AND NOT EXISTS(SELECT 1 FROM review_drops d WHERE d.submission_id=s.id AND d.restored_at IS NULL)
     AND (claimed_by IS NULL OR claimed_at<=?6 OR claimed_by=?1 OR ?7) AND (flip_by IS NULL OR flip_by=?1 OR (?7 AND flip_by=?8))
     AND NOT EXISTS(SELECT 1 FROM review_stamps WHERE submission_id=?4 AND member_id=?1) RETURNING *`)
     .bind(memberId,now,crypto.randomUUID(),submissionId,row.claim_generation,now-CLAIM_TTL_MS,takeOver?1:0,row.flip_by??null).first<SubmissionRow>();
-  if(!result)throw new HttpError(409,'claim changed');
+  if(!result){
+    await assertReviewNotWithdrawn(db, row.id);
+    throw new HttpError(409,'claim changed');
+  }
   return result;
 }
 
@@ -505,6 +517,7 @@ export async function stamp(
   env?:Env,
 ): Promise<StampResult> {
   const row = await getSubmission(db, input.submissionId);
+  await assertReviewNotWithdrawn(db, row.id);
   // 改判單待審時版本列還在原本那張駁回單上（0152），核准時才轉過來
   const managed=await db.prepare('SELECT 1 FROM hosting_versions v JOIN managed_work_access p ON p.work_id=v.work_id WHERE v.submission_id IN (?,?)').bind(row.id,row.flip_of??row.id).first();
   if(managed&&await db.prepare('SELECT 1 FROM work_review_decisions WHERE submission_id=?').bind(row.id).first()){
@@ -591,6 +604,10 @@ export async function stamp(
   }
   try { await db.batch(writes); } catch (error) {
     if (flipAdopted) await releaseFlipVersion(db, row);
+    if(error instanceof Error && error.message.includes('review_withdrawal_blocked')){
+      await assertReviewNotWithdrawn(db, row.id);
+      throw new HttpError(409, 'claim changed');
+    }
     if(error instanceof Error && error.message.includes('claim changed')) throw new HttpError(409,'claim changed');
     if(error instanceof Error && error.message.includes('review_held')) throw new HttpError(409,'review_held');
     if(error instanceof Error && error.message.includes('review_dropped')) throw new HttpError(409,'review_dropped');

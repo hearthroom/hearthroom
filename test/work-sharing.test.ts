@@ -2,7 +2,7 @@ import {createExecutionContext,env,waitOnExecutionContext} from 'cloudflare:test
 import {beforeEach,afterEach,it,expect,vi} from 'vitest';
 import worker from '../src/index';
 import {getCard,upsertCard} from '../src/cards';
-import {identitiesFor,makeMember,resetDb,restoreUpstream,role,ratingBody} from './helpers';
+import {identitiesFor,makeMember,makeReviewer,resetDb,restoreUpstream,role,ratingBody} from './helpers';
 import {reconcileWorkAccess} from '../src/work-reconcile';
 import {hostGateway} from '../src/hosting';
 import {opsMetrics} from '../src/ops-metrics';
@@ -229,6 +229,66 @@ it('cancels only pending review while keeping the current public access and appr
  expect((await getCard(env.DB,card.id))?.status).toBe('approved');expect(behavior.commands).toBe(1);
  expect(await env.DB.prepare('SELECT state FROM hosting_versions WHERE version_id=?').bind(version).first()).toEqual({state:'superseded'});
  expect(await env.DB.prepare('SELECT state FROM work_publication_permits WHERE version_id=?').bind(version).first()).toEqual({state:'cancelled'});
+});
+
+it('blocks a claimed review while the author cancellation owns its publication permit',async()=>{
+ const {card,source,work,member,current,behavior}=await fixture();
+ await env.DB.prepare("DELETE FROM review_submissions WHERE card_id=?").bind(card.id).run();
+ await env.DB.prepare("UPDATE cards SET status='pending',approved_hosted_role_id=NULL,approved_version_id=NULL").run();
+ await env.DB.prepare("UPDATE managed_work_access SET access='unlisted',approved_role_id=NULL").run();
+ current.access='unlisted';
+ current.approvedRoleId='';
+ const reviewer=await makeReviewer(42);
+ const submission=crypto.randomUUID(),version=crypto.randomUUID(),permit=crypto.randomUUID();
+ await env.DB.batch([
+  env.DB.prepare("INSERT INTO review_submissions(id,card_id,provider,source_role_id,kind,status,submitted_at,review_length_total) VALUES(?,?,'harbor',?,'first','pending',9,10000)").bind(submission,card.id,source),
+  env.DB.prepare("INSERT INTO hosting_versions(version_id,work_id,member_id,operation_id,source_role_id,provider,card_id,submission_id,state,created_at) VALUES(?,?,?,?,?,'harbor',?,?,'pending',9)").bind(version,work,member,crypto.randomUUID(),source,card.id,submission),
+  env.DB.prepare("INSERT INTO work_publication_permits(version_id,operation_id,epoch,state) VALUES(?,?,2,'prepared')").bind(version,permit),
+ ]);
+ const reviewPath=`/v1/review/${submission}`;
+ const claim=await request(`${reviewPath}/claim`,'reader',{});
+ expect(claim.status).toBe(200);
+ const {generation}=await claim.json() as {generation:string};
+ const {targetAccess,...base}=await command(card.id);
+ const intent={...base,action:'cancel_review'};
+ behavior.unavailable=true;
+ expect((await request(`/v1/me/cards/${card.id}/visibility`,'owner',intent)).status).toBe(202);
+
+ const attempted=await request(`${reviewPath}/stamp`,'reader',{generation,verdict:'approve',note:''});
+ expect(attempted.status).toBe(409);
+ expect(await env.DB.prepare('SELECT 1 FROM review_stamps WHERE submission_id=?').bind(submission).first()).toBeNull();
+ expect(await attempted.json()).toMatchObject({error:'review_withdrawal_pending'});
+ expect(await env.DB.prepare("SELECT 1 FROM review_events WHERE submission_id=? AND action='approve'").bind(submission).first()).toBeNull();
+ expect(await env.DB.prepare('SELECT 1 FROM work_review_decisions WHERE submission_id=?').bind(submission).first()).toBeNull();
+ // An already-started request that reached the write after the cancellation must lose too.
+ await expect(env.DB.prepare("INSERT INTO review_stamps(submission_id,member_id,verdict,created_at,claim_generation) VALUES(?,?,'approve',?,?)")
+  .bind(submission,reviewer,Date.now(),generation).run()).rejects.toThrow('review_withdrawal_blocked');
+ expect(await opsMetrics(env.DB)).toContain('hearthroom_review_stamps_total{operation="approve",outcome="conflict"} 1');
+ const inFlightAi=await request(`${reviewPath}/stamp`,'reader',{generation,finalSource:'ai'});
+ expect(inFlightAi.status).toBe(409);
+ expect(await inFlightAi.json()).toMatchObject({error:'review_withdrawal_pending'});
+ const waiting=await request(`${reviewPath}/detail`,'reader');
+ expect(waiting.status).toBe(409);
+ expect(await waiting.json()).toMatchObject({error:'review_withdrawal_pending'});
+ expect(await (await request('/v1/review/queue','reader')).json()).toMatchObject({items:[],counts:{new:0}});
+
+ const statusPath=`/v1/me/cards/${card.id}/visibility/operations/${intent.operationId}`;
+ const status=await request(statusPath);
+ expect(status.status).toBe(202);
+ expect(await status.json()).toMatchObject({operation:{state:'pending',retryable:true}});
+ expect((await request(statusPath,'reader')).status).toBe(403);
+ expect(behavior.commands).toBe(0);
+ behavior.unavailable=false;
+ expect((await request(`/v1/me/cards/${card.id}/visibility`,'owner',intent)).status).toBe(200);
+ const withdrawn=await request(`${reviewPath}/detail`,'reader');
+ expect(withdrawn.status).toBe(410);
+ expect(await withdrawn.json()).toMatchObject({error:'review_author_withdrawn'});
+ expect((await request(`${reviewPath}/claim`,'reader',{})).status).toBe(410);
+ expect((await request(`${reviewPath}/stamp`,'reader',{generation,verdict:'approve',note:''})).status).toBe(410);
+ expect(await env.DB.prepare('SELECT status,approved_version_id FROM cards WHERE id=?').bind(card.id).first()).toEqual({status:'unshared',approved_version_id:null});
+ expect(await env.DB.prepare('SELECT status FROM review_submissions WHERE id=?').bind(submission).first()).toEqual({status:'superseded'});
+ expect(await env.DB.prepare('SELECT state FROM work_publication_permits WHERE operation_id=?').bind(permit).first()).toEqual({state:'cancelled'});
+ expect(behavior.commands).toBe(1);
 });
 
 it('does not accept an author write with a read-only bearer or implicitly submit a review',async()=>{

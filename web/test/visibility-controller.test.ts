@@ -32,6 +32,22 @@ it('cancel review preserves access and never sends targetAccess',async()=>{
  expect(mocks.change.mock.calls[0][3]).toMatchObject({action:'cancel_review',expectedPolicyRevision:'1',expectedApprovalRevision:'0'});
  expect(mocks.change.mock.calls[0][3]).not.toHaveProperty('targetAccess');
 });
+it('lets the author resend only the saved cancellation after Provider reports no receipt',async()=>{
+ const ready=policy({review:'pending',actions:['cancel_review']});
+ mocks.read.mockResolvedValueOnce({workVisibility:ready}).mockResolvedValue({workVisibility:policy({syncState:'changing'})});
+ mocks.change.mockImplementationOnce(async(_id,_token,_provider,command)=>({operation:{operationId:command.operationId,state:'pending'}}));
+ mocks.operation.mockImplementation(async(_id,key)=>({operation:{operationId:key,state:'pending',retryable:true}}));
+ const first=setup();await first.load();await first.cancelReview();
+ const original=mocks.change.mock.calls[0][3];
+ const reopened=setup();await reopened.load();await reopened.check();
+ expect(reopened.phase.value).toBe('retryable');
+ expect(reopened.resumeAction.value).toBe('cancelReview');
+ expect(mocks.change).toHaveBeenCalledTimes(1);
+ mocks.change.mockResolvedValueOnce({operation:{operationId:original.operationId,state:'complete'},workVisibility:policy()});
+ await reopened.resume();
+ expect(mocks.change.mock.calls[1][3]).toEqual(original);
+ expect(reopened.phase.value).toBe('ready');
+});
 it('lost response and failed readback remain unknown and cannot issue another mutation',async()=>{
  mocks.change.mockRejectedValue(new Error('network'));mocks.operation.mockRejectedValue(new Error('network'));
  const c=setup();await c.load();await c.apply('unlisted');await c.apply('private');

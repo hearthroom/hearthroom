@@ -30,7 +30,7 @@ export function createVisibilityController(options:{id:string;provider:ProviderI
    await latest(t);
    if((result.operation?.state==='complete'||result.operation?.state==='conflict')&&value.value?.syncState==='complete'){
     message.value=result.operation.state==='conflict'?(isPublicationRefusal(result.error)?result.error!:'conflict'):'';clear();phase.value='ready';
-   }else phase.value='pending';
+   }else phase.value=result.operation.state==='pending'&&result.operation.retryable===true&&command.action==='cancel_review'?'retryable':'pending';
   }catch{phase.value='unknown';}
  }
  async function load():Promise<void>{

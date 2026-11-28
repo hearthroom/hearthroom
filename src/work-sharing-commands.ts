@@ -152,7 +152,7 @@ async function authorConflictResult(env:Env,op:AuthorOperation):Promise<{error:s
  if(!isPublicationRefusal(refusal.error))return {error:'visibility_operation_conflict'};
  return {error:refusal.error!,detail:publicationRefusalDetail(refusal.detail)};
 }
-export async function recoverAuthorVisibility(env:Env,op:AuthorOperation,token?:string,options:{allowTransmit?:boolean}={}):Promise<AuthorOperation['state']>{
+export async function recoverAuthorVisibility(env:Env,op:AuthorOperation,token?:string,options:{allowTransmit?:boolean;onMissingCancelReceipt?:()=>void}={}):Promise<AuthorOperation['state']>{
  await assertNormalMember(env.DB,op.member_id);
  const latest=await findOperation(env,op.member_id,op.operation_id);if(!latest)throw new HttpError(404,'card_not_found');
  if(latest.state!=='pending')return latest.state;
@@ -176,7 +176,15 @@ export async function recoverAuthorVisibility(env:Env,op:AuthorOperation,token?:
    receipt=parseWorkPolicyReceipt(intent.receipt,op.source_role_id,op.work_id,op.provider_operation_id);
   }else{
    receipt=await workPolicyGateway.operation(env,'harbor',op.source_role_id,op.work_id,op.provider_operation_id);
-   if(!receipt){if(!token||options.allowTransmit===false)return 'pending';receipt=await runWorkPolicyOperation(env,'harbor',op.source_role_id,command,token);}
+   if(!receipt){
+    if(!token||options.allowTransmit===false){
+     // Status reads can surface an explicit author retry without transmitting or storing a bearer.
+     if(token&&command.action==='cancel'&&(intent?.state==='intent'||intent?.state==='pending')
+      &&fence.moderation_revision===fence.confirmed_moderation_revision)options.onMissingCancelReceipt?.();
+     return 'pending';
+    }
+    receipt=await runWorkPolicyOperation(env,'harbor',op.source_role_id,command,token);
+   }
   }
  }catch(error){
   if(error instanceof HttpError&&error.status===422&&isPublicationRefusal(error.message))return settlePublicationRefusal(env,op,command,token);
@@ -251,8 +259,9 @@ workSharingCommandRoutes.get('/v1/me/cards/:id/visibility/operations/:operationI
  const {source,row}=await ownerCardSource(c.env,c.req.param('id'));const token=c.req.header('Authorization')!.replace(/^Bearer\s+/i,'');
  await workPolicyGateway.owner(c.env,'harbor',source,token);
  const op=await findOperation(c.env,member.id,c.req.param('operationId'));if(!op||op.source_role_id!==source)throw new HttpError(404,'visibility_operation_not_found');
- let state=op.state;try{state=await recoverAuthorVisibility(c.env,op,token,{allowTransmit:false});}catch{state='pending';}
- if(state==='pending')return c.json({operation:{operationId:op.operation_id,state}},202);
+ let state=op.state,retryable=false;
+ try{state=await recoverAuthorVisibility(c.env,op,token,{allowTransmit:false,onMissingCancelReceipt:()=>{retryable=true;}});}catch{state='pending';}
+ if(state==='pending')return c.json({operation:{operationId:op.operation_id,state,...(retryable?{retryable:true}:{})}},202);
  if(state==='conflict')return c.json({...await authorConflictResult(c.env,op),operation:{operationId:op.operation_id,state}},409);
  const latest=await readOwnerVisibility(c.env,source,token,await getCard(c.env.DB,source,'harbor'));
  return c.json({workVisibility:latest.workVisibility,operation:{operationId:op.operation_id,state}},200);

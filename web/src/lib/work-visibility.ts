@@ -39,7 +39,7 @@ export function requiresFirstRegistration(value: WorkVisibility): boolean {
   value.update === 'pending' || value.update === 'rejected'
  );
 }
-export interface VisibilityOperation { operationId: string; state: 'pending' | 'complete' | 'conflict'; error?: string }
+export interface VisibilityOperation { operationId: string; state: 'pending' | 'complete' | 'conflict'; error?: string; retryable?: boolean }
 export interface VisibilityResult { error?: string; detail?: {missing?:string[];field?:string}; workVisibility?: WorkVisibility; operation?: VisibilityOperation }
 export type VisibilityRevision = Pick<WorkVisibility, 'policyRevision' | 'approvalRevision'>;
 export type VisibilityCommand = {

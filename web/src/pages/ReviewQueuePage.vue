@@ -119,6 +119,10 @@ async function claim(item: ReviewQueueItem) {
     void reviewerStore.refresh();
     await router.push(lp(`/review/${item.id}`));
   } catch (err) {
+    if (err instanceof ApiError && (err.code === "review_withdrawal_pending" || err.code === "review_author_withdrawn")) {
+      await router.push(lp(`/review/${item.id}`));
+      return;
+    }
     // 被別人先領走：這一列改成「有人在看」並說明；其他失敗只說沒領成，按鈕照樣可以再按
     const taken = err instanceof ApiError && err.status === 409 && err.code !== "you already reviewed this submission";
     const text = taken ? t("review.claim.taken")

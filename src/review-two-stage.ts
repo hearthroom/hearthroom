@@ -1,4 +1,4 @@
-import { getSubmission, hasStamped, RETAIN_MS, stamp, type DecisionInput, type StampResult } from "./review";
+import { assertReviewNotWithdrawn, getSubmission, hasStamped, RETAIN_MS, stamp, type DecisionInput, type StampResult } from "./review";
 import { isReviewReason } from "../shared/review-reasons";
 import { currentCriteria, suggestionsOf, type SuggestionView } from "./review-ai";
 import { HttpError, type Env } from "./types";
@@ -63,6 +63,7 @@ export async function finalize(db: D1Database, env: Env, input: {
 }): Promise<StampResult & { finalSource: FinalSource }> {
   // 舊雙盲的 blind（用我的盲審）不再接受：盲審判斷已不會產生
   if (typeof input.source !== "string" || !(FINAL_SOURCES as readonly string[]).includes(input.source)) throw new HttpError(400, "invalid_arguments", undefined, { field: "finalSource" });
+  await assertReviewNotWithdrawn(db, input.submissionId);
   let source = input.source as FinalSource;
   const ai = await aiStateOf(db, input.submissionId);
   const types = Array.isArray(input.aiNoteTypes) ? [...input.aiNoteTypes] : input.aiNoteTypes === undefined || input.aiNoteTypes === null ? [] : input.aiNoteTypes;
