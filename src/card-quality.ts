@@ -1,4 +1,4 @@
-import { QUALITY_MIN_PLAYERS, QUALITY_TURNS, type CardQualityDetail, type CardQualityLength, type CardQualitySignal } from '../shared/card-quality';
+import { QUALITY_MIN_PLAYERS, type CardQualityDetail, type CardQualityLength, type CardQualitySignal } from '../shared/card-quality';
 
 // The scheduled sync rechecks cohorts. Stop serving a last-good value after
 // six hours if its page cannot be verified, so an old cohort cannot persist.
@@ -13,7 +13,7 @@ export interface QualitySignalRow {
 
 function deepPlay(players: number | null | undefined, reached: number | null | undefined) {
   return players != null && players >= QUALITY_MIN_PLAYERS && reached != null
-    ? { players, reached, turns: QUALITY_TURNS }
+    ? { rate: Math.floor((reached * 100) / players) }
     : null;
 }
 
