@@ -90,7 +90,7 @@ export function aiOpeningText(settings: Record<string, unknown>, surface: string
 }
 
 /** 送給 AI 的卡片內容：長文截斷；統計數字用全文算。只有審卡員讀卡才套用顯示規則。 */
-export function aiCardInput(settings: Record<string, unknown>, meta: { tags: string[]; fandom: string }, opts: { applyRules?: boolean } = {}) {
+export function aiCardInput(settings: Record<string, unknown>, meta: { tags: string[]; fandom: string }, opts: { applyRules?: boolean; includeObservations?: boolean } = {}) {
   const { doc, greetings, asset, pageHtml, mode, rules, activeRules, welcome, alternates, names } = openingContext(settings);
   const page = openingMarkup(pageHtml);
   const books = Array.isArray(settings.worldbooks) ? settings.worldbooks : settings.worldbook ? [settings.worldbook] : [];
@@ -113,14 +113,14 @@ export function aiCardInput(settings: Record<string, unknown>, meta: { tags: str
   const tail = welcome.slice(-200);
   const pageCoverage = page.dynamic || page.clipped ? "partial" : "complete";
   const pagePrimary = mode === "page" && !!pageHtml;
-  const observations = {
+  const observations = opts.includeObservations ? {
     hasDisplayRules: activeRules.some((r) => r.promptOnly !== true && (!Array.isArray(r.targets) || r.targets.includes("ai"))),
     hasOpeningPage: !!pageHtml,
     settingTranscriptPattern: /(?:^|\n)\s*(?:user|human|使用者|用戶|用户)\s*[:：]/i.test(setting)
       && /(?:^|\n)\s*(?:assistant|chatgpt|助手|助理)\s*[:：]/i.test(setting),
     primary: pagePrimary ? { source: "page", coverage: pageCoverage, ...page.observations }
       : welcomeView ? { source: welcomeView.hits ? "display_rules" : "greeting", coverage: welcomeView.coverage, ...welcomeView.observations } : null,
-  };
+  } : undefined;
   return {
     card: {
       name: text(doc.roleName),
@@ -151,7 +151,7 @@ export function aiCardInput(settings: Record<string, unknown>, meta: { tags: str
             structure: page.structure,
           } : null,
         },
-        ...(opts.applyRules ? { observations } : {}),
+        ...(observations ? { observations } : {}),
       },
       // 世界書：設定可以寫在世界書裡（常駐條目每輪都在，召回條目依關鍵字帶入）。index 是全部條目的目錄（不含內文）
       lorebook: {

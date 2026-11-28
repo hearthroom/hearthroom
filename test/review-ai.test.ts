@@ -4,6 +4,7 @@ import { GENERAL_RATING, bearer, identities, makeAgent, makeMember, makeReviewer
 import { hostGateway, submitHosted } from '../src/hosting';
 import { claim, pendingSubmissionOf, stamp } from '../src/review';
 import { dropSubmission } from '../src/review-drop';
+import { startFlip } from '../src/review-flip';
 import { aiCardInput } from '../src/review-ai';
 import { getCard } from '../src/cards';
 import { upstream } from '../src/upstream';
@@ -133,7 +134,7 @@ describe('審卡員讀卡', () => {
     await setTime(priorPass.id, 1_100);
     await setTime(priorDeny.id, 1_300);
     await setTime(target.id, 1_700);
-    await setTime(future.id, 2_000);
+    await setTime(future.id, 1_400);
     await env.DB.prepare("UPDATE review_stamps SET note='合成駁回說明' WHERE submission_id=?").bind(priorDeny.id).run();
     await env.DB.prepare("UPDATE review_events SET actor_kind='system' WHERE submission_id=? AND action='reject'").bind(future.id).run();
     const path = `/v1/review-ai/submissions/${target.id}/precedents`;
@@ -143,6 +144,20 @@ describe('審卡員讀卡', () => {
       rejected: [{ decision: 'rejected', reasons: ['opening.no_reply_hook'], note: '合成駁回說明' }] });
     expect(JSON.stringify(results)).not.toContain(target.id);
     expect(await json(await get(`${path}?reason=opening.no_reply_hook&before=1200`, 'key'))).toMatchObject({ rejected: [] });
+  });
+
+  it('駁回被人工改成通過後，不再當成駁回判例', async () => {
+    const prior = await submitCard('precedent-flipped', AUTHOR + 1);
+    await decide(prior.id, humanId, 'reject');
+    const original = await env.DB.prepare('SELECT decided_at FROM review_submissions WHERE id=?').bind(prior.id).first<{ decided_at: number }>();
+    const flipAt = original!.decided_at + 2_000;
+    const { id: flipId } = await startFlip(env, { id: prior.id, memberId: managerId, operationId: crypto.randomUUID(), reason: '有完整情節可進入', now: flipAt });
+    await stamp(env.DB, { submissionId: flipId, memberId: managerId, verdict: 'approve', note: '', now: flipAt });
+    const target = await submitCard('precedent-flip-target');
+    await env.DB.prepare('UPDATE review_submissions SET submitted_at=? WHERE id=?').bind(flipAt + 1, target.id).run();
+    const path = `/v1/review-ai/submissions/${target.id}/precedents?reason=opening.no_reply_hook`;
+    expect(await json(await get(`${path}&before=${flipAt}`, 'key'))).toMatchObject({ rejected: [{ decision: 'rejected' }] });
+    expect(await json(await get(path, 'key'))).toMatchObject({ rejected: [] });
   });
 
   it('作者歷史連到公開核准版的字數與五回合留存，封存回放不帶今天的留存', async () => {
@@ -161,6 +176,21 @@ describe('審卡員讀卡', () => {
       published: [{ characters: expect.any(Number), continuation: null }] });
   });
 
+  it('作者歷史按撤回核准完成時間還原，時間切點以前仍是原通過', async () => {
+    const prior = await submitCard('history-unapproved');
+    // Represent the stored form after a completed correction: current rejected with original approval time retained.
+    await decide(prior.id, humanId, 'reject');
+    await env.DB.batch([
+      env.DB.prepare('UPDATE review_submissions SET decided_at=1000,reject_reasons=NULL WHERE id=?').bind(prior.id),
+      env.DB.prepare("INSERT INTO review_corrections(operation_id,submission_id,actor_member_id,actor_role,note,original_decided_at,created_at,state,completed_at) VALUES(?,?,?,'manager','合成撤回說明',1000,1900,'complete',2000)")
+        .bind(crypto.randomUUID(), prior.id, managerId),
+    ]);
+    const target = await submitCard('history-correction-target');
+    const path = `/v1/review-ai/submissions/${target.id}/author-history`;
+    expect(await json(await get(`${path}?before=1500`, 'key'))).toMatchObject({ decisions: [{ decision: 'approved', decidedAt: 1000 }], published: [{ continuation: null }] });
+    expect(await json(await get(`${path}?before=2500`, 'key'))).toMatchObject({ decisions: [{ decision: 'rejected', decidedAt: 2000 }], published: [] });
+  });
+
   it('讀待審單的封存內容，不領取、不帶人工決定；人類審核員不能用這條路', async () => {
     const { id } = await submitCard();
     const res = await get(`/v1/review-ai/submissions/${id}`, 'key');
@@ -169,6 +199,9 @@ describe('審卡員讀卡', () => {
     expect(body.card.setting.length).toBeLessThanOrEqual(12_000 + 10);
     expect(body.card.setting.endsWith('…[截斷]')).toBe(true);
     expect(body.stats.settingChars).toBe(SETTING.length);
+    expect(body.card.openings.observations).toBeUndefined();
+    const evidence = await json(await get(`/v1/review-ai/submissions/${id}?evidence=1`, 'key'));
+    expect(evidence.card.openings.observations.primary.visibleCharacters).toBeGreaterThan(0);
     expect(body.stats.openingChoices).toBe(true);
     expect(body.submission.phase).toBe('shadow');
     expect(body.author).toMatchObject({ batchSuspected: false });
@@ -670,7 +703,7 @@ describe('判準 v4 的讀卡輸入', () => {
       document: { roleDetailDesc: '使用者：寫一段故事\n助手：這是開場' },
       greetings: { welcome: '[OPEN]' },
       authorAsset: { rules: [{ find: '[OPEN]', replace: `<p>，${body}</p><p>${last}</p>` }] },
-    }, { tags: [], fandom: '' }, { applyRules: true });
+    }, { tags: [], fandom: '' }, { applyRules: true, includeObservations: true });
     expect(input.card.openings.welcomeRendered).not.toContain(last);
     expect(input.card.openings.observations).toEqual({
       hasDisplayRules: true, hasOpeningPage: false, settingTranscriptPattern: true,
@@ -685,7 +718,7 @@ describe('判準 v4 的讀卡輸入', () => {
       document: { roleDetailDesc: '助手：工地領班的職稱。' },
       greetings: { welcome: '，原始占位字。' },
       authorAsset: { openingMode: 'page', openingPage: '<script>load()</script><p>「先關水閥嗎？」</p>' },
-    }, { tags: [], fandom: '' }, { applyRules: true });
+    }, { tags: [], fandom: '' }, { applyRules: true, includeObservations: true });
     expect(input.card.openings.observations).toEqual({
       hasDisplayRules: false, hasOpeningPage: true, settingTranscriptPattern: false,
       primary: { source: 'page', coverage: 'partial',

@@ -101,13 +101,14 @@ reviewAiRoutes.get("/v1/review-ai/submissions/:id", (c) => counted(c, "read", as
   const now = Date.now();
   const s = await getSubmission(c.env.DB, c.req.param("id"));
   const phase = aiReadPhase(s, now);
+  const expandedEvidence = c.req.query("evidence") === "1";
   const settings = await readContent(c.env, s);
   const { submission, author, meta } = await aiSubmissionMeta(c.env.DB, s, now);
   return c.json({
     submission: { ...submission, phase },
     author,
-    ...aiCardInput(settings, meta, { applyRules: true }),
-    update: await aiUpdateDiff(c.env, s),
+    ...aiCardInput(settings, meta, { applyRules: true, includeObservations: expandedEvidence }),
+    update: await aiUpdateDiff(c.env, s, !expandedEvidence),
     originality: await aiOriginality(c.env.DB, s, settings),
     allowed: { verdicts: AI_VERDICTS, reasons: AI_REASONS, flags: AI_FLAGS, handoffCauses: AI_HANDOFF_CAUSES, handoffReasons: AI_HANDOFF_REASONS },
   }, 200, NO_STORE);
@@ -133,9 +134,9 @@ async function aiOriginality(db: D1Database, s: SubmissionRow, settings: Record<
  * 更新與重送：跟審核頁同一份差異（基準＝上次過審版，重送時是上次被駁回版）。給 AI 的只取欄位前後各 1,500 字。
  * 新卡、沒有基準、讀不到都照實回狀態，不擋讀卡。
  */
-async function aiUpdateDiff(env: Env, s: SubmissionRow) {
+async function aiUpdateDiff(env: Env, s: SubmissionRow, cacheSummary = true) {
   // 新卡被駁回後重送也有差異（基準＝上次被駁回版），所以不看 kind，照差異表有沒有這張單
-  const view = await diffView(env, s.id, { cacheSummary: false }).catch(() => ({ state: "unreadable" as const }));
+  const view = await diffView(env, s.id, { cacheSummary }).catch(() => ({ state: "unreadable" as const }));
   if (view.state === "missing") return null;
   if (view.state !== "ready") return { state: view.state };
   const clipText = (t: string) => (t.length > 1500 ? `${t.slice(0, 1500)}…[截斷]` : t);
