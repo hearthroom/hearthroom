@@ -7,7 +7,8 @@
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import type { CardQualityDetail } from "../../../shared/card-quality";
-import { qualityCharacters, qualityPercent } from "@/lib/card-quality-format";
+import { qualityCharacters, qualityRate } from "@/lib/card-quality-format";
+import { QUALITY_TURNS } from "../../../shared/card-quality";
 import WorkshopIcon from "./workshop/WorkshopIcon.vue";
 
 const props = defineProps<{ detail: CardQualityDetail | null; loading?: boolean; failed?: boolean }>();
@@ -71,13 +72,13 @@ const hasPlayers = computed(() => Boolean(deep.value) || stats.value.length > 0)
         <div v-if="deep" class="cq__deep">
           <div class="cq__deep-top">
             <span class="cq__deep-label">{{ $t("quality.retention.label") }}</span>
-            <span class="cq__deep-num">{{ qualityPercent(deep.reached, deep.players) }}</span>
+            <span class="cq__deep-num">{{ qualityRate(deep.rate) }}</span>
             <button type="button" class="cq__help" :aria-label="$t('quality.retention.help')" :aria-expanded="helpOpen" :aria-controls="helpId" @click="helpOpen = !helpOpen">
               <WorkshopIcon name="info" />
             </button>
           </div>
           <div v-show="helpOpen" :id="helpId" class="cq__help-body">
-            <p>{{ $t("quality.retention.explain", { n: deep.turns }) }}</p>
+            <p>{{ $t("quality.retention.explain", { n: QUALITY_TURNS }) }}</p>
             <p class="cq__help-rules">{{ $t("quality.retention.rules") }}</p>
           </div>
         </div>

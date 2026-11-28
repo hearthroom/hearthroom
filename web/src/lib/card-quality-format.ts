@@ -1,5 +1,4 @@
 import { i18n } from "./i18n";
-import { statCount } from "./format";
 
 /*
  * 卡片品質信號的數字怎麼寫（設計定稿 ui.md「字數一律取整」，owner 2026-11-28）。
@@ -23,13 +22,7 @@ export function qualityCharacters(rounded: number): string {
   return t(huge ? "quality.chars.huge" : "quality.chars.large", { n: number(value, value < 10 ? 1 : 0) });
 }
 
-/** 「164/200」：分子分母未滿一萬寫全數加千分位，一萬以上縮寫（跟主頁人數同一套寫法）。 */
-export function qualityRatio(reached: number, players: number): string {
-  return `${statCount(reached)}/${statCount(players)}`;
-}
-
-export function qualityPercent(reached: number, players: number): string {
-  if (players <= 0) return "";
-  // 無條件捨去：199/200 寫 99%，不讓沒聊滿的人被四捨五入成「全部都聊滿」
-  return new Intl.NumberFormat(locale(), { style: "percent", maximumFractionDigits: 0 }).format(Math.floor((reached * 100) / players) / 100);
+/** 續玩率：伺服器給 0–100 的整數（已無條件捨去），這裡只照語言寫成百分比（82%）。 */
+export function qualityRate(rate: number): string {
+  return new Intl.NumberFormat(locale(), { style: "percent", maximumFractionDigits: 0 }).format(rate / 100);
 }

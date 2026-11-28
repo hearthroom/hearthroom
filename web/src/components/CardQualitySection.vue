@@ -10,7 +10,7 @@ import CardQualityData from "./CardQualityData.vue";
 import { ApiError } from "@/lib/api";
 import { loadCardQuality } from "@/lib/card-preview";
 import { useCardQualityCapability } from "@/lib/card-quality-capability";
-import { qualityCharacters, qualityPercent } from "@/lib/card-quality-format";
+import { qualityCharacters, qualityRate } from "@/lib/card-quality-format";
 import type { CommunityCard } from "@/lib/types";
 import type { CardQualityDetail } from "../../../shared/card-quality";
 
@@ -53,7 +53,7 @@ const summary = computed(() => {
   const deep = detail.value ? detail.value.deepPlay : props.card.qualitySignal?.deepPlay ?? null;
   const total = detail.value ? detail.value.length?.total ?? null : props.card.qualitySignal?.lengthCharacters ?? null;
   const parts: string[] = [];
-  if (deep) parts.push(`${t("quality.retention.label")} ${qualityPercent(deep.reached, deep.players)}`);
+  if (deep) parts.push(`${t("quality.retention.label")} ${qualityRate(deep.rate)}`);
   if (typeof total === "number") parts.push(`${t("quality.tile.length")} ${qualityCharacters(total)}`);
   return parts.join(t("quality.summarySep"));
 });
