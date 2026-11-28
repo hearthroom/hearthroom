@@ -2759,5 +2759,6 @@
   "db0b8e5d702e8": "Opening page HTML, at most 100000000 UTF-8 bytes (100 MB) (`validate_reject` reason `openingPage`). Same keep and clear rules as `AuthorAssetSaveRequest.openingPage`. The whole trial body is limited to 48 MiB; push a larger page afterwards with `PUT /open/v1/role/{roleId}/opening-page`.",
   "2530978c25cae": "Read card statistics",
   "2571eff8cdf40": "Uses the card visibility and adult-content permissions. Returns rounded character counts for the approved version, presentation counts, and public player statistics. Deep play is hidden below 20 qualified players. Rating is hidden below 5 ratings.",
-  "d53c1816e6b14": "Zero characters means fewer than 1,000. A null value means the statistic is unavailable."
+  "d53c1816e6b14": "Zero characters means fewer than 1,000. A null value means the statistic is unavailable.",
+  "d76adf6f95c25": "Retention rate as a whole percentage, rounded down."
 }
