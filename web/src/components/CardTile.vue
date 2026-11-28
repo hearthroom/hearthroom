@@ -4,7 +4,7 @@ import CommunityName from "@/components/CommunityName.vue";
 import { computed, ref, watch, nextTick, onMounted, onBeforeUnmount } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink } from "vue-router";
-import { compact, compactTile, hueFrom, relativeTime } from "@/lib/format";
+import { compact, compactTile, hueFrom, relativeTime, relativeTimeShort } from "@/lib/format";
 import { zoneLabel } from "@/lib/i18n";
 import { titleLayout } from "@/lib/title-layout";
 import { useLocalePath } from "@/lib/use-locale";
@@ -184,7 +184,7 @@ const adultLabel = computed(() => ratingName("R", String(locale.value)));
           <circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.3" />
           <path d="M8 4.8V8l2.2 1.4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
-        <time :datetime="new Date(shownAt).toISOString()" aria-hidden="true">{{ relativeTime(shownAt) }}</time>
+        <time :datetime="new Date(shownAt).toISOString()" aria-hidden="true"><span class="card__time-full">{{ relativeTime(shownAt) }}</span><span v-if="quality" class="card__time-short">{{ relativeTimeShort(shownAt) }}</span></time>
       </span>
       <!-- 預覽鈕：半透明深色玻璃配白色面板輪廓（不用眼睛，眼睛是「顯示敏感封面」）；點擊區用偽元素擴到 44 -->
       <button v-if="canPreview" type="button" class="card__preview" :aria-label="t('quality.preview', { name })" aria-haspopup="dialog" :aria-expanded="previewOpen" @click.stop.prevent="openPreview">
@@ -337,10 +337,13 @@ const adultLabel = computed(() => ratingName("R", String(locale.value)));
  * 品質信號版的底列：時間 → 精選 → 預覽鈕（靠右）。精選放在一格會換行的槽裡，前面墊一個零寬的項目：
  * 整個標放得下就留在第一行，放不下就掉到第二行被裁掉（不截成「精…」，PM 2026-11-28 裁定）。
  */
-/* 時間平常不縮；超過一年的日期（「2025年10月4日」）在 135 寬封面上會把預覽鈕擠出去，這時才讓日期字省略，完整說法留在提示與讀屏 */
-.card__corner--quality .card__updated { order: 0; margin-left: 0; flex: 0 1 auto; min-width: 0; }
-.card__corner--quality .card__updated time { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.card__corner--quality .card__updated svg { flex: none; }
+.card__corner--quality .card__updated { order: 0; margin-left: 0; }
+/* 最窄的封面（約 135 寬）放不下「2025年10月4日」加預覽鈕：改寫短格式，一年以上只到年份（PM 2026-11-28），不省略字 */
+.card__time-short { display: none; }
+@container (max-width: 150px) {
+  .card__corner--quality .card__time-full { display: none; }
+  .card__corner--quality .card__time-short { display: inline; }
+}
 .card__corner--quality .card__feat-slot { order: 1; flex: 1 1 0; flex-wrap: wrap; align-items: center; height: 20px; overflow: hidden; }
 .card__corner--quality .card__feat-slot::before { content: ""; width: 0; height: 20px; }
 .card__corner--quality .card__featured { flex: none; overflow: visible; text-overflow: clip; }

@@ -2378,9 +2378,10 @@ async function exportCard(format: "png" | "json") {
               {{ reviewCount.eligible ? $t("reviewLength.eligible") : $t("reviewLength.remaining", reviewCount.n) }}
             </span>
           </template>
+          <!-- 列表上的篇幅：同一列元件，緊接在送審字數後面另起一行（PM 2026-11-28） -->
           <template v-if="listedLength && reviewCount">
-            <span class="topbar__sep" aria-hidden="true">·</span>
-            <span class="topbar__listed" :title="$t('quality.lengthNote')">{{ $t("quality.editor.label") }} {{ listedLength }}</span>
+            <span class="topbar__break" aria-hidden="true" />
+            <span class="topbar__listed" :title="$t('quality.lengthNote')">{{ $t("quality.editor.label") }} <span class="topbar__total">{{ listedLength }}</span></span>
           </template>
         </div>
       </div>
@@ -2414,9 +2415,10 @@ async function exportCard(format: "png" | "json") {
                 {{ reviewCount.eligible ? $t("reviewLength.eligible") : $t("reviewLength.remaining", reviewCount.n) }}
               </span>
             </template>
+            <!-- 列表上的篇幅：同一列元件，緊接在送審字數後面另起一行（PM 2026-11-28） -->
             <template v-if="listedLength && reviewCount">
-              <span class="topbar__sep" aria-hidden="true">·</span>
-              <span class="topbar__listed" :title="$t('quality.lengthNote')">{{ $t("quality.editor.label") }} {{ listedLength }}</span>
+              <span class="topbar__break" aria-hidden="true" />
+              <span class="topbar__listed" :title="$t('quality.lengthNote')">{{ $t("quality.editor.label") }} <span class="topbar__total">{{ listedLength }}</span></span>
             </template>
           </div>
         </template>
@@ -3059,6 +3061,7 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
   font-size: 13px; line-height: 1.4; color: var(--text-2); font-variant-numeric: tabular-nums;
 }
 .topbar__total { color: var(--text); font-weight: 600; }
+.topbar__break { flex-basis: 100%; height: 0; }
 .topbar__sep { color: var(--text-3); }
 .topbar__state { color: var(--warning-text); font-weight: 600; }
 .topbar__state.is-met { color: var(--text); }
