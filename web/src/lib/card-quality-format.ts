@@ -30,5 +30,6 @@ export function qualityRatio(reached: number, players: number): string {
 
 export function qualityPercent(reached: number, players: number): string {
   if (players <= 0) return "";
-  return new Intl.NumberFormat(locale(), { style: "percent", maximumFractionDigits: 0 }).format(reached / players);
+  // 無條件捨去：199/200 寫 99%，不讓沒聊滿的人被四捨五入成「全部都聊滿」
+  return new Intl.NumberFormat(locale(), { style: "percent", maximumFractionDigits: 0 }).format(Math.floor((reached * 100) / players) / 100);
 }
