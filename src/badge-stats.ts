@@ -73,11 +73,34 @@ export async function runSelfRefresh(env:Env,member:string,claim:SelfRefresh,now
 export async function badgeStatsMaintenance(env:Env,now=Date.now()):Promise<void>{
  // 全服唯一：每一拍都看一次確認期過了沒（只讀已存的越線時間，不打 Harbor）
  await awardFirstBadges(env,STAT_FIRST_BADGES,now).catch(async()=>{await bumpOp(env.DB,'badge_stats','first','error');});
- const rows=(await env.DB.prepare(`SELECT member_id,account_no FROM (SELECT m.id AS member_id,CAST(i.external_id AS INTEGER) AS account_no,
- ROW_NUMBER() OVER(PARTITION BY m.id ORDER BY i.linked_at DESC,i.external_id) AS n,r.attempted_at
- FROM member_identities i LEFT JOIN member_connections c ON c.provider=i.provider AND c.external_id=i.external_id JOIN members m ON m.id=COALESCE(c.owner_member_id,i.member_id)
- LEFT JOIN badge_qualification_refresh r ON r.member_id=m.id WHERE i.provider='harbor' AND m.account_class='normal'
- AND NOT EXISTS(SELECT 1 FROM legacy_account_fence f WHERE f.member_id=m.id)) WHERE n=1 ORDER BY attempted_at IS NOT NULL,attempted_at,member_id LIMIT 8`).all<{member_id:string;account_no:number}>()).results;
+ // Order the narrow member queue first. LIMIT -1 keeps it separate so SQLite
+ // can stop resolving Harbor accounts as soon as eight eligible owners pass.
+ const rows=(await env.DB.prepare(`
+  SELECT member_id, account_no FROM (
+    SELECT q.member_id, q.attempted_at, CAST((
+      SELECT i.external_id
+      FROM member_identities i
+      WHERE i.provider='harbor' AND i.external_id IN (
+        (SELECT c.external_id FROM member_connections c WHERE c.owner_member_id=q.member_id AND c.provider='harbor'),
+        (SELECT own.external_id FROM member_identities own
+         WHERE own.member_id=q.member_id AND own.provider='harbor'
+           AND NOT EXISTS (
+             SELECT 1 FROM member_connections c
+             WHERE c.provider='harbor' AND c.external_id=own.external_id AND c.owner_member_id<>q.member_id
+           ))
+      )
+      ORDER BY i.linked_at DESC, i.external_id LIMIT 1
+    ) AS INTEGER) AS account_no
+    FROM (
+      SELECT m.id AS member_id, r.attempted_at
+      FROM members m LEFT JOIN badge_qualification_refresh r ON r.member_id=m.id
+      WHERE m.account_class='normal'
+        AND NOT EXISTS (SELECT 1 FROM legacy_account_fence f WHERE f.member_id=m.id)
+      ORDER BY r.attempted_at, m.id LIMIT -1
+    ) q
+    WHERE account_no IS NOT NULL LIMIT 8
+  ) ORDER BY attempted_at, member_id
+ `).all<{member_id:string;account_no:number}>()).results;
  if(!rows.length)return;const receipt=crypto.randomUUID();
  await env.DB.batch(rows.map(r=>env.DB.prepare('INSERT INTO badge_qualification_refresh(member_id,receipt,attempted_at) VALUES(?,?,?) ON CONFLICT(member_id) DO UPDATE SET receipt=excluded.receipt,attempted_at=excluded.attempted_at').bind(r.member_id,receipt,now)));
  try{const values=await badgeStatsTransport.read(env,rows.map(r=>r.account_no));let applied=0;

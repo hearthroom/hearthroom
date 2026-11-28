@@ -37,3 +37,51 @@ it('updates complete invitation totals while incomplete currency totals preserve
  expect(wall.items.find(b=>b.key==='spend_2')?.state).toBe('earned');
  expect(await env.DB.prepare('SELECT net_topup_usd_micros FROM badge_qualifications WHERE member_id=?').bind(member).first('net_topup_usd_micros')).toBe(50000000);
 });
+
+it('refreshes the next eight eligible owners in attempt order with a bounded identity lookup cost', async () => {
+  await env.DB.batch([
+    env.DB.prepare(`WITH RECURSIVE n(x) AS (VALUES(0) UNION ALL SELECT x+1 FROM n WHERE x<1199)
+      INSERT INTO members(id,handle,created_at,account_class)
+      SELECT printf('badge-%04d',x),printf('badge-%04d',x),1,CASE x WHEN 0 THEN 'test' ELSE 'normal' END FROM n`),
+    env.DB.prepare(`INSERT INTO member_identities(provider,external_id,member_id,linked_at)
+      SELECT 'harbor',CAST(10000+CAST(substr(id,7) AS INTEGER) AS TEXT),id,
+        CASE id WHEN 'badge-0008' THEN 2 ELSE 1 END
+      FROM members WHERE id GLOB 'badge-*' AND id NOT IN ('badge-0002','badge-0005')`),
+    env.DB.prepare(`INSERT INTO member_connections(provider,external_id,owner_member_id,linked_at) VALUES
+      ('harbor','10003','badge-0004',1),('harbor','10006','badge-0005',1),('harbor','10008','badge-0007',1)`),
+    env.DB.prepare(`INSERT INTO legacy_account_fence(public_no,member_id,request_id,created_at)
+      VALUES(279,'badge-0001','badge-refresh-fixture',1)`),
+    env.DB.prepare(`INSERT INTO badge_qualification_refresh(member_id,receipt,attempted_at)
+      SELECT id,'previous',CASE WHEN id<'badge-0014' THEN 10 ELSE 20 END
+      FROM members WHERE id GLOB 'badge-*' AND id>='badge-0010'`),
+    env.DB.prepare('INSERT INTO badge_qualification_refresh(member_id,receipt,attempted_at) VALUES(?,?,?)')
+      .bind(member, 'previous', 200),
+  ]);
+  const requested: number[][] = [];
+  badgeStatsTransport.read = async (_env, accountNos) => {
+    requested.push(accountNos);
+    return [];
+  };
+  const candidateReads: number[] = [];
+  const db = new Proxy(env.DB, {
+    get(target, key) {
+      if (key === 'prepare') return (sql: string) => {
+        const statement = target.prepare(sql);
+        if (!/^\s*(SELECT|WITH)\b/i.test(sql) || !sql.includes('badge_qualification_refresh')) return statement;
+        return { all: async () => {
+          const result = await statement.all();
+          candidateReads.push(result.meta.rows_read);
+          return result;
+        } };
+      };
+      const value = Reflect.get(target, key);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+  await badgeStatsMaintenance({ ...env, DB: db }, 1000);
+  expect(requested).toEqual([[10003, 10006, 10008, 10009, 10010, 10011, 10012, 10013]]);
+  expect(candidateReads).toHaveLength(1);
+  expect(candidateReads[0]).toBeGreaterThan(0);
+  console.info('Scheduled badge refresh candidate rows read:', candidateReads[0]);
+  expect(candidateReads[0]).toBeLessThan(5000);
+});
