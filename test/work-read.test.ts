@@ -176,11 +176,45 @@ it.each(['/v1/tags','/v1/tags/counts','/v1/authors','/v1/fandoms','/v1/suggest?q
  expect(response.status).toBe(503);expect(await response.text()).not.toContain('Stale managed work');
 });
 
-it('revalidates cached tag counts on every request',async()=>{
- const path='/v1/tags/counts';
- await managedFixture();const {current,network}=providerFixture('public');
- expect((await request(path)).status).toBe(200);current.access='private';
- const response=await request(path);expect(response.status).toBe(503);expect(network).toHaveBeenCalledTimes(2);
+it('reuses the zoned proof for tag counts only during its 30 second lifetime',async()=>{
+ const origin='https://counts-proof.test';
+ const path=origin+'/v1/tags/counts?zone=zh';
+ await managedFixture();
+ const {current,network}=providerFixture('public');
+ const startedAt=Date.now();
+ const now=vi.spyOn(Date,'now').mockReturnValue(startedAt);
+ const cold=await request(path);
+ expect(cold.status).toBe(200);
+ expect((await request(origin+'/v1/tags?zone=zh')).status).toBe(200);
+ current.access='private';
+ now.mockReturnValue(startedAt+29_000);
+ const warm=await request(path);
+ expect(warm.status).toBe(200);
+ expect(await warm.json()).toEqual(await cold.json());
+ expect(network).toHaveBeenCalledTimes(1);
+ now.mockReturnValue(startedAt+30_000);
+ const expired=await request(path);
+ expect(expired.status).toBe(503);
+ expect(await expired.json()).toEqual({error:'visibility_sync_pending'});
+ expect(network).toHaveBeenCalledTimes(2);
+});
+
+it('joins concurrent misses for tag counts and top tags',async()=>{
+ await managedFixture();
+ const {network}=providerFixture('public');
+ const read=network.getMockImplementation()!;
+ network.mockImplementation(async(input,init)=>{
+  await new Promise(resolve=>setTimeout(resolve,30));
+  return read(input,init);
+ });
+ const origin='https://aggregate-concurrent.test';
+ const results=await Promise.all([
+  request(origin+'/v1/tags/counts?zone=zh'),
+  request(origin+'/v1/tags?zone=zh'),
+  request(origin+'/v1/tags/counts?zone=zh&tag=story'),
+ ]);
+ expect(results.map(response=>response.status)).toEqual([200,200,200]);
+ expect(network).toHaveBeenCalledTimes(1);
 });
 
 it.each(['/v1/tags','/v1/authors','/v1/fandoms','/v1/suggest?q=Stale'])('avoids the global proof scan on a warm %s request',async path=>{
@@ -225,6 +259,17 @@ it('invalidates warm aggregate results immediately when local visibility changes
  expect(network).toHaveBeenCalledTimes(1);
 });
 
+it('invalidates warm tag counts immediately when the local visibility revision changes',async()=>{
+ await aggregateFixture(1);
+ providerFixture('public');
+ const path='https://counts-revision.test/v1/tags/counts?zone=zh';
+ expect(await (await request(path)).json()).toMatchObject({counts:{story:1},ratings:{none:1}});
+ await env.DB.prepare("UPDATE managed_work_access SET access='private'").run();
+ const response=await request(path);
+ expect(response.status).toBe(200);
+ expect(await response.json()).toMatchObject({counts:{story:0},ratings:{none:0}});
+});
+
 // Real D1 contributors span multiple policy batches; the Provider mock remains
 // bounded and returns the current authority for every requested identity.
 async function aggregateFixture(size:number){
@@ -243,7 +288,7 @@ async function aggregateFixture(size:number){
   SELECT 'aggregate-work-'||id,'harbor',source_role_id,'public',1,'none',source_role_id FROM cards`).run();
 }
 
-it('counts all contributors beyond two full visibility batches and revalidates a warm cache',async()=>{
+it('counts all contributors beyond two full visibility batches and reuses a warm proof',async()=>{
  await aggregateFixture(401);const {network}=providerFixture('public');
  for(let repeat=0;repeat<2;repeat++){
   const response=await request('/v1/tags/counts?zone=zh');
@@ -252,9 +297,9 @@ it('counts all contributors beyond two full visibility batches and revalidates a
   expect(await response.json()).toMatchObject({counts:{story:401},ratings:{none:401}});
  }
  const batches=network.mock.calls.map(([,init])=>JSON.parse(String(init?.body)).items);
- expect(batches.map(batch=>batch.length)).toEqual([200,200,1,200,200,1]);
- for(const start of [0,3])expect(new Set(batches.slice(start,start+3).flat().map(item=>item.sourceRoleId)).size).toBe(401);
- expect(await opsMetrics(env.DB)).toContain('hearthroom_visibility_reads_total{surface="aggregate",outcome="allow"} 6');
+ expect(batches.map(batch=>batch.length)).toEqual([200,200,1]);
+ expect(new Set(batches.flat().map(item=>item.sourceRoleId)).size).toBe(401);
+ expect(await opsMetrics(env.DB)).toContain('hearthroom_visibility_reads_total{surface="aggregate",outcome="allow"} 3');
 });
 
 it.each(['/v1/tags','/v1/authors','/v1/fandoms','/v1/suggest?q=Aggregate'])('proves every batch for shared aggregate %s',async path=>{

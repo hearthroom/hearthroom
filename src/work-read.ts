@@ -1,3 +1,5 @@
+/// <reference lib="es2024.promise" />
+
 import {excludedAuthorKeys,testCardIdsForRows} from './test-accounts';
 import type {CardRow} from './cards';
 import {apiBaseOf} from './providers';
@@ -158,6 +160,7 @@ export async function provePublicAggregates(env:Env,zone?:string):Promise<void>{
 }
 
 const AGGREGATE_PROOF_MS = 30_000;
+const aggregateProofsInFlight = new Map<string, Promise<number>>();
 
 /** A successful catalog proof can be shared by the aggregate routes in one zone. */
 export async function proveCachedPublicAggregates(
@@ -176,20 +179,42 @@ export async function proveCachedPublicAggregates(
   if(Number.isSafeInteger(expiresAt)&&expiresAt>now&&expiresAt<=now+AGGREGATE_PROOF_MS)return {expiresAt,hit:true};
  }catch{console.warn('Public aggregate proof cache read unavailable');}
 
+ // Only the initiating request performs I/O. Other requests in the same
+ // isolate receive the expiry of that proof, never a cached failure.
+ const proofKey = key.url;
+ const pending = aggregateProofsInFlight.get(proofKey);
+ if(pending){
+  const expiresAt=await pending;
+  if(expiresAt<=Date.now())throw new HttpError(503,'visibility_provider_unavailable');
+  return {expiresAt,hit:true};
+ }
+
  // Expiration starts before the first authority batch. A slow or out-of-order
  // cache write cannot extend the life of permissions that were checked earlier.
  const expiresAt=Date.now()+AGGREGATE_PROOF_MS;
- await provePublicAggregates(env,zone);
- const remaining=expiresAt-Date.now();
- if(remaining<=0)throw new HttpError(503,'visibility_provider_unavailable');
- if(cache&&remaining>=1000){
-  const entry=new Response(null,{headers:{
-   'Cache-Control':`public, max-age=${Math.floor(remaining/1000)}`,
-   'X-Proof-Expires-At':String(expiresAt),
-  }});
-  ctx.waitUntil(cache.put(key,entry).catch(()=>{console.warn('Public aggregate proof cache write unavailable');}));
- }
- return {expiresAt,hit:false};
+ // Use a native settlement gate for cross-request waiters. The producer's
+ // D1 and Cache API operations stay in its own Worker request context.
+ const gate=Promise.withResolvers<number>();
+ aggregateProofsInFlight.set(proofKey,gate.promise);
+ ctx.waitUntil((async()=>{
+  try{
+   await provePublicAggregates(env,zone);
+   if(expiresAt<=Date.now())throw new HttpError(503,'visibility_provider_unavailable');
+   gate.resolve(expiresAt);
+   const remaining=expiresAt-Date.now();
+   if(!cache||remaining<1000)return;
+   const entry=new Response(null,{headers:{
+    'Cache-Control':`public, max-age=${Math.floor(remaining/1000)}`,
+    'X-Proof-Expires-At':String(expiresAt),
+   }});
+   await cache.put(key,entry).catch(()=>{console.warn('Public aggregate proof cache write unavailable');});
+  }catch(err){
+   gate.reject(err);
+  }finally{
+   aggregateProofsInFlight.delete(proofKey);
+  }
+ })());
+ return {expiresAt:await gate.promise,hit:false};
 }
 
 export interface CurrentCardAccess {

@@ -641,18 +641,20 @@ app.get("/v1/cards", async (c) => {
  * （看的人開沒開成人內容分開放，審核一動就換一份）。
  */
 app.get("/v1/tags/counts", async (c) => {
-  await provePublicAggregates(c.env,parseZone(c.req.query('zone')));
+  const zone = parseZone(c.req.query("zone"));
   const [allowNsfw, moderation] = await Promise.all([viewerAllowsNsfw(c), moderationRevision(c)]);
+  const proofStarted = performance.now();
+  const proof = await proveCachedPublicAggregates(c.env, c.executionCtx, c.req.url, zone, moderation.revision);
+  const timing = `${moderation.timing}, aggregate-proof;desc="${proof.hit ? "hit" : "miss"}";dur=${(performance.now() - proofStarted).toFixed(1)}`;
   const key = await boardKey(c.req.url, moderation.revision, allowNsfw);
   const hit = await readBoardCache(c.env, c.executionCtx, key);
-  if (hit) return boardResponse(hit.body, allowNsfw, hit.layer, moderation.timing);
-  const filters = tagFilters(c);
-  if (!filters) return c.json({ error: "too_many_tags" }, 400);
-  const scope = { zone: parseZone(c.req.query("zone")), ...filters, allowNsfw, maxRating: maxRatingOf(c) };
-  const { counts, ratings } = await catalogAndRatingCounts(c.env.DB, scope);
-  const body = JSON.stringify({ counts, ratings });
-  writeBoardCache(c.env, c.executionCtx, key, body);
-  return boardResponse(body, allowNsfw, "origin", moderation.timing);
+  const filters = hit ? undefined : tagFilters(c);
+  if (filters === null) return c.json({ error: "too_many_tags" }, 400);
+  const scope = { zone, ...filters, allowNsfw, maxRating: maxRatingOf(c) };
+  const body = hit?.body ?? JSON.stringify(await catalogAndRatingCounts(c.env.DB, scope));
+  if (proof.expiresAt <= Date.now()) throw new HttpError(503, "visibility_provider_unavailable");
+  if (!hit) writeBoardCache(c.env, c.executionCtx, key, body);
+  return boardResponse(body, allowNsfw, hit?.layer ?? "origin", timing);
 });
 
 /** 平台預設分類與玩法固定目錄（四組＋五語顯示名）：公開上架至少需命中其中一項的顯示名。 */

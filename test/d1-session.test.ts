@@ -23,7 +23,7 @@ it('reads follow visibility at the primary so a newly hidden count or list reach
 it('reads the current visibility revision at the primary for proof-cached aggregate routes',()=>{
   for (const path of ['/v1/tags','/v1/fandoms','/v1/authors','/v1/suggest'])
     expect(startsAtPrimary('GET',path)).toBe(true);
-  expect(startsAtPrimary('GET','/v1/tags/counts')).toBe(false);
+  expect(startsAtPrimary('GET','/v1/tags/counts')).toBe(true);
 });
 
 function recorder(){

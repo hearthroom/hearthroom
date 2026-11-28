@@ -32,7 +32,7 @@ const READ_MOSTLY_POSTS = new Set(["/v1/auth/session", "/v1/auth/token"]);
 // Author CAS and an operation's absence must not be inferred from a lagging replica.
 // Operation recovery may also finalize a previously accepted command in D1.
 const AUTHOR_VISIBILITY = /^\/v1\/me\/cards\/[^/]+\/(?:visibility(?:\/operations\/[^/]+)?|publication\/operations\/[^/]+)$/;
-const PUBLIC_AGGREGATE_PATHS = new Set(["/v1/tags", "/v1/fandoms", "/v1/authors", "/v1/suggest"]);
+const PUBLIC_AGGREGATE_PATHS = new Set(["/v1/tags", "/v1/tags/counts", "/v1/fandoms", "/v1/authors", "/v1/suggest"]);
 
 export const isPublicAggregatePath = (pathname: string): boolean => PUBLIC_AGGREGATE_PATHS.has(pathname);
 
