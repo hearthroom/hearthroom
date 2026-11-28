@@ -28,3 +28,13 @@ it("keeps small ratios exact and abbreviates five-digit player counts", () => {
   expect(qualityPercent(199, 200)).toBe("99%");
   expect(qualityPercent(0, 0)).toBe("");
 });
+
+it("writes the short cover date: year only after a year, narrow relative time before", async () => {
+  const { relativeTimeShort } = await import("../src/lib/format");
+  const day = 86_400_000, old = Date.now() - 420 * day, year = String(new Date(old).getFullYear());
+  for (const [code, yearText, months] of [["zh-Hant", `${year}年`, "11 個月前"], ["en", year, "11mo ago"], ["ko", `${year}년`, "11개월 전"]] as const) {
+    await loadLocale(code); at(code);
+    expect(relativeTimeShort(old), code).toBe(yearText);
+    expect(relativeTimeShort(Date.now() - 330 * day), code).toBe(months);
+  }
+});
