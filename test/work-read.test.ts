@@ -3,7 +3,7 @@ import {createExecutionContext,env,waitOnExecutionContext} from 'cloudflare:test
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import worker,{iconCache} from '../src/index';
 import {getCard,upsertCard} from '../src/cards';
-import {identitiesFor,makeMember,recordD1,resetDb,restoreUpstream,role} from './helpers';
+import {identitiesFor,makeMember,recordD1,resetDb,restoreUpstream,role,testHandle} from './helpers';
 import {upstream} from '../src/upstream';
 import {ADULT_CONSENT_VERSION} from '../shared/adult-consent';
 import {signShortcutKey} from '../src/shortcut';
@@ -11,6 +11,7 @@ import {opsMetrics} from '../src/ops-metrics';
 import {workPolicyGateway} from '../src/work-policy';
 import {hostGateway} from '../src/hosting';
 import {HttpError} from '../src/types';
+import {authorLine} from '../src/head';
 
 beforeEach(async () => { await resetDb(); vi.spyOn(scoreGateway, 'read').mockResolvedValue({ eligible: true, turns: 6, credits: '0', requiredTurns: 6, paidTurns: 3, requiredCredits: '500' }); });
 afterEach(()=>{vi.restoreAllMocks();restoreUpstream();});
@@ -416,6 +417,53 @@ it.each(['manifest.webmanifest','icon-192.png','touch-icon.png','platforms'])('c
  const {source}=await managedFixture();providerFixture('private');
  const response=await request(`/v1/cards/${source}/${file}`);
  expect(response.status).toBe(404);expect(await response.text()).not.toContain('Stale managed work');
+});
+
+it('shares the full-catalog proof across author HTML and cold aggregate response keys',async()=>{
+ await managedFixture();
+ const {current,network}=providerFixture('public');
+ const origin='https://author-proof.test';
+ const handle=testHandle(11);
+ const startedAt=Date.now();
+ const now=vi.spyOn(Date,'now').mockReturnValue(startedAt);
+ const first=await request(origin+'/authors/'+handle);
+ expect(first.status).toBe(200);
+ expect(await first.text()).toContain('property="og:title"');
+ const responses=[];
+ for(const path of ['/en/authors/'+handle,'/v1/fandoms?zone=all&q=First','/v1/suggest?zone=all&q=Second']){
+  responses.push(await request(origin+path));
+ }
+ expect(responses.map(response=>response.status)).toEqual([200,200,200]);
+ expect(network).toHaveBeenCalledTimes(1);
+ for(const response of responses){
+  expect(response.headers.get('Server-Timing')).toContain('aggregate-proof;desc="hit"');
+ }
+ expect(first.headers.get('Cache-Control')).toBe('public, max-age=30, must-revalidate');
+ current.access='private';
+ now.mockReturnValue(startedAt+29_000);
+ const warm=await request(origin+'/authors/'+handle);
+ expect(warm.status).toBe(200);
+ expect(warm.headers.get('Cache-Control')).toBe('public, max-age=1, must-revalidate');
+ now.mockReturnValue(startedAt+30_000);
+ const expired=await request(origin+'/authors/'+handle);
+ expect(expired.status).toBe(503);
+ expect(await expired.json()).toEqual({error:'visibility_sync_pending'});
+ expect(network).toHaveBeenCalledTimes(2);
+});
+
+it('reads the new author HTML proof and counts after a local visibility change',async()=>{
+ const {work}=await managedFixture();
+ const {network}=providerFixture('public');
+ const path='https://author-proof-local-revision.test/authors/'+testHandle(11);
+ const first=await request(path);
+ expect(first.status).toBe(200);
+ expect(await first.text()).toContain(authorLine('zh-Hant',1,0));
+ await env.DB.prepare("UPDATE managed_work_access SET access='private' WHERE work_id=?").bind(work).run();
+ const next=await request(path);
+ expect(next.status).toBe(200);
+ expect(next.headers.get('Server-Timing')).toContain('aggregate-proof;desc="miss"');
+ expect(await next.text()).toContain(authorLine('zh-Hant',0,0));
+ expect(network).toHaveBeenCalledTimes(1);
 });
 
 it.each(['','en/','ja/'])('removes private card metadata from the %sHTML shell',async prefix=>{

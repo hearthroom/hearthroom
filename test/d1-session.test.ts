@@ -26,6 +26,13 @@ it('reads the current visibility revision at the primary for proof-cached aggreg
   expect(startsAtPrimary('GET','/v1/tags/counts')).toBe(true);
 });
 
+it('opens a primary session for author HTML across supported locales and trailing slashes',()=>{
+  for (const path of ['/authors/abcdefgh','/zh-Hans/authors/abcdefgh','/en/authors/abcdefgh/','/ja/authors/abcdefgh','/ko/authors/abcdefgh'])
+    expect(startsAtPrimary('GET',path)).toBe(true);
+  expect(startsAtPrimary('HEAD','/authors/abcdefgh')).toBe(true);
+  expect(startsAtPrimary('GET','/authors')).toBe(false);
+});
+
 function recorder(){
   const seen:string[]=[];
   const db={withSession(c:string){seen.push(c);return env.DB.withSession(c as any);}} as unknown as D1Database;

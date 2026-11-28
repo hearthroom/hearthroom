@@ -103,7 +103,7 @@ import { draftStateOf, loadMine, type MineFilter } from "./mine";
 import { PRESET_TAG_CATALOG, TAG_GROUPS, tagNamesFor } from "../shared/tag-catalog";
 import { bearerOf, blogWriterHint } from "./community-admin";
 import {reconcileWorkAccess} from './work-reconcile';
-import {filterPublicRows,currentCardAccess,unlistedCardRow,provePublicAggregates,proveCachedPublicAggregates,type VisibilityReadSurface} from './work-read';
+import {filterPublicRows,currentCardAccess,unlistedCardRow,proveCachedPublicAggregates,type VisibilityReadSurface} from './work-read';
 import { providerOf, requestIdentity, reviewerRole, isHumanReviewer, isReviewAgent, memberByHandle, memberNsfw, memberProfile, missingMemberStatements, requireMember, requireReviewer, resolveMember, updateMemberNsfw, viewerAllowsNsfw, memberHiddenTags, updateMemberHiddenTags } from "./members";
 import { followList, ownFollowVisibility, parseFollowVisibility, publicFollowStats, updateFollowVisibility } from "./follow-visibility";
 import { configuredProviders, hasChat, parseProvider, requireConfigured, DEFAULT_PROVIDER, PROVIDER_NAMES, type ProviderId, reviewEnabled } from "./providers";
@@ -2944,14 +2944,20 @@ app.get("*", async (c) => {
     res.headers.set("Cache-Control", access?.managed?'private, no-store':`public, max-age=${PAGE_TTL}`);
     return res;
   }
-  const memberId = await memberByHandle(c.env.DB, m[3]!);
-  await provePublicAggregates(c.env);
+  const [memberId, moderation] = await Promise.all([memberByHandle(c.env.DB, m[3]!), moderationRevision(c)]);
+  const proofStarted = performance.now();
+  const proof = await proveCachedPublicAggregates(c.env, c.executionCtx, c.req.url, undefined, moderation.revision);
+  const proofTiming = `aggregate-proof;desc="${proof.hit ? "hit" : "miss"}";dur=${(performance.now() - proofStarted).toFixed(1)}`;
   const author = memberId ? await getAuthor(c.env.DB, memberId) : null;
+  const remaining = proof.expiresAt - Date.now();
+  if (remaining <= 0) throw new HttpError(503, "visibility_provider_unavailable");
   if (!author) return new Response(shell.body, { status: 404, headers: shell.headers });
   const res = renderHead(shell, {
     lang: locale, title: `${author.author_name} · ${siteName(locale)}`, description: authorLine(locale, author.card_count, author.talk_total ?? 0), image: author.author_avatar || null, url: self, type: "profile",
   });
-  res.headers.set("Cache-Control", `public, max-age=${PAGE_TTL}`);
+  // An HTTP cache must not extend the visibility proof's lifetime.
+  res.headers.set("Cache-Control", `public, max-age=${Math.min(PAGE_TTL, Math.floor(remaining / 1000))}, must-revalidate`);
+  res.headers.set("Server-Timing", `${moderation.timing}, ${proofTiming}`);
   return res;
 });
 
