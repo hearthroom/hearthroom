@@ -109,7 +109,7 @@ import { bearerOf, blogWriterHint } from "./community-admin";
 import {reconcileWorkAccess} from './work-reconcile';
 import {workPolicyGateway} from "./work-policy";
 import {filterPublicRows,currentCardAccess,unlistedCardRow,type VisibilityReadSurface} from './work-read';
-import { getPublicAggregateProof } from './public-aggregate-proof';
+import { confirmPublicAggregateProof, getPublicAggregateProof } from './public-aggregate-proof';
 import { providerOf, requestIdentity, reviewerRole, isHumanReviewer, isReviewAgent, memberByHandle, memberNsfw, memberProfile, missingMemberStatements, requireMember, requireReviewer, resolveMember, updateMemberNsfw, viewerAllowsNsfw, memberHiddenTags, updateMemberHiddenTags } from "./members";
 import { followList, ownFollowVisibility, parseFollowVisibility, publicFollowStats, updateFollowVisibility } from "./follow-visibility";
 import { configuredProviders, hasChat, parseProvider, requireConfigured, DEFAULT_PROVIDER, PROVIDER_NAMES, type ProviderId, reviewEnabled } from "./providers";
@@ -483,14 +483,25 @@ async function withAggregateProof(
 ): Promise<Response> {
   const started = performance.now();
   const record = isPublicAggregatePath(c.req.path);
+  const startPrimarySession = () => {
+    if (c.env.freshAggregateDb) c.env = { ...c.env, DB: c.env.freshAggregateDb() };
+  };
   for (let attempt = 0; attempt < 2; attempt++) {
     if (record) note(c, { detail: attempt ? "aggregate_proof_recheck" : "aggregate_proof_unavailable" });
-    // Earlier middleware may have read D1 already. The guard and the response
-    // queries start a new session so they cannot use a pre-revision replica.
-    if (c.env.freshAggregateDb) c.env = { ...c.env, DB: c.env.freshAggregateDb() };
-    const proof = await getPublicAggregateProof(c.env, c.executionCtx, c.req.url, zone);
-    const timing = `aggregate-proof;desc="${proof.hit && !attempt ? "hit" : "miss"}";dur=${(performance.now() - started).toFixed(1)}`;
-    if (record && !attempt) note(c, { detail: proof.hit ? "aggregate_proof_hit" : "aggregate_proof_miss" });
+    // Earlier middleware may have read D1 already. Start the guard at primary.
+    startPrimarySession();
+    const current = await getPublicAggregateProof(c.env, c.executionCtx, c.req.url, zone);
+    let proof: { revision: number; expiresAt: number } = current;
+    if (!current.hit) {
+      // Moderation or another producer may have revoked the proof while this
+      // request waited. Anchor the response queries at the new primary read.
+      startPrimarySession();
+      const confirmed = await confirmPublicAggregateProof(c.env.DB, c.req.url, zone);
+      if (!confirmed) continue;
+      proof = confirmed;
+    }
+    const timing = `aggregate-proof;desc="${current.hit && !attempt ? "hit" : "miss"}";dur=${(performance.now() - started).toFixed(1)}`;
+    if (record && !attempt) note(c, { detail: current.hit ? "aggregate_proof_hit" : "aggregate_proof_miss" });
     const response = await respond(proof, timing);
     if (response && proof.expiresAt > Date.now()) return response;
     if (!attempt) c.executionCtx.waitUntil(bumpOp(c.env.DB, 'aggregate_proof', 'response', 'recheck'));

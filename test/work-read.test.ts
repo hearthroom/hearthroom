@@ -345,6 +345,70 @@ it('does not allocate separate durable proofs for arbitrary wildcard hostnames',
  expect(network).toHaveBeenCalledTimes(1);
 });
 
+it('replaces a stalled background producer after its lease ends',async()=>{
+ await aggregateFixture(1);
+ const {network}=providerFixture('public');
+ const origin='https://sukisuki.chat';
+ const path=origin+'/v1/tags/counts?zone=zh';
+ const startedAt=Date.now();
+ const now=vi.spyOn(Date,'now').mockReturnValue(startedAt);
+ expect((await request(path)).status).toBe(200);
+ const entered=Promise.withResolvers<void>();
+ const release=Promise.withResolvers<void>();
+ const provider=network.getMockImplementation()!;
+ network.mockImplementationOnce(async(input,init)=>{entered.resolve();await release.promise;return provider(input,init);});
+ now.mockReturnValue(startedAt+16_000);
+ const ctx=createExecutionContext();
+ const refresh=worker.fetch(new Request(path),{...env,HOSTING_SERVICE_KEY:'fixture-issuer'},ctx);
+ await entered.promise;
+ let stalled=false;
+ const watchdog=setTimeout(()=>{stalled=true;release.resolve();},750);
+ try{
+  expect((await refresh).status).toBe(200);
+  now.mockReturnValue(startedAt+35_000);
+  expect((await request(path)).status).toBe(200);
+  expect(stalled).toBe(false);
+  expect(network).toHaveBeenCalledTimes(3);
+ }finally{
+  clearTimeout(watchdog);
+  release.resolve();
+  await waitOnExecutionContext(ctx);
+ }
+});
+
+it('checks primary moderation again when a cold proof was published before a takedown',async()=>{
+ const {work}=await managedFixture();
+ providerFixture('public');
+ let removed=false;
+ const wrapStatement=(statement:D1PreparedStatement):D1PreparedStatement=>new Proxy(statement,{get(target,key){
+  if(key==='bind')return (...args:unknown[])=>wrapStatement(target.bind(...args));
+  if(key==='run')return async()=>{
+   const result=await target.run();
+   if(!removed){
+    removed=true;
+    await env.DB.prepare("UPDATE managed_work_access SET access='private' WHERE work_id=?").bind(work).run();
+   }
+   return result;
+  };
+  return Reflect.get(target,key);
+ }});
+ const wrapDb=<T extends D1Database|D1DatabaseSession>(db:T):T=>new Proxy(db,{get(target,key){
+  if(key==='withSession'&&'withSession' in target)return (constraint:string)=>wrapDb(target.withSession(constraint));
+  if(key==='prepare')return (sql:string)=>{
+   const statement=target.prepare(sql);
+   return sql.includes("UPDATE public_aggregate_proof SET expires_at=?,lease=''")?wrapStatement(statement):statement;
+  };
+  const value=Reflect.get(target,key);
+  return typeof value==='function'?value.bind(target):value;
+ }});
+ const response=await request('https://sukisuki.pro/v1/tags/counts?zone=zh',undefined,{},wrapDb(env.DB));
+ expect(removed).toBe(true);
+ expect(response.status).toBe(200);
+ expect(await response.json()).toMatchObject({ratings:{none:0}});
+ const proof=await env.DB.prepare('SELECT p.revision=m.revision AS current FROM public_aggregate_proof p CROSS JOIN moderation_clock m').first<number>('current');
+ expect(proof).toBe(1);
+});
+
 // Real D1 contributors span multiple policy batches; the Provider mock remains
 // bounded and returns the current authority for every requested identity.
 async function aggregateFixture(size:number){

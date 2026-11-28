@@ -7,9 +7,12 @@ import { siteRootOf } from '../shared/site-hosts';
 
 const PROOF_MS = 30_000;
 const REFRESH_BEFORE_MS = 15_000;
+// Leave headroom under the Worker's 30 s waitUntil lifetime.
+const BUILD_LEASE_MS = 18_000;
 const FAILURE_BACKOFF_MS = 2_000;
 type Context = Pick<ExecutionContext, 'waitUntil'>;
-type Proof = { revision: number; expiresAt: number; hit: boolean };
+type ProofWindow = { revision: number; expiresAt: number };
+type Pending = { promise: Promise<ProofWindow | null>; deadline: number };
 type SharedRow = {
   clock_revision: number;
   revision: number | null;
@@ -18,7 +21,7 @@ type SharedRow = {
   failure_code: string;
   failed_until: number;
 };
-const inFlight = new Map<string, Promise<Proof | null>>();
+const inFlight = new Map<string, Pending>();
 const unavailable = () => new HttpError(503, 'visibility_provider_unavailable');
 
 function valid(row: SharedRow, now: number): boolean {
@@ -41,16 +44,15 @@ function failureCode(error: unknown): string {
   return 'visibility_provider_unavailable';
 }
 
-async function buildProof(env: Env, scope: string, zone: string | undefined, initial: SharedRow, background: boolean): Promise<Proof | null> {
+async function buildProof(env: Env, ctx: Context, scope: string, zone: string | undefined, initial: SharedRow, background: boolean, deadline: number): Promise<ProofWindow | null> {
   const db = env.DB;
   const revision = initial.clock_revision;
   const replaceAt = background ? initial.expires_at : 0;
-  const deadline = performance.now() + PROOF_MS;
   let row = initial;
-  for (let delay = 100; performance.now() < deadline; delay = Math.min(delay * 2, 1500)) {
+  for (let delay = 100; Date.now() < deadline; delay = Math.min(delay * 2, 1500)) {
     const now = Date.now();
     if (row.clock_revision !== revision) throw unavailable();
-    if (valid(row, now) && row.expires_at > replaceAt) return { revision, expiresAt: row.expires_at, hit: true };
+    if (valid(row, now) && row.expires_at > replaceAt) return { revision, expiresAt: row.expires_at };
     if (row.revision === revision && row.failed_until > now) throw new HttpError(503, row.failure_code);
     if (row.revision !== revision || row.lease_until <= now) {
       const lease = crypto.randomUUID();
@@ -63,20 +65,20 @@ async function buildProof(env: Env, scope: string, zone: string | undefined, ini
           failure_code='',failed_until=0
         WHERE revision<excluded.revision
           OR (revision=excluded.revision AND lease_until<=? AND expires_at<=? AND failed_until<=?)
-        RETURNING 1 AS won`).bind(scope, revision, lease, expiresAt, revision, now, Math.max(now, replaceAt), now).first();
+        RETURNING 1 AS won`).bind(scope, revision, lease, deadline, revision, now, Math.max(now, replaceAt), now).first();
       if (claimed) {
         const operation = background ? 'refresh' : 'cold';
         try {
-          await provePublicAggregates(env, zone, expiresAt);
+          await provePublicAggregates(env, zone, deadline);
           const finished = Date.now();
-          if (finished >= expiresAt) throw unavailable();
+          if (finished >= deadline) throw unavailable();
           const saved = await db.prepare(`UPDATE public_aggregate_proof SET expires_at=?,lease='',lease_until=0
             WHERE scope=? AND revision=? AND lease=? AND lease_until>?
               AND EXISTS(SELECT 1 FROM moderation_clock WHERE id=1 AND revision=?)`)
             .bind(expiresAt, scope, revision, lease, finished, revision).run();
           if (!saved.meta.changes) throw unavailable();
-          await bumpOp(db, 'aggregate_proof', operation, 'success');
-          return { revision, expiresAt, hit: false };
+          ctx.waitUntil(bumpOp(db, 'aggregate_proof', operation, 'success'));
+          return { revision, expiresAt };
         } catch (error) {
           const code = failureCode(error);
           const denied = code === 'visibility_sync_pending';
@@ -84,59 +86,88 @@ async function buildProof(env: Env, scope: string, zone: string | undefined, ini
             expires_at=CASE WHEN ? THEN 0 ELSE expires_at END,failure_code=?,failed_until=?
             WHERE scope=? AND revision=? AND lease=?`)
             .bind(denied ? 1 : 0, code, Date.now() + FAILURE_BACKOFF_MS, scope, revision, lease).run().catch(() => {});
-          await bumpOp(db, 'aggregate_proof', operation, denied ? 'denied' : 'unavailable');
+          ctx.waitUntil(bumpOp(db, 'aggregate_proof', operation, denied ? 'denied' : 'unavailable'));
           throw new HttpError(503, code);
         }
       }
     }
     // Only an expired/cold request waits for another isolate's result.
     if (background) return null;
-    await new Promise(resolve => setTimeout(resolve, Math.min(delay, Math.max(0, deadline - performance.now()))));
+    await new Promise(resolve => setTimeout(resolve, Math.min(delay, Math.max(0, deadline - Date.now()))));
     row = await readProof(db, scope);
   }
   throw unavailable();
 }
 
-function startProof(env: Env, ctx: Context, scope: string, zone: string | undefined, row: SharedRow, key: string, background: boolean) {
+function activeProof(key: string): Pending | undefined {
+  const pending = inFlight.get(key);
+  if (pending && pending.deadline > Date.now()) return pending;
+  inFlight.delete(key);
+}
+
+async function waitForProof(pending: Pending): Promise<ProofWindow | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<null>(resolve => {
+    timer = setTimeout(() => resolve(null), Math.max(0, pending.deadline - Date.now()));
+  });
+  try {
+    return await Promise.race([pending.promise, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function startProof(env: Env, ctx: Context, scope: string, zone: string | undefined, row: SharedRow, key: string, background: boolean): Pending {
   // Cross-request waiters only share a native settlement gate. The producer's
   // D1 session and Provider fetches stay in its own execution context.
-  const gate = Promise.withResolvers<Proof | null>();
-  inFlight.set(key, gate.promise);
+  const gate = Promise.withResolvers<ProofWindow | null>();
+  const pending = { promise: gate.promise, deadline: Date.now() + BUILD_LEASE_MS };
+  inFlight.set(key, pending);
   ctx.waitUntil((async () => {
     try {
-      gate.resolve(await buildProof(env, scope, zone, row, background));
+      gate.resolve(await buildProof(env, ctx, scope, zone, row, background, pending.deadline));
     } catch (error) {
       gate.reject(error instanceof HttpError ? error : unavailable());
     } finally {
-      inFlight.delete(key);
+      if (inFlight.get(key) === pending) inFlight.delete(key);
     }
   })());
-  return gate.promise;
+  return pending;
 }
 
-export async function getPublicAggregateProof(env: Env, ctx: Context, requestUrl: string, zone?: string): Promise<Proof> {
+function scopeOf(requestUrl: string, zone: string | undefined): string {
   // Version the key so receipts from the retired shared implementation are ignored.
   // Wildcard worker routes must not let request hostnames allocate D1 rows.
   const site = siteRootOf(new URL(requestUrl).hostname) ?? 'other';
-  const scope = JSON.stringify(['v3', site, zone ?? 'all']);
+  return JSON.stringify(['v3', site, zone ?? 'all']);
+}
+
+/** Start in a fresh primary session after waiting for a cold or expired proof. */
+export async function confirmPublicAggregateProof(db: D1Database, requestUrl: string, zone?: string): Promise<ProofWindow | null> {
+  const row = await readProof(db, scopeOf(requestUrl, zone));
+  return valid(row, Date.now()) ? { revision: row.clock_revision, expiresAt: row.expires_at } : null;
+}
+
+export async function getPublicAggregateProof(env: Env, ctx: Context, requestUrl: string, zone?: string): Promise<ProofWindow & { hit: boolean }> {
+  const scope = scopeOf(requestUrl, zone);
   const row = await readProof(env.DB, scope);
   const key = JSON.stringify([scope, row.clock_revision]);
   const now = Date.now();
-  const pending = inFlight.get(key);
+  const pending = activeProof(key);
   if (valid(row, now)) {
     if (!pending && row.expires_at - now <= REFRESH_BEFORE_MS && row.lease_until <= now && row.failed_until <= now) {
-      ctx.waitUntil(startProof(env, ctx, scope, zone, row, key, true).catch(() => {}));
+      ctx.waitUntil(startProof(env, ctx, scope, zone, row, key, true).promise.catch(() => {}));
     }
     return { revision: row.clock_revision, expiresAt: row.expires_at, hit: true };
   }
-  let proof = await (pending ?? startProof(env, ctx, scope, zone, row, key, false));
+  let proof = await waitForProof(pending ?? startProof(env, ctx, scope, zone, row, key, false));
   if (!proof) {
-    // The local background refresh lost its lease race. Read the winner or
-    // wait for its result with the original request's bounded cold path.
+    // The producer lost the lease or stopped responding. Try the shared
+    // result or lease once more without awaiting the abandoned gate.
     const current = await readProof(env.DB, scope);
     const currentKey = JSON.stringify([scope, current.clock_revision]);
-    proof = await (inFlight.get(currentKey) ?? startProof(env, ctx, scope, zone, current, currentKey, false));
+    proof = await waitForProof(activeProof(currentKey) ?? startProof(env, ctx, scope, zone, current, currentKey, false));
   }
   if (!proof || proof.expiresAt <= Date.now()) throw unavailable();
-  return proof;
+  return { ...proof, hit: false };
 }
