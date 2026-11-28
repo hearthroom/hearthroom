@@ -6408,7 +6408,7 @@
   "quality.retention.label": "継続率",
   "quality.retention.help": "継続率の数え方",
   "quality.retention.explain": "会話を始めた対象プレイヤーのうち、{n}ターン以上遊んだ人の割合です。",
-  "quality.retention.rules": "対象プレイヤーには作者本人を含めず、同じ端末の複数アカウントは1人として数え、ほかの作者のカードを遊んだことがある人に限ります。再生成した返信はターンに数えません。",
+  "quality.retention.rules": "対象は、ほかの作者のカードを遊んだことがあるプレイヤーです。作者本人と措置を受けたアカウントを除き、同じ端末の複数アカウントは1人として数えます。プレイヤーが送信して完了したターンのみが対象で、返信の再生成は含めません。",
   "quality.preview": "「{name}」をプレビュー",
   "quality.close": "プレビューを閉じる",
   "quality.enter": "カードを開く",
