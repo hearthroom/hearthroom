@@ -112,6 +112,13 @@ it.each([
   }
 });
 
+it.each(['GET', 'HEAD'])('serves the Date A Live thread update short link for %s', async method => {
+  const response = await visit('/go/bh-dal-f2?ref=OVERRIDE&utm_source=override&utm_medium=override&utm_campaign=other', method);
+  expect(response.status).toBe(302);
+  expect(response.headers.get('location')).toBe('/cards/100194?ref=94A9H94Z&utm_source=bahamut&utm_medium=forum&utm_campaign=bh-44201-dal-shiori-f2-20261128');
+  expect(response.headers.get('cache-control')).toBe('no-store');
+});
+
 it.each([
   ['bh-hut-dal', 'bahamut', 'cabin'],
   ['vc-dal', 'vocus', 'blog'],

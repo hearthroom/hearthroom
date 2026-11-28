@@ -39,6 +39,7 @@ it.each([
   ['vc-howto-doujin', '94A9H94Z', 'vc-howto-doujin-20261106', 'vocus', 'blog', '/guide'],
   ['vc-intro', '94A9H94Z', 'vc-intro-20261106', 'vocus', 'blog', '/'],
   ['cn-player-jinyong-20261127', '6M9ZV5FS', 'cn-player-jinyong-20261127', 'player-share', 'social', '/cards/_'],
+  ['bh-dal-f2', '94A9H94Z', 'bh-44201-dal-shiori-f2-20261128', 'bahamut', 'forum', '/cards/_'],
 ])('initializes sanitized GA4 commands for %s after referral cleanup', (code, ref, campaign, source, medium, page) => {
   const landingUrl = 'https://sukisuki.ai' + links[code as keyof typeof links];
   const cleaned = new URL(landingUrl);
