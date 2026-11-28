@@ -44,7 +44,16 @@ it("uses the fresh numbers once loaded, even when the card fell back under the p
   expect(summary).not.toContain("20/20");
 });
 
-it("stays expanded on desktop and hides itself when the card has no numbers", async () => {
+it("stays expanded on desktop without a toggle", async () => {
+  phone(false);
+  f.quality.mockResolvedValue({ length: { total: 3000, setting: 3000, worldbook: { entries: 0, characters: 0 }, openings: { count: 0, characters: 0 }, presentation: { openingPage: false, displayRules: 0, panel: false } }, deepPlay: null, rating: null, comments: null });
+  await mount(card("104", { lengthCharacters: 3000, deepPlay: null }));
+  expect(root.querySelector("button[aria-expanded]")).toBeNull();
+  expect((root.querySelector("#card-quality-body") as HTMLElement).style.display).toBe("");
+  expect(root.textContent).toContain("3,000 字");
+});
+
+it("hides itself when the server has no numbers for the card", async () => {
   phone(false);
   f.quality.mockRejectedValue(new ApiError(404, "not found"));
   await mount(card("103", null));

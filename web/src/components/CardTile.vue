@@ -133,9 +133,12 @@ const qualityLine = computed(() => {
   if (typeof signal?.lengthCharacters === "number") return { label: t("quality.tile.length"), value: qualityCharacters(signal.lengthCharacters) };
   return null;
 });
+/** 沒有任何數字的卡（快照還沒算到）不放預覽鈕：打開也是空的 */
+const canPreview = computed(() => quality.value && !props.selectOnly && !!props.card.qualitySignal);
 const previewOpen = computed(() => cardPreview.value?.card.id === props.card.id);
 function openPreview(event: MouseEvent) {
-  openCardPreview({ card: props.card, opener: event.currentTarget as HTMLElement, concealed: concealed.value && hasArt.value });
+  // 封面遮著就照遮著傳：磚上的圖載不到時也一樣，預覽頭部的縮圖不能比磚更露
+  openCardPreview({ card: props.card, opener: event.currentTarget as HTMLElement, concealed: concealed.value });
 }
 
 /** 封面上的限制級縮成「R」方塊：文字藥丸約 52 寬，最窄的封面（135）放不下它和左上那一列 */
@@ -171,7 +174,7 @@ const adultLabel = computed(() => ratingName("R", String(locale.value)));
       <span v-if="card.rating === 'R'" class="card__flag" role="img" :aria-label="adultLabel" :title="adultLabel">R</span>
       <!-- 底下一列：精選標在左、時間在右，放同一個 flex 列裡。英日韓的精選標很長，各自絕對定位時會蓋掉時間；時間不縮，精選標截斷。
            品質信號上線後（card__corner--quality）：由左到右是時間、精選、預覽鈕；精選放不下整個標就不顯示，不截成「精…」 -->
-      <div v-if="card.featured || shownAt || (quality && !selectOnly)" class="card__corner" :class="{ 'card__corner--quality': quality }">
+      <div v-if="card.featured || shownAt || canPreview" class="card__corner" :class="{ 'card__corner--quality': quality }">
       <span v-if="card.featured" class="card__feat-slot"><span class="card__featured" :title="$t('card.featuredHint')">{{ $t("card.featuredShort") }}</span></span>
       <!-- 幾天前更新：目前上線那一版過審的時刻（跟「更新」榜同一個口徑）。標在立繪右下角（像影片縮圖的時長）：
          底下那一行在手機上只有 140px，作者、時間、對話數三樣放不下。畫面只放時鐘與相對時間，整句給提示與讀屏 -->
@@ -184,7 +187,7 @@ const adultLabel = computed(() => ratingName("R", String(locale.value)));
         <time :datetime="new Date(shownAt).toISOString()" aria-hidden="true">{{ relativeTime(shownAt) }}</time>
       </span>
       <!-- 預覽鈕：半透明深色玻璃配白色面板輪廓（不用眼睛，眼睛是「顯示敏感封面」）；點擊區用偽元素擴到 44 -->
-      <button v-if="quality && !selectOnly" type="button" class="card__preview" :aria-label="t('quality.preview', { name })" aria-haspopup="dialog" :aria-expanded="previewOpen" @click.stop.prevent="openPreview">
+      <button v-if="canPreview" type="button" class="card__preview" :aria-label="t('quality.preview', { name })" aria-haspopup="dialog" :aria-expanded="previewOpen" @click.stop.prevent="openPreview">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.2" y="2.2" width="11.6" height="11.6" rx="2.6" /><path d="M2.2 9.2h11.6" /></svg>
       </button>
       </div>
