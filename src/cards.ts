@@ -11,7 +11,7 @@ import {managedWork} from './work-policy';
 import {fenceManagedWork} from './work-fence';
 import {COVER_HONORS} from './rank-honors';
 import {NOV_20_COMPENSATION_DEPLOYED_AT,NOV_20_DAILY_COHORT_START,NOV_20_OUTAGE_BOARD_SINCE,NOV_20_OUTAGE_START,RANK_DURATION} from './rank-settlement';
-import { cardQualitySignal, type QualitySignalRow } from './card-quality';
+import { FRESH_PLAY_SNAPSHOT, cardQualitySignal, type QualitySignalRow } from './card-quality';
 import type {RankHonor} from '../shared/rank-honors';
 
 export interface CardRow extends CoverFlags, QualitySignalRow {
@@ -102,7 +102,7 @@ const FEED_EVENT_AT = `MAX(c.registered_at, COALESCE(${LATEST_ANNOUNCED_UPDATE},
 
 const CARD_METADATA = "cn.cover_author_sensitive, cn.cover_review_sensitive, (SELECT update_kind FROM hosting_versions WHERE version_id=c.approved_version_id) AS update_kind, (SELECT update_note FROM hosting_versions WHERE version_id=c.approved_version_id) AS update_note, CAST(c.id AS TEXT) AS id, " + UPDATED_AT + " AS updated_at, fe.labels AS fandom_labels, am.handle AS author_handle, am.is_official AS author_official, am.tip_links AS author_tip_links, am.display_name AS community_name, CASE WHEN am.display_name IS NOT NULL THEN am.avatar_url END AS community_avatar, cn.num AS num, (SELECT COUNT(*) FROM member_favorites mf WHERE mf.card_id=c.id) AS favorite_count";
 const QUALITY_JOINS = `LEFT JOIN card_quality_lengths ql ON ql.version_id=c.approved_version_id
-  LEFT JOIN card_quality_play qp ON qp.card_id=c.id`;
+  LEFT JOIN card_quality_play qp ON qp.card_id=c.id AND ${FRESH_PLAY_SNAPSHOT}`;
 const QUALITY_METADATA = 'ql.total_chars AS quality_chars, qp.players AS quality_players, qp.reached AS quality_reached';
 const CARD_COLUMNS = COVER_HONORS + " AS honors, c.*, " + CARD_METADATA + ", " + QUALITY_METADATA;
 // Capture card content and the visibility binding together, without presentation joins.
