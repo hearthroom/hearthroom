@@ -12,9 +12,8 @@ export interface CardQualityLength {
 }
 
 export interface CardQualityDeepPlay {
-  reached: number;
-  players: number;
-  turns: number;
+  /** An integer percentage, rounded down. The public API omits cohort counts. */
+  rate: number;
 }
 
 export interface CardQualitySignal {

@@ -6198,46 +6198,32 @@
       },
       "CardQualityDeepPlay": {
         "type": "object",
+        "additionalProperties": false,
         "required": [
-          "reached",
-          "players",
-          "turns"
+          "rate"
         ],
         "properties": {
-          "reached": {
+          "rate": {
             "type": "integer",
-            "minimum": 0
-          },
-          "players": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "turns": {
-            "type": "integer",
-            "minimum": 0
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Retention rate as a whole percentage, rounded down."
           }
         }
       },
       "CardQualityDeepPlayDetail": {
         "type": "object",
+        "additionalProperties": false,
         "required": [
-          "reached",
-          "players",
-          "turns",
+          "rate",
           "medianTurns"
         ],
         "properties": {
-          "reached": {
+          "rate": {
             "type": "integer",
-            "minimum": 0
-          },
-          "players": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "turns": {
-            "type": "integer",
-            "minimum": 0
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Retention rate as a whole percentage, rounded down."
           },
           "medianTurns": {
             "type": "number",
