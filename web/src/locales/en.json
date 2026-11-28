@@ -6406,6 +6406,7 @@
   "quality.chars.huge": "{n}M chars",
   "quality.tile.length": "Card length",
   "quality.deep.label": "{n}+ turns",
+  "quality.deep.shortLabel": "{n}+ turns",
   "quality.deep.sentence": "{reached} of {players} players reached {n} or more turns",
   "quality.preview": "Preview {name}",
   "quality.close": "Close preview",

@@ -19,7 +19,7 @@ import { coverHonors, HONOR_COLORS } from "@/lib/honors";
 import { ratingName } from "@/lib/rating";
 import { useCardQualityCapability } from "@/lib/card-quality-capability";
 import { cardPreview, openCardPreview } from "@/lib/card-preview";
-import { qualityCharacters, qualityRatio } from "@/lib/card-quality-format";
+import { qualityCharacters, qualityPercent, qualityRatio } from "@/lib/card-quality-format";
 
 const props = defineProps<{
   card: CommunityCard;
@@ -129,10 +129,35 @@ watch([honors, locale, () => props.rank, () => props.card.rating], async () => {
 const quality = useCardQualityCapability();
 const qualityLine = computed(() => {
   const signal = props.card.qualitySignal;
-  if (signal?.deepPlay) return { label: t("quality.deep.label", { n: signal.deepPlay.turns }), value: qualityRatio(signal.deepPlay.reached, signal.deepPlay.players) };
+  if (signal?.deepPlay) {
+    const d = signal.deepPlay;
+    return { label: t("quality.deep.label", { n: d.turns }), value: qualityRatio(d.reached, d.players), short: { value: qualityPercent(d.reached, d.players), label: t("quality.deep.shortLabel", { n: d.turns }) } };
+  }
   if (typeof signal?.lengthCharacters === "number") return { label: t("quality.tile.length"), value: qualityCharacters(signal.lengthCharacters) };
   return null;
 });
+/*
+ * 聊滿那一行放不下整句「聊滿 5 回合 164/200」時改寫短式「82% 聊滿 5 回合」（owner 經 PM 2026-11-28：只剩 164/200 玩家看不懂；保留回合數、百分比在前）。
+ * 用一份看不見的整句量寬度，跟這一行的寬度比；篇幅那一行不用短式（只留「1.5 萬字」看得懂，靠 CSS 讓說明讓位）。
+ */
+const qualityRow = ref<HTMLElement | null>(null);
+const qualityMirror = ref<HTMLElement | null>(null);
+const qualityShort = ref(false);
+function fitQuality() {
+  const row = qualityRow.value, mirror = qualityMirror.value;
+  qualityShort.value = !!row && !!mirror && row.clientWidth > 0 && mirror.getBoundingClientRect().width > row.clientWidth - 1;
+}
+let qualityObserver: ResizeObserver | undefined;
+onMounted(() => {
+  if (typeof ResizeObserver !== "undefined") qualityObserver = new ResizeObserver(fitQuality);
+  if (qualityRow.value) qualityObserver?.observe(qualityRow.value);
+  void document.fonts?.ready.then(fitQuality);
+  fitQuality();
+});
+onBeforeUnmount(() => qualityObserver?.disconnect());
+watch(qualityRow, (el, before) => { if (before) qualityObserver?.unobserve(before); if (el) qualityObserver?.observe(el); });
+watch([qualityLine, locale], async () => { await nextTick(); fitQuality(); });
+
 /** 沒有任何數字的卡（快照還沒算到）不放預覽鈕：打開也是空的 */
 const canPreview = computed(() => quality.value && !props.selectOnly && !!props.card.qualitySignal);
 const previewOpen = computed(() => cardPreview.value?.card.id === props.card.id);
@@ -229,10 +254,18 @@ const adultLabel = computed(() => ratingName("R", String(locale.value)));
         <li v-if="moreTags" class="tag tag--more">+{{ moreTags }}</li>
       </ul>
 
-      <p v-if="quality" class="card__quality" :aria-hidden="qualityLine ? undefined : 'true'">
+      <p v-if="quality" ref="qualityRow" class="card__quality" :class="{ 'card__quality--lead': qualityShort && qualityLine?.short }" :aria-hidden="qualityLine ? undefined : 'true'">
         <template v-if="qualityLine">
           <span class="sr-only">{{ qualityLine.label }} {{ qualityLine.value }}</span>
-          <b class="card__quality-value" aria-hidden="true">{{ qualityLine.value }}</b><span class="card__quality-label" aria-hidden="true">{{ qualityLine.label }}</span>
+          <template v-if="qualityLine.short">
+            <span ref="qualityMirror" class="card__quality-mirror" aria-hidden="true"><span>{{ qualityLine.label }}</span><b>{{ qualityLine.value }}</b></span>
+          </template>
+          <template v-if="qualityShort && qualityLine.short">
+            <b class="card__quality-value" aria-hidden="true">{{ qualityLine.short.value }}</b><span class="card__quality-label" aria-hidden="true">{{ qualityLine.short.label }}</span>
+          </template>
+          <template v-else>
+            <b class="card__quality-value" aria-hidden="true">{{ qualityLine.value }}</b><span class="card__quality-label" aria-hidden="true">{{ qualityLine.label }}</span>
+          </template>
         </template>
       </p>
 
@@ -418,11 +451,16 @@ const adultLabel = computed(() => ratingName("R", String(locale.value)));
  * 只留數字（135 寬英文「15k chars」，不出現「Card l…」，PM 2026-11-28）；完整說法在讀屏文字裡。
  */
 .card__quality {
-  display: flex; flex-direction: row-reverse; flex-wrap: wrap; justify-content: flex-end; align-items: center; column-gap: 6px;
+  position: relative; display: flex; flex-direction: row-reverse; flex-wrap: wrap; justify-content: flex-end; align-items: center; column-gap: 6px;
   height: 20px; margin: 2px 0 0; overflow: hidden;
   font-size: 12px; line-height: 20px; color: var(--text-2); white-space: nowrap;
 }
 .card__quality-label { flex: none; }
+/* 短式：百分比在前（「82% 聊滿 5 回合」） */
+.card__quality--lead { flex-direction: row; justify-content: flex-start; }
+/* 量整句寬度用：跟這一行同字級、同間距，不佔位、看不見 */
+.card__quality-mirror { position: absolute; left: 0; top: 0; display: inline-flex; width: max-content; gap: 6px; visibility: hidden; pointer-events: none; white-space: nowrap; }
+.card__quality-mirror b { font-weight: 600; font-variant-numeric: tabular-nums; }
 .card__quality-value { flex: none; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
 .card__tags { display: flex; gap: 4px; margin: 1px 0 0; padding: 0; list-style: none; overflow: hidden; }
 /* 包著連結的 li 若是一般的 list-item，會多一條文字基線把標籤往下推 2px，跟直接當 li 的「+N」對不齊 */

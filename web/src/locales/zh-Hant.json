@@ -6406,6 +6406,7 @@
   "quality.chars.huge": "{n} 萬字",
   "quality.tile.length": "篇幅",
   "quality.deep.label": "聊滿 {n} 回合",
+  "quality.deep.shortLabel": "聊滿 {n} 回合",
   "quality.deep.sentence": "{players} 位玩家中，{reached} 位聊滿 {n} 回合",
   "quality.preview": "預覽「{name}」",
   "quality.close": "關閉預覽",
