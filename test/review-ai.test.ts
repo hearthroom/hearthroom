@@ -572,6 +572,30 @@ describe('仲裁：不受理中的單與改判', () => {
 });
 
 describe('判準 v4 的讀卡輸入', () => {
+  it('長 HTML 替換仍留下開場文字，依序套用規則並摘要備選開場與開場網頁', () => {
+    const input = aiCardInput({
+      greetings: { welcome: '[scene]', alternates: ['[ALT]'] },
+      authorAsset: {
+        openingMode: 'greeting',
+        openingPage: '<section><h2>作者說明</h2><button>開始</button></section>',
+        rules: [
+          { find: '/\\[SCENE\\]/i', replace: `<style>${'.unused{color:blue}'.repeat(100)}</style><section><h2>角色介紹</h2><aside>狀態欄：夜班</aside><button>[CHOOSE]</button></section>` },
+          { find: '[CHOOSE]', replace: '替車掌驗票' },
+          { find: '[ALT]', replace: '<article>上月台找列車長</article>' },
+          { find: '替車掌驗票', replace: '只給模型', promptOnly: true },
+          { find: '替車掌驗票', replace: '玩家訊息專用', targets: ['user'] },
+        ],
+      },
+    }, { tags: [], fandom: '' }, { applyRules: true });
+    expect(input.card.openings.welcomeRendered).toBe('角色介紹\n狀態欄：夜班\n替車掌驗票');
+    expect(input.card.openings.alternatesRendered).toEqual(['上月台找列車長']);
+    expect(input.card.openings.presentation).toMatchObject({
+      welcome: { source: 'display_rules', coverage: 'complete', structure: { headings: 1, controls: 1, characterIntro: true, statusPanel: true } },
+      page: { coverage: 'complete', structure: { headings: 1, controls: 1 } },
+    });
+    expect(input.stats.openingRuleHits).toBe(3);
+  });
+
   it('世界書目錄（常駐／召回、是否在卡裡提到）、顯示規則摘要、開場選項；開場被規則替換時給套用後的純文字', () => {
     const input = aiCardInput({
       document: { roleDetailDesc: '她是車站站務員，常去月台。' },
@@ -582,11 +606,11 @@ describe('判準 v4 的讀卡輸入', () => {
         { name: '停用', content: 'y', isEnabled: false },
       ] }],
       authorAsset: { rules: [
-        { name: '狀態欄', find: '<status hp="(\\d+)" mood="([^"]+)"></status>', replace: '<div>生命 $1｜心情 $2</div>', enabled: true },
-        { name: '壞掉的', find: '(', replace: '', enabled: true },
+        { name: '狀態欄', find: '/<status hp="(\\d+)" mood="([^"]+)"><\\/status>/', replace: '<div>生命 $1｜心情 $2</div>', enabled: true },
+        { name: '壞掉的', find: '/(/', replace: '', enabled: true },
         { name: '關掉的', find: '末班車', replace: '刪掉', enabled: false },
-        // 巢狀量詞會災難性回溯：不在 Worker 裡跑
-        { name: '危險的', find: '(到+)+了', replace: 'X', enabled: true },
+        // 目前的摘錄引擎不支援前瞻，並標示證據可能不完整。
+        { name: '危險的', find: '/到(?=了)/', replace: 'X', enabled: true },
       ], cardCss: '.a{}' },
     }, { tags: [], fandom: '' }, { applyRules: true });
     expect(input.card.lorebook).toMatchObject({ entryCount: 2, constantCount: 1, recallCount: 1 });

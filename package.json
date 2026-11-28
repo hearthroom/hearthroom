@@ -34,7 +34,9 @@
     "entities": "^7.0.1",
     "hono": "^4.13.5",
     "jose": "^6.2.10",
-    "markdown-it": "^14.3.3"
+    "markdown-it": "^14.3.3",
+    "parse5": "8.0.1",
+    "re2js": "2.10.0"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.22.0",

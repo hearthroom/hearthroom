@@ -15,6 +15,8 @@ export type Env = Omit<Cloudflare.Env, "EVENTS" | "VISIT_LIMIT" | "AUTH_ROUTE_LI
   BLOG_PUBLISHER_CONFIG?: string;
   /** 審卡員固定金鑰：{"memberId","keySha256"}。空或沒設＝金鑰一律無效（撤銷就清空它）。 */
   REVIEW_AGENT_CONFIG?: string;
+  /** Enable expanded AI publication only for this active criteria version. */
+  REVIEW_AI_AUTO_APPROVE_CRITERIA?: string;
   HARBOR_BADGES_CLIENT_ID?:string;
   HARBOR_BADGES_CLIENT_SECRET?:string;
   QA_BROWSER_CONTEXT_KEY?: string;

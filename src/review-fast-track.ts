@@ -7,7 +7,8 @@ import { HttpError, type Env } from "./types";
 
 /**
  * AI 審卡快速通道（任務 2026-11-25-ai-review-fast-track，owner 2026-11-25）：
- * 已上架卡的更新，AI 用目前判準判「通過」、沒有任何審核標記、分級跟上架版本完全相同，就自動核准。
+ * 旗標符合目前判準時，擴大到新卡與更新。旗標關閉時沿用已上架且分級未變的更新路徑。
+ * 兩條路徑都需要目前判準的通過和無審核標記，並保留人工領取、字數及出版狀態守衛。
  *
  * - 觸發：審卡員寫下結論（PUT /v1/review-ai/submissions/:id/suggestion，待審單）之後立刻判一次。
  *   不符合就什麼都不做，單子照舊留在人工佇列；AI 沒判、交人、逾時、出錯也一樣留著。
@@ -28,11 +29,11 @@ export type FastTrackOutcome = "approved" | "ineligible_status" | "ineligible_ra
 export const FAST_TRACK_ELIGIBLE: readonly FastTrackOutcome[] = ["approved", "ineligible_verdict", "ineligible_flags"];
 
 interface Row {
-  status: string; card_id: number; flip_of: string | null; reopen_of: string | null; claimed_by: string | null; claimed_at: number | null;
+  status: string; kind: string; card_id: number; flip_of: string | null; reopen_of: string | null; claimed_by: string | null; claimed_at: number | null;
   rating: string | null; rating_descriptors: string | null;
   stamped: number; decided: number; held: number; dropped: number; drop_case_open: number; after_drop: number; previous_status: string | null;
   card_status: string; approved_version_id: string | null; public_blocked: number; board_hidden: number; live_rating: string | null; live_descriptors: string | null;
-  live_state: string | null; live_submission_status: string | null; version_blocked: number; open_case: number; correcting: number; restricted: number;
+  candidate_pending: number; live_state: string | null; live_submission_status: string | null; version_blocked: number; open_case: number; correcting: number; restricted: number;
 }
 
 /**
@@ -40,14 +41,14 @@ interface Row {
  * 結構條件（前三項）的 SQL：
  *   - 單子待審、沒有任何審核章、沒有託管核准決定、沒有人在有效期內領著；
  *   - 不是改判單、重新審核單；卡沒冷凍、單沒在不受理中、這張卡沒有還開著的不受理案件、不是不受理後改版重送；
- *   - 同一張卡上一次定案（EARLIER_DECIDED）是通過（被駁回後改稿重送的不走）；
+ *   - 舊通道要求上一次定案通過；擴大通道看本次送審的封存版本與公開狀態；
  *   - 卡片目前已核准上架：cards.status='approved'、有上架版本、上架版本的單仍是通過、版本狀態 approved；
  *     沒被隱藏或封鎖（board_hidden、public_blocked）、上架版本沒被處置封鎖、沒有開著的處置案件、
  *     上架那張單沒有進行中的改判；託管作品是公開、沒有限制、同步完成；
- *   - 分級：送審的級別＝卡片目前的級別（含管理員更正與分級下限），內容標示（集合）完全相同。
+ *   - 舊通道才要求分級與內容標示一致；擴大通道照一般核准路徑處理分級。
  */
 async function loadRow(db: D1Database, submissionId: string): Promise<Row | null> {
-  return db.prepare(`SELECT s.status, s.card_id, s.flip_of, s.reopen_of, s.claimed_by, s.claimed_at, s.rating, s.rating_descriptors,
+  return db.prepare(`SELECT s.status, s.kind, s.card_id, s.flip_of, s.reopen_of, s.claimed_by, s.claimed_at, s.rating, s.rating_descriptors,
       EXISTS(SELECT 1 FROM review_stamps st WHERE st.submission_id=s.id) AS stamped,
       EXISTS(SELECT 1 FROM work_review_decisions d WHERE d.submission_id=s.id) AS decided,
       EXISTS(SELECT 1 FROM review_holds h WHERE h.card_id=s.card_id) AS held,
@@ -57,11 +58,13 @@ async function loadRow(db: D1Database, submissionId: string): Promise<Row | null
       (SELECT p.status FROM review_submissions p WHERE ${EARLIER_DECIDED("p", "s")} ORDER BY p.submitted_at DESC, p.rowid DESC LIMIT 1) AS previous_status,
       c.status AS card_status, c.approved_version_id, c.public_blocked, c.board_hidden, c.rating AS live_rating, c.rating_descriptors AS live_descriptors,
       lv.state AS live_state, ls.status AS live_submission_status,
+      EXISTS(SELECT 1 FROM hosting_versions v WHERE v.submission_id=s.id AND v.state='pending'
+        AND NOT EXISTS(SELECT 1 FROM moderation_blocked_versions b WHERE b.version_id=v.version_id)) AS candidate_pending,
       EXISTS(SELECT 1 FROM moderation_blocked_versions b WHERE b.version_id=c.approved_version_id) AS version_blocked,
       EXISTS(SELECT 1 FROM moderation_cases m WHERE m.provider=c.provider AND m.source_role_id=c.source_role_id AND m.status IN ('pending','disputed')) AS open_case,
       EXISTS(SELECT 1 FROM review_corrections x WHERE x.submission_id=ls.id AND x.state IN ('pending','applying')) AS correcting,
       EXISTS(SELECT 1 FROM managed_work_access p WHERE p.provider=c.provider AND p.source_role_id=c.source_role_id
-        AND (p.access<>'public' OR p.restriction<>'none' OR p.sync_state<>'complete')) AS restricted
+        AND ((c.approved_version_id IS NOT NULL AND p.access<>'public') OR p.restriction<>'none' OR p.sync_state<>'complete')) AS restricted
     FROM review_submissions s JOIN cards c ON c.id=s.card_id
     LEFT JOIN hosting_versions lv ON lv.version_id=c.approved_version_id
     LEFT JOIN review_submissions ls ON ls.id=lv.submission_id
@@ -78,14 +81,16 @@ const sameDescriptors = (a: string | null, b: string | null) => {
 };
 
 /** self：系統自己已經領著（領取後的重新檢查），自己的領取不算「人工在處理」 */
-function structural(r: Row, now: number, self = false): FastTrackOutcome | null {
+function structural(r: Row, now: number, expanded: boolean, self = false): FastTrackOutcome | null {
   const claimedLive = !!r.claimed_by && r.claimed_at !== null && now - r.claimed_at < CLAIM_TTL_MS && !(self && r.claimed_by === FAST_TRACK_ACTOR);
   if (r.status !== "pending" || r.stamped || r.decided || claimedLive) return "skipped_decided";
   if (r.flip_of || r.reopen_of || r.held || r.dropped || r.drop_case_open || r.after_drop) return "ineligible_status";
-  if (r.previous_status !== "approved") return "ineligible_status";
-  if (r.card_status !== "approved" || !r.approved_version_id || r.live_state !== "approved" || r.live_submission_status !== "approved") return "ineligible_status";
   if (r.public_blocked || r.board_hidden || r.version_blocked || r.open_case || r.correcting || r.restricted) return "ineligible_status";
-  if (!r.rating || r.rating !== r.live_rating || !sameDescriptors(r.rating_descriptors, r.live_descriptors)) return "ineligible_rating";
+  if (expanded && (!r.candidate_pending || !r.rating)) return "ineligible_status";
+  if (expanded && r.kind === "first" && !r.approved_version_id && r.card_status === "pending") return null;
+  if (r.card_status !== "approved" || !r.approved_version_id || r.live_state !== "approved" || r.live_submission_status !== "approved") return "ineligible_status";
+  if (!expanded && r.previous_status !== "approved") return "ineligible_status";
+  if (!expanded && (!r.rating || r.rating !== r.live_rating || !sameDescriptors(r.rating_descriptors, r.live_descriptors))) return "ineligible_rating";
   return null;
 }
 
@@ -96,22 +101,28 @@ function structural(r: Row, now: number, self = false): FastTrackOutcome | null 
 export async function tryFastTrack(env: Env, submissionId: string, trigger: { suggestionId: string; at: number }, now = Date.now()): Promise<FastTrackOutcome> {
   const db = env.DB;
   let outcome: FastTrackOutcome;
-  let cardId: number | null = null;
+  let row: Row | null = null;
+  let expanded = false;
   // 核准時判定事件跟蓋章同一批寫（recorded）：報表的核准數不會超過分母
   let recorded = false;
   try {
-    const row = await loadRow(db, submissionId);
+    row = await loadRow(db, submissionId);
     if (!row) return "skipped_decided";
-    cardId = row.card_id;
-    outcome = structural(row, now) ?? await verdictGate(db, submissionId);
-    if (outcome === "approved") ({ outcome, recorded } = await approve(env, submissionId, trigger, now));
+    const criteria = await currentCriteria(db);
+    expanded = !!criteria && env.REVIEW_AI_AUTO_APPROVE_CRITERIA === criteria;
+    outcome = structural(row, now, expanded) ?? await verdictGate(db, submissionId, trigger, criteria);
+    if (outcome === "approved") ({ outcome, recorded } = await approve(env, submissionId, trigger, now, expanded));
   } catch (error) {
     outcome = "error";
-    console.error("AI 快速通道判定失敗", error instanceof Error ? error.message : "unknown");
+    console.error("AI 快速通道判定失敗", error instanceof HttpError ? error.status : "internal");
   }
-  if (cardId !== null && !recorded) {
-    try { await checkEvent(db, submissionId, cardId, trigger, outcome, now).run(); }
-    catch (error) { console.error("AI 快速通道判定事件寫入失敗", error instanceof Error ? error.message : "unknown"); }
+  if (row && !recorded) {
+    try {
+      const { meta } = await checkEvent(db, submissionId, row.card_id, trigger, outcome, now).run();
+      if (expanded && meta.changes && outcome !== "skipped_decided") {
+        await bumpOp(db, "review_ai_auto_approve", row.kind === "first" ? "new_card" : "update", "manual");
+      }
+    } catch { console.error("AI 快速通道判定事件寫入失敗"); }
   }
   await bumpOp(db, "review_fast_track", "evaluate", outcome);
   return outcome;
@@ -128,10 +139,10 @@ const checkEvent = (db: D1Database, submissionId: string, cardId: number, trigge
  * AI 結論：目前判準版本（必須有）最新的一筆是「通過」、沒有審核標記；而且同一判準版本裡，任何審卡員對這張單
  * 都沒有判過不通過或交人、沒有打過標記（之後多一個審卡員時，任一個有疑慮就交人工）。
  */
-async function verdictGate(db: D1Database, submissionId: string): Promise<FastTrackOutcome> {
-  const current = await currentCriteria(db);
+async function verdictGate(db: D1Database, submissionId: string, trigger: { suggestionId: string; at: number }, current: string | null): Promise<FastTrackOutcome> {
   const ai = await aiStateOf(db, submissionId);
-  if (!current || ai.state !== "ready" || ai.suggestion.criteriaVersion !== current || ai.suggestion.verdict !== "pass") return "ineligible_verdict";
+  if (!current || ai.state !== "ready" || ai.suggestion.criteriaVersion !== current || ai.suggestion.verdict !== "pass"
+    || ai.suggestion.id !== trigger.suggestionId || ai.suggestion.at !== trigger.at) return "ineligible_verdict";
   if (ai.suggestion.flags.length) return "ineligible_flags";
   const any = await db.prepare(`SELECT COALESCE(MAX(verdict IS NOT NULL AND verdict<>'pass'), 0) AS doubt, COALESCE(MAX(json_array_length(flags) > 0), 0) AS flagged
     FROM review_ai_suggestions WHERE submission_id=? AND criteria_version=?`).bind(submissionId, current).first<{ doubt: number; flagged: number }>();
@@ -150,21 +161,36 @@ export const fastTrackSeams: { afterClaim: ((submissionId: string) => Promise<vo
 const SYSTEM_CLAIM_WINDOW_MS = 60_000;
 
 /** 蓋章那一批裡最後一次確認卡片仍在上架、沒被處置、沒冷凍、分級沒變；不成立就讓整批失敗（見 approve 的稽核列） */
-const LIVE_AT_WRITE = `EXISTS(SELECT 1 FROM review_submissions s JOIN cards c ON c.id=s.card_id
-  JOIN hosting_versions lv ON lv.version_id=c.approved_version_id AND lv.state='approved'
-  WHERE s.id=?1 AND c.status='approved' AND c.public_blocked=0 AND c.board_hidden=0 AND c.rating IS s.rating
-  AND NOT EXISTS(SELECT 1 FROM moderation_blocked_versions b WHERE b.version_id=c.approved_version_id)
+const ELIGIBLE_AT_WRITE = `EXISTS(SELECT 1 FROM review_submissions s JOIN cards c ON c.id=s.card_id
+  WHERE s.id=?1 AND s.status='pending' AND s.flip_of IS NULL AND s.reopen_of IS NULL
+  AND c.status=?5 AND c.approved_version_id IS ?6 AND c.public_blocked=0 AND c.board_hidden=0
+  AND s.rating IS ?7 AND s.rating_descriptors IS ?8
+  AND (c.approved_version_id IS NULL OR EXISTS(SELECT 1 FROM hosting_versions v
+    JOIN review_submissions p ON p.id=v.submission_id AND p.status='approved'
+    WHERE v.version_id=c.approved_version_id AND v.state='approved'
+    AND (?9 OR (c.rating IS ?10 AND c.rating_descriptors IS ?11))
+    AND NOT EXISTS(SELECT 1 FROM review_corrections x WHERE x.submission_id=p.id AND x.state IN ('pending','applying'))))
+  AND NOT EXISTS(SELECT 1 FROM moderation_blocked_versions b WHERE b.version_id=c.approved_version_id
+    OR b.version_id=(SELECT v.version_id FROM hosting_versions v WHERE v.submission_id=s.id))
+  AND (?9=0 OR EXISTS(SELECT 1 FROM hosting_versions v WHERE v.submission_id=s.id AND v.state='pending'))
   AND NOT EXISTS(SELECT 1 FROM moderation_cases m WHERE m.provider=c.provider AND m.source_role_id=c.source_role_id AND m.status IN ('pending','disputed'))
   AND NOT EXISTS(SELECT 1 FROM review_holds h WHERE h.card_id=s.card_id)
+  AND NOT EXISTS(SELECT 1 FROM review_drop_cases d WHERE d.card_id=s.card_id AND d.closed_at IS NULL)
   AND NOT EXISTS(SELECT 1 FROM managed_work_access p WHERE p.provider=c.provider AND p.source_role_id=c.source_role_id
-    AND (p.access<>'public' OR p.restriction<>'none' OR p.sync_state<>'complete')))`;
+    AND ((c.approved_version_id IS NOT NULL AND p.access<>'public') OR p.restriction<>'none' OR p.sync_state<>'complete'))
+  AND NOT EXISTS(SELECT 1 FROM community_settings WHERE key='review_ai_criteria' AND value<>json_quote(?12))
+  AND EXISTS(SELECT 1 FROM review_ai_suggestions a WHERE a.id=?13 AND a.submission_id=s.id
+    AND a.criteria_version=?12 AND a.updated_at=?14 AND a.verdict='pass' AND json_array_length(a.flags)=0)
+  AND NOT EXISTS(SELECT 1 FROM review_ai_suggestions a WHERE a.submission_id=s.id AND a.criteria_version=?12
+    AND ((a.verdict IS NOT NULL AND a.verdict<>'pass') OR json_array_length(a.flags)>0)))`;
 
-async function approve(env: Env, submissionId: string, trigger: { suggestionId: string; at: number }, now: number): Promise<{ outcome: FastTrackOutcome; recorded: boolean }> {
+async function approve(env: Env, submissionId: string, trigger: { suggestionId: string; at: number }, now: number, expanded: boolean): Promise<{ outcome: FastTrackOutcome; recorded: boolean }> {
   const db = env.DB;
   const no = (outcome: FastTrackOutcome) => ({ outcome, recorded: false });
   // 領取前再看一次 AI 結論：審卡員可能剛重判
   const ai = await aiStateOf(db, submissionId);
-  if (ai.state !== "ready" || ai.suggestion.verdict !== "pass" || ai.suggestion.flags.length) return no("ineligible_verdict");
+  if (ai.state !== "ready" || ai.suggestion.verdict !== "pass" || ai.suggestion.flags.length
+    || ai.suggestion.id !== trigger.suggestionId || ai.suggestion.at !== trigger.at) return no("ineligible_verdict");
   let generation: string;
   try {
     generation = (await claim(db, submissionId, FAST_TRACK_ACTOR, now - CLAIM_TTL_MS + SYSTEM_CLAIM_WINDOW_MS)).claim_generation;
@@ -174,29 +200,32 @@ async function approve(env: Env, submissionId: string, trigger: { suggestionId: 
   }
   let approved = false;
   // 重新讀一次：領取之前判的結構條件，這段時間裡卡片可能被下架、封鎖、處置
-  const recheck = async () => { const r = await loadRow(db, submissionId); return r ? structural(r, now, true) : "skipped_decided"; };
+  const recheck = async () => {
+    const row = await loadRow(db, submissionId);
+    return { row, denial: row ? structural(row, now, expanded, true) : "skipped_decided" as const };
+  };
   try {
     await fastTrackSeams.afterClaim?.(submissionId);
-    const changed = await recheck();
-    if (changed) return no(changed);
+    const { row, denial } = await recheck();
+    if (!row || denial) return no(denial ?? "skipped_decided");
     await fastTrackSeams.beforeStamp?.(submissionId);
     const s = ai.suggestion;
     // 稽核跟蓋章同一批：附 AI 判定摘要（判準版本、理由代碼、審核標記、建議編號）。同一張單只會有一筆。
-    // 它同時是這一批的守衛：卡片在這一刻已不在上架（LIVE_AT_WRITE 不成立）時 actor_kind 寫成不合法的值，
+    // 它同時是這一批的守衛：卡片在這一刻已不在上架（ELIGIBLE_AT_WRITE 不成立）時 actor_kind 寫成不合法的值，
     // CHECK 失敗讓整批（蓋章、核准、上架）一起不寫；D1 的 batch 不能 RAISE，用約束代替
     const audit = db.prepare(`INSERT INTO audit_log (id, subject_kind, subject_id, actor_member_id, actor_kind, action, reason, before_json, after_json, operation_id, created_at)
-      SELECT ?2, 'review_submission', ?1, NULL, CASE WHEN ${LIVE_AT_WRITE} THEN 'ai' ELSE 'fast_track_card_not_live' END,
+      SELECT ?2, 'review_submission', ?1, NULL, CASE WHEN ${ELIGIBLE_AT_WRITE} THEN 'ai' ELSE 'fast_track_guard_changed' END,
         'review_fast_track_approve', '', json_object('status', 'pending'), ?3, ?2, ?4
       WHERE EXISTS(SELECT 1 FROM review_submissions WHERE id=?1)
       ON CONFLICT(id) DO NOTHING`)
       .bind(submissionId, `fast-track:${submissionId}`,
-        JSON.stringify({ criteriaVersion: s.criteriaVersion, reasons: s.reasons, flags: s.flags, suggestionId: s.id, model: s.model, finalSource: FAST_TRACK_SOURCE }), now);
-    const row = await loadRow(db, submissionId);
+        JSON.stringify({ criteriaVersion: s.criteriaVersion, reasons: s.reasons, flags: s.flags, suggestionId: s.id, model: s.model, finalSource: FAST_TRACK_SOURCE }), now, row.card_status, row.approved_version_id,
+        row.rating, row.rating_descriptors, Number(expanded), row.live_rating, row.live_descriptors, s.criteriaVersion, s.id, s.at);
     try {
       await stamp(db, {
         submissionId, memberId: FAST_TRACK_ACTOR, verdict: "approve", note: "", now, generation,
         final: { source: FAST_TRACK_SOURCE, aiSuggestionId: s.id, aiNoteTypes: [], aiNote: "", retainMs: RETAIN_MS,
-          system: { writes: [audit, checkEvent(db, submissionId, row!.card_id, trigger, "approved", now)] } },
+          system: { writes: [audit, checkEvent(db, submissionId, row.card_id, trigger, "approved", now)] } },
       }, env);
       approved = true;
       return { outcome: "approved", recorded: true };
@@ -206,13 +235,15 @@ async function approve(env: Env, submissionId: string, trigger: { suggestionId: 
         approved = true;
         return { outcome: "approved", recorded: true };
       }
-      const after = await recheck();
-      if (after) return no(after);
+      const { denial } = await recheck();
+      if (denial) return no(denial);
+      const verdict = await verdictGate(db, submissionId, trigger, await currentCriteria(db));
+      if (verdict !== "approved") return no(verdict);
       if (error instanceof HttpError && error.status === 409) return no("skipped_decided");
       throw error;
     }
   } finally {
-    if (!approved) await release(db, submissionId, FAST_TRACK_ACTOR, generation).catch((error) => console.error("AI 快速通道放回領取失敗", error instanceof Error ? error.message : "unknown"));
+    if (!approved) await release(db, submissionId, FAST_TRACK_ACTOR, generation).catch(() => console.error("AI 快速通道放回領取失敗"));
   }
 }
 

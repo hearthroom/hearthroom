@@ -1,10 +1,12 @@
 import { SELF, env } from 'cloudflare:test';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { legacyPolicyFixture, restoreLegacyPolicyFixture } from './work-policy-fixture';
 import { bearer, identities, makeReviewer, ratingBody, resetDb, restoreUpstream, reviewOff, reviewOn, reviewUpstream, rolesOnMainSite } from './helpers';
 import { opsMetrics } from '../src/ops-metrics';
 import { FAST_TRACK_ACTOR, fastTrackSeams } from '../src/review-fast-track';
 import { CLAIM_TTL_MS, claim, STAMPS_REQUIRED } from '../src/review';
+import { enrollWorkAccess, workPolicyGateway } from '../src/work-policy';
+import { finalizeManagedReview } from '../src/work-publication';
 
 // AI 審卡快速通道（任務 2026-11-25-ai-review-fast-track）：已上架卡的更新，分級不變、AI 用目前判準判通過且沒有審核標記，就自動核准。
 const KEY = 'b'.repeat(64);
@@ -65,6 +67,81 @@ const metric = async (outcome: string) => {
 };
 
 describe('自動核准', () => {
+  it('擴大旗標與現行判準一致時，新卡通過直接上架並計入新卡指標', async () => {
+    Object.assign(env, { REVIEW_AI_AUTO_APPROVE_CRITERIA: 'v1' });
+    try {
+      const id = await submit();
+      expect((await suggest(id)).status).toBe(200);
+      expect(await statusOf(id)).toBe('approved');
+      expect(await env.DB.prepare('SELECT status, approved_version_id FROM cards').first()).toMatchObject({ status: 'approved', approved_version_id: expect.any(String) });
+      expect(await opsMetrics(env.DB)).toContain('hearthroom_review_ai_auto_approve_total{kind="new_card",outcome="published"} 1');
+    } finally { Reflect.deleteProperty(env, 'REVIEW_AI_AUTO_APPROVE_CRITERIA'); }
+  });
+
+  it('擴大旗標只在同一判準有效，開啟後更新沿用送審分級', async () => {
+    const { update } = await liveCardWithUpdate();
+    await env.DB.prepare("UPDATE cards SET rating='PG15'").run();
+    Object.assign(env, { REVIEW_AI_AUTO_APPROVE_CRITERIA: 'v2' });
+    try {
+      await suggest(update);
+      expect(await statusOf(update)).toBe('pending');
+      Object.assign(env, { REVIEW_AI_AUTO_APPROVE_CRITERIA: 'v1' });
+      await suggest(update);
+      expect(await statusOf(update)).toBe('approved');
+      expect(await opsMetrics(env.DB)).toContain('hearthroom_review_ai_auto_approve_total{kind="update",outcome="published"} 1');
+    } finally { Reflect.deleteProperty(env, 'REVIEW_AI_AUTO_APPROVE_CRITERIA'); }
+  });
+
+  it('託管新卡在 Provider 確認公開時才計入發布', async () => {
+    const first = await submit();
+    expect((await post('/v1/cards/role-1/edit', 'author')).status).toBe(200);
+    const work = (await env.DB.prepare("SELECT id, member_id FROM works WHERE source_role_id='role-1'").first<{id: string; member_id: string}>())!;
+    const receipt = { workId: work.id, sourceRoleId: 'role-1', access: 'private' as const, restriction: 'none' as const, epoch: 1, state: 'complete' as const, operationId: '', replayed: false };
+    vi.spyOn(workPolicyGateway, 'change').mockImplementation(async (_env, _provider, _source, cmd) => ({
+      ...receipt, operationId: cmd.operationId, state: cmd.action === 'prepare' ? 'prepared' : 'complete',
+    }));
+    vi.spyOn(workPolicyGateway, 'state').mockResolvedValue(receipt);
+    vi.spyOn(workPolicyGateway, 'operation').mockResolvedValue(null);
+    const commit = vi.spyOn(workPolicyGateway, 'commit').mockRejectedValue(new Error('injected'));
+    Object.assign(env, { REVIEW_AI_AUTO_APPROVE_CRITERIA: 'v1' });
+    try {
+      await enrollWorkAccess(env, { memberId: work.member_id, roleId: 'role-1', operationId: crypto.randomUUID(), access: 'private', token: 'author' });
+      const id = await submit();
+      expect(await statusOf(first)).toBe('superseded');
+      expect((await suggest(id)).status).toBe(200);
+      expect(await statusOf(id)).toBe('pending');
+      expect(await env.DB.prepare('SELECT 1 FROM work_review_decisions WHERE submission_id=?').bind(id).first()).not.toBeNull();
+      expect(await opsMetrics(env.DB)).not.toContain('hearthroom_review_ai_auto_approve_total{kind="new_card",outcome="published"}');
+      const permit = (await env.DB.prepare('SELECT p.operation_id FROM work_publication_permits p JOIN hosting_versions v ON v.version_id=p.version_id WHERE v.submission_id=?')
+        .bind(id).first<{operation_id: string}>())!;
+      const confirmed = { ...receipt, operationId: permit.operation_id, access: 'public' as const, epoch: 2 };
+      commit.mockResolvedValue(confirmed);
+      vi.mocked(workPolicyGateway.state).mockResolvedValue(confirmed);
+      await finalizeManagedReview(env, id);
+      expect(await statusOf(id)).toBe('approved');
+      await finalizeManagedReview(env, id);
+      expect(await opsMetrics(env.DB)).toContain('hearthroom_review_ai_auto_approve_total{kind="new_card",outcome="published"} 1');
+    } finally {
+      vi.restoreAllMocks();
+      Reflect.deleteProperty(env, 'REVIEW_AI_AUTO_APPROVE_CRITERIA');
+    }
+  });
+
+  it('新卡的駁回、逾時與錯誤交人工，低於送審門檻的通過也不發布', async () => {
+    Object.assign(env, { REVIEW_AI_AUTO_APPROVE_CRITERIA: 'v1' });
+    try {
+      const id = await submit();
+      await suggest(id, { verdict: 'reject' });
+      await suggest(id, { verdict: 'handoff', handoffCause: 'timeout' });
+      await suggest(id, { verdict: 'handoff', handoffCause: 'error' });
+      await env.DB.prepare('UPDATE review_submissions SET review_length_total=3000 WHERE id=?').bind(id).run();
+      expect((await suggest(id)).status).toBe(200);
+      expect(await statusOf(id)).toBe('pending');
+      expect(await env.DB.prepare('SELECT claimed_by FROM review_submissions WHERE id=?').bind(id).first()).toEqual({ claimed_by: null });
+      expect(await opsMetrics(env.DB)).toContain('hearthroom_review_ai_auto_approve_total{kind="new_card",outcome="manual"} 4');
+    } finally { Reflect.deleteProperty(env, 'REVIEW_AI_AUTO_APPROVE_CRITERIA'); }
+  });
+
   it('已上架卡的更新、分級不變、AI 通過無標記：系統蓋章核准、上架新版、通知作者、留稽核', async () => {
     const { first, update } = await liveCardWithUpdate();
     const before = await env.DB.prepare('SELECT approved_version_id FROM cards').first<{ approved_version_id: string }>();

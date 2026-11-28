@@ -210,6 +210,11 @@ async function projectForReview(call: TransferCall, roleId: string, includeQuali
     // 審核頁一次看一本；綁了多本的全部放在 worldbooks。
     worldbook: books[0] ?? null, worldbooks: books, worldbookAvailable: true,
     authorAsset, hashes, costProfile,
+    // Preserve opening-rule semantics for review evidence without changing the canonical transfer fingerprint.
+    reviewDisplayRules: authorAsset.rules.map((rule: Record<string, unknown>, i: number) => {
+      const raw = rawAsset.rules[i];
+      return { ...rule, targets: raw.targets, promptOnly: raw.promptOnly, trimStrings: raw.trimStrings };
+    }),
   };
   return {
     ...settings,

@@ -83,13 +83,15 @@ describe("送審時讀整份設定", () => {
           "/role/detail?roleId=rev-fy": { ...own, roleWelcome: "", rolePrologue: ["推開門", "敲門"] },
           "/worldbook/bindings?roleId=rev-fy": { bindings: [] },
           "/role/author-asset?roleId=rev-fy": {
-            rules: [], mountTrigger: "", mountLayer: "over", pageMode: "sandbox",
+            rules: [{ find: "[intro]", replace: "<p>場景</p>", targets: ["user"], promptOnly: true, trimStrings: [" "] }],
+            mountTrigger: "", mountLayer: "over", pageMode: "sandbox",
             cardFormat: "fengyue", openingPage: "<section>風月介紹</section>", status: "passed", version: 2,
           },
         },
       },
     });
     const d = (await readSealedForReview({ ...env, HOSTING_SERVICE_KEY: "k" }, "rev-fy", "harbor")) as any;
+    expect(d.reviewDisplayRules).toMatchObject([{ targets: ["user"], promptOnly: true, trimStrings: [" "] }]);
     expect(d.greetings).toEqual({ welcome: "", alternates: ["備選一"], prologue: ["推開門", "敲門"] });
     expect(d.authorAsset).toMatchObject({
       pageMode: "sandbox",

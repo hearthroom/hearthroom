@@ -1,3 +1,4 @@
+import { openingMarkup, openingRules, type OpeningRule } from "./review-opening";
 import { applyBatchMarks, authorProfiles, deviceSignals } from "./review-profile";
 import { weeklyLimitAt, weeklyUsageForMember } from "./quota";
 import { internalTermsIn } from "./author-note-guard";
@@ -33,53 +34,9 @@ export const AI_FEEDBACK = ["ai_right", "ai_wrong", "both_ok"] as const;
 /** 已定案的單，送審後多久內還能讓 AI 讀（試跑用） */
 export const AI_BACKFILL_WINDOW_MS = 7 * 86_400_000;
 
-const LIMITS = { setting: 12_000, text: 4_000, opening: 6_000, page: 3_000, alternates: 3, alternate: 3_000, prologue: 6, entries: 20, entry: 300, note: 400, authorNote: 1500, index: 40, rules: 20 };
-
-interface RuleInput { name?: unknown; find?: unknown; replace?: unknown; enabled?: unknown }
-
-/**
- * 作者寫的顯示規則要在 Worker 裡執行，正規表示式沒有逾時：只跑看起來安全的規則，免得一張卡的災難性回溯拖垮請求。
- * 跳過：太長的樣式或替換、巢狀量詞（(a+)+ 之類）、反向參照、前後瞻。最多 20 條、只量開場前 2,000 字、每條後輸出截在 12,000 字。
- * 漏網的最壞情況是審卡員讀這一張卡失敗（AI 記成交人），不影響玩家或審核員。
- */
-const RULE_GUARD = { rules: 20, find: 200, replace: 1_000, input: 2_000, output: 12_000 };
-const UNSAFE_PATTERN = /\([^)]*[+*{][^)]*\)[+*{?]|\\[1-9]|\\k<|\(\?<?[=!]/;
-function safeRules(rules: RuleInput[]): { re: RegExp; replace: string }[] {
-  const out: { re: RegExp; replace: string }[] = [];
-  for (const r of rules) {
-    if (out.length >= RULE_GUARD.rules) break;
-    if (r.enabled === false || typeof r.find !== "string" || !r.find.trim() || r.find.length > RULE_GUARD.find) continue;
-    const replace = typeof r.replace === "string" ? r.replace : "";
-    if (replace.length > RULE_GUARD.replace || UNSAFE_PATTERN.test(r.find)) continue;
-    try { out.push({ re: new RegExp(r.find, "g"), replace }); } catch { /* 作者的規則寫錯，略過 */ }
-  }
-  return out;
-}
-
-/** 顯示規則在一段文字裡命中幾次 */
-function ruleHits(rules: { re: RegExp }[], text: string): number {
-  const input = text.slice(0, RULE_GUARD.input);
-  return rules.reduce((n, r) => n + (input.match(r.re) ?? []).length, 0);
-}
-
-/** 套用顯示規則後玩家大致看到的字：照規則替換，再去掉標籤與樣式 */
-function renderedText(rules: { re: RegExp; replace: string }[], text: string): string {
-  let out = text.slice(0, RULE_GUARD.input);
-  for (const r of rules) out = out.replace(r.re, r.replace).slice(0, RULE_GUARD.output);
-  return pageText(out);
-}
+const LIMITS = { setting: 12_000, text: 4_000, opening: 6_000, alternates: 3, alternate: 3_000, prologue: 6, entries: 20, entry: 300, note: 400, authorNote: 1500, index: 40, rules: 20 };
 
 const NAME_MAX = 40;
-
-/** 開場網頁（作者資產的 openingPage）只取玩家看得到的字：去掉 script／style 與標籤，留下選項等文字。 */
-export function pageText(html: string): string {
-  return html
-    .replace(/<(script|style)\b[\s\S]*?<\/\1>/gi, " ")
-    .replace(/<br\s*\/?>|<\/(p|div|li|h[1-6]|button|tr)>/gi, "\n")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&amp;/g, "&")
-    .replace(/[ \t]+/g, " ").replace(/\s*\n\s*/g, "\n").trim();
-}
 
 const text = (v: unknown): string => (typeof v === "string" ? v : v === null || v === undefined ? "" : JSON.stringify(v));
 const list = (v: unknown): string[] => (Array.isArray(v) ? v.map(text) : []);
@@ -108,7 +65,8 @@ export function aiCardInput(settings: Record<string, unknown>, meta: { tags: str
   const doc = (settings.document ?? {}) as Record<string, unknown>;
   const greetings = (settings.greetings ?? {}) as Record<string, unknown>;
   const asset = (settings.authorAsset ?? {}) as Record<string, unknown>;
-  const page = pageText(text(asset.openingPage));
+  const pageHtml = typeof asset.openingPage === "string" ? asset.openingPage : "";
+  const page = openingMarkup(pageHtml);
   const books = Array.isArray(settings.worldbooks) ? settings.worldbooks : settings.worldbook ? [settings.worldbook] : [];
   type Entry = { name?: unknown; content?: unknown; isEnabled?: unknown; isConstant?: unknown; keywords?: unknown };
   const allEntries = (books as { entries?: Entry[] }[]).flatMap((b) => (Array.isArray(b?.entries) ? b.entries : []));
@@ -117,13 +75,20 @@ export function aiCardInput(settings: Record<string, unknown>, meta: { tags: str
     .map((e) => ({ name: text(e.name), content: text(e.content), constant: e.isConstant === true, keywords: list(e.keywords).length }));
   const setting = text(doc.roleDetailDesc);
   const welcome = text(greetings.welcome);
-  const rules = (Array.isArray(asset.rules) ? asset.rules : []) as RuleInput[];
+  const rawRules = Array.isArray(settings.reviewDisplayRules) ? settings.reviewDisplayRules : asset.rules;
+  const rules = (Array.isArray(rawRules) ? rawRules : []).filter((r): r is OpeningRule => !!r && typeof r === "object");
   const activeRules = rules.filter((r) => r.enabled !== false && typeof r.find === "string" && r.find.trim());
-  const runnable = opts.applyRules ? safeRules(activeRules) : [];
-  const cardText = setting + welcome + list(greetings.alternates).join("");
-  const welcomeHits = opts.applyRules ? ruleHits(runnable, welcome) : null;
+  const render = opts.applyRules ? openingRules(activeRules) : null;
   const alternates = list(greetings.alternates);
+  const names = { char: text(doc.roleName), user: text(doc.userName) };
+  const welcomeView = render?.(welcome, names);
+  const alternateViews = render ? alternates.slice(0, LIMITS.alternates).map((a) => render(a, names)) : [];
+  const cardText = setting + welcome + alternates.join("");
   const prologue = list(greetings.prologue);
+  const presentation = (view: typeof welcomeView) => view ? {
+    source: view.hits ? "display_rules" : "greeting", text: view.text, coverage: view.coverage,
+    structure: view.structure, ruleHits: view.hits, skippedRules: view.skipped,
+  } : null;
   const scanned = setting + welcome;
   const tail = welcome.slice(-200);
   return {
@@ -140,13 +105,22 @@ export function aiCardInput(settings: Record<string, unknown>, meta: { tags: str
       openings: {
         // 開場網頁：玩家進卡先看到的互動頁（選項、按鈕的字）。mode=page 時它就是開場，welcome 可能是空的
         mode: text(asset.openingMode) || (asset.cardFormat === "fengyue" ? "page" : "greeting"),
-        page: clip(page, LIMITS.page),
+        page: page.text,
         welcome: clip(welcome, LIMITS.opening),
         alternates: alternates.slice(0, LIMITS.alternates).map((a) => clip(a, LIMITS.alternate)),
         // 開場選項：玩家點了會填進輸入框的預設回覆（編輯器的「開場選項」欄位）
         prologue: prologue.slice(0, LIMITS.prologue).map((a) => clip(a, LIMITS.alternate)),
         // 開場白有被顯示規則替換的標記時，玩家看到的是替換後的版面：這是套用規則後的純文字近似
-        welcomeRendered: welcomeHits ? clip(renderedText(runnable, welcome), LIMITS.opening) : null,
+        welcomeRendered: welcomeView?.hits ? welcomeView.text : null,
+        alternatesRendered: alternateViews.map((view) => view.hits ? view.text : null),
+        presentation: {
+          welcome: presentation(welcomeView),
+          alternates: alternateViews.map(presentation),
+          page: pageHtml ? {
+            text: page.text, coverage: page.dynamic || page.clipped ? "partial" : "complete",
+            structure: page.structure,
+          } : null,
+        },
       },
       // 世界書：設定可以寫在世界書裡（常駐條目每輪都在，召回條目依關鍵字帶入）。index 是全部條目的目錄（不含內文）
       lorebook: {
@@ -173,18 +147,18 @@ export function aiCardInput(settings: Record<string, unknown>, meta: { tags: str
       ellipsisPer1k: per1k((scanned.match(/…+|\.{3,}/g) ?? []).length, scanned.length),
       dashPer1k: per1k((scanned.match(/—+|──+/g) ?? []).length, scanned.length),
       openingQuestion: /[?？]|\[choices\]|(^|\n)\s*(?:[1-9１-９][.、．)]|[A-DＡ-Ｄ][.、．)])/.test(tail),
-      openingPageChars: page.length,
+      openingPageChars: page.chars,
       // 開場網頁的結構：原始 HTML 大小、元素數、可點的元素（按鈕、連結、分頁）、有沒有腳本。
       // 頁面內容靠腳本畫出來時，上面的純文字可能只剩「載入中」，這時看結構判斷用不用心
-      openingPageHtmlChars: text(asset.openingPage).length,
-      openingPageElements: (text(asset.openingPage).match(/<[a-zA-Z][^>]*>/g) ?? []).length,
-      openingPageInteractive: (text(asset.openingPage).match(/<(button|a|select|input)\b|onclick=|data-tab|role="tab"/gi) ?? []).length,
-      openingPageScript: /<script\b/i.test(text(asset.openingPage)),
+      openingPageHtmlChars: pageHtml.length,
+      openingPageElements: (pageHtml.match(/<[a-zA-Z][^>]*>/g) ?? []).length,
+      openingPageInteractive: (pageHtml.match(/<(button|a|select|input)\b|onclick=|data-tab|role="tab"/gi) ?? []).length,
+      openingPageScript: /<script\b/i.test(pageHtml),
       // 開場白裡直接寫的 HTML（會被渲染成版面）的標籤數
       openingHtmlTags: (welcome.match(/<[a-zA-Z][^>]*>/g) ?? []).length,
       openingOptions: prologue.length,
       // 開場白（含備選）被顯示規則命中的次數：多代表開場靠規則換成版面呈現
-      openingRuleHits: welcomeHits === null ? null : welcomeHits + list(greetings.alternates).slice(0, LIMITS.alternates).reduce((n, a) => n + ruleHits(runnable, a), 0),
+      openingRuleHits: welcomeView ? welcomeView.hits + alternateViews.reduce((n, view) => n + view.hits, 0) : null,
       lorebookConstantChars: entries.filter((e) => e.constant).reduce((n, e) => n + e.content.length, 0),
       openingChoices: /\[choices\]|(^|\n)\s*(?:[1-9１-９][.、．)]|[A-DＡ-Ｄ][.、．)])\s*\S/.test(welcome),
     },
