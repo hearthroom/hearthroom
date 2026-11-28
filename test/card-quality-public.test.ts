@@ -47,11 +47,14 @@ it('never serializes small cohorts and reads only the approved version’s round
   expect(await (await card('/quality')).json()).toEqual({ length, deepPlay: null, rating: null, comments: 0 });
   expect(await (await card('?view=0')).json()).toMatchObject({ qualitySignal: signal });
   expect(await (await list()).json()).toMatchObject({ items: [{ qualitySignal: signal }] });
-  await env.DB.prepare('UPDATE card_quality_play SET players=20 WHERE card_id=?').bind(row.id).run();
-  const deepPlay = { reached: 7, players: 20, turns: 5 };
-  expect(await (await list()).json()).toMatchObject({ items: [{ qualitySignal: { lengthCharacters: 14000, deepPlay } }] });
+  await env.DB.prepare('UPDATE card_quality_play SET players=200,reached=165 WHERE card_id=?').bind(row.id).run();
+  const deepPlay = { rate: 82 };
+  const board = await (await list()).json<{ items: { qualitySignal: unknown }[] }>();
+  expect(board.items[0].qualitySignal).toEqual({ lengthCharacters: 14000, deepPlay });
+  const cardDetail = await (await card('?view=0')).json<{ qualitySignal: unknown }>();
+  expect(cardDetail.qualitySignal).toEqual({ lengthCharacters: 14000, deepPlay });
   expect(await (await card('/quality')).json()).toEqual({ length, deepPlay: { ...deepPlay, medianTurns: 3 }, rating: null, comments: 0 });
-  await env.DB.prepare('UPDATE card_quality_play SET players=19 WHERE card_id=?').bind(row.id).run();
+  await env.DB.prepare('UPDATE card_quality_play SET players=19,reached=7 WHERE card_id=?').bind(row.id).run();
   expect(await (await card('/quality')).json()).toMatchObject({ deepPlay: null });
 });
 
