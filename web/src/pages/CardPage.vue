@@ -27,6 +27,7 @@ import AdultGate from "@/components/AdultGate.vue";
 import RegionUnavailable from "@/components/RegionUnavailable.vue";
 import { isRegionUnavailable } from "@/lib/country-region";
 import CardScore from "@/components/CardScore.vue";
+import CardQualitySection from "@/components/CardQualitySection.vue";
 import CardSpendLeaderboard from '@/components/CardSpendLeaderboard.vue';
 import ReadmeView from "@/components/ReadmeView.vue";
 import CoverImg from "@/components/CoverImg.vue";
@@ -654,6 +655,8 @@ watch(
 
         <aside ref="side" class="role__side">
           <CardScore v-if="listed && score" id="score" class="role__score-box" :score="score" :own="own" :busy="scoreBusy" @rate="rate" @write="writeReview" />
+          <!-- 卡片數據（篇幅、聊滿人數）：桌機在評分之後；手機排在名字與簡介正下方、介紹之前，預設收合 -->
+          <CardQualitySection v-if="listed" :key="card.id" class="role__quality" :card="card" />
 
           <CardSpendLeaderboard v-if="card.provider==='harbor'" :key="card.id" :card-id="card.id" :play-url="stageAvailable ? playAppUrl(String(card.num ?? card.id), locale, { provider: card.provider }) : undefined" />
 
@@ -921,11 +924,15 @@ a.role__author-who:hover { color: var(--accent-text); }
   .role__intro-wrap { grid-area: intro; }
   .role__versions-wrap { grid-area: versions; }
   .role__score-box { grid-area: score; }
+  .role__quality { grid-area: quality; }
   .role__comments-wrap { grid-area: comments; }
   .role__info { grid-area: info; }
   .role__more { grid-area: more; }
   /* 作者綁了打賞：作者區塊從最底下移到介紹正下方，讀完介紹就看得到（其他作品跟著上來） */
   .role__body:has(.role__more--tips) { grid-template-areas: "intro" "versions" "more" "score" "spend" "comments" "info"; }
+  /* 卡片數據在名字與簡介正下方、介紹之前；沒有這一塊時不留空列 */
+  .role__body:has(.role__quality) { grid-template-areas: "quality" "intro" "versions" "score" "spend" "comments" "info" "more"; }
+  .role__body:has(.role__quality):has(.role__more--tips) { grid-template-areas: "quality" "intro" "versions" "more" "score" "spend" "comments" "info"; }
   .role__intro { padding: var(--s-4); }
   .role__comments { padding: var(--s-4); }
 }

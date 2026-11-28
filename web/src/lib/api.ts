@@ -17,6 +17,7 @@ import { rememberCard, rememberCards } from "./card-memory";
 import type { Author, AuthorSort, CardPage, CommunityCard, FollowersVisibility, FollowingVisibility, FollowListPage, MyRole, Sort, Zone } from "./types";
 import type { CardHonor, Honor } from "./honors";
 import type { AnnualBoard } from "../../../shared/annual-honors";
+import type { CardQualityDetail } from "../../../shared/card-quality";
 import type { AchievementBoard, AchievementBoardKind } from "../../../shared/achievements";
 import type { RoleDocumentFields, TalkExampleEntry, WorldbookEntryDraft } from "./role-draft";
 
@@ -337,6 +338,13 @@ export async function fetchEditorCardReference(id: string, token: string, provid
   return json(await fetch(`${COMMUNITY_API}/me/cards/${encodeURIComponent(id)}/author-reference?lang=${encodeURIComponent(String(i18n.global.locale.value))}`, {
     headers: { ...from(), "X-Provider": provider, ...authHeaders(token) },
   }));
+}
+
+/** 卡片預覽與卡片頁的數據（篇幅拆項、聊滿人數、評分、留言數）。只有取整後的數字，不含卡片內容；成人卡同 fetchCard 的門。 */
+export async function fetchCardQuality(id: string): Promise<CardQualityDetail> {
+  const viewer = await viewerAccess();
+  const q = viewer.param ? "?nsfw=1" : "";
+  return json<CardQualityDetail>(await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(id)}/quality${q}`, { headers: { ...from(), ...viewer.headers } }));
 }
 
 /** 卡片頁「全部榮譽」：這張卡在兩條榜、各期別結算出的全部榮譽，新頒發的在前。看得到卡的人才看得到（成人卡同 fetchCard）。 */
