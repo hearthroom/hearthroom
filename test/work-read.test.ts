@@ -289,6 +289,96 @@ async function aggregateFixture(size:number){
   SELECT 'aggregate-work-'||id,'harbor',source_role_id,'public',1,'none',source_role_id FROM cards`).run();
 }
 
+it('samples at most one of twenty background observations and shares the existing Provider result',async()=>{
+ await aggregateFixture(1);
+ const {network}=providerFixture('public');
+ await env.DB.prepare('DELETE FROM public_aggregate_proof').run();
+ await env.DB.prepare("INSERT INTO community_settings(key,value,updated_at) VALUES('public_aggregate_proof_shadow','true',1)").run();
+ for(let i=0;i<21;i++){
+  const origin=`https://shadow-sample-${Math.min(i,19)}.test`;
+  const response=await request(origin+'/v1/tags/counts?zone=zh');
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({counts:{story:1}});
+ }
+ expect(network).toHaveBeenCalledTimes(20);
+ expect(await env.DB.prepare('SELECT count(*) AS n FROM public_aggregate_proof WHERE expires_at>0').first<number>('n')).toBe(1);
+ const metrics=await opsMetrics(env.DB);
+ expect(metrics).toContain('hearthroom_aggregate_proof_shadow_total{operation="build",outcome="sampled"} 1');
+ expect(metrics).toContain('hearthroom_aggregate_proof_shadow_total{operation="build",outcome="success"} 1');
+});
+
+it('lets a public response finish while the background publication waits, then stops publication when disabled',async()=>{
+ await aggregateFixture(1);
+ const {network}=providerFixture('public');
+ await env.DB.prepare('DELETE FROM public_aggregate_proof').run();
+ await env.DB.prepare("INSERT INTO community_settings(key,value,updated_at) VALUES('public_aggregate_proof_shadow','true',1)").run();
+ const release=Promise.withResolvers<void>();
+ const entered=Promise.withResolvers<void>();
+ const wrapStatement=(statement:D1PreparedStatement):D1PreparedStatement=>new Proxy(statement,{get(target,key){
+  if(key==='bind')return (...args:unknown[])=>wrapStatement(target.bind(...args));
+  if(key==='run')return async()=>{entered.resolve();await release.promise;return target.run();};
+  return Reflect.get(target,key);
+ }});
+ const wrapDb=<T extends D1Database|D1DatabaseSession>(db:T):T=>new Proxy(db,{get(target,key){
+  if(key==='withSession'&&'withSession' in target)return (constraint:string)=>wrapDb(target.withSession(constraint));
+  if(key==='prepare')return (sql:string)=>{
+   const statement=target.prepare(sql);
+   return sql.includes('UPDATE public_aggregate_proof SET expires_at=?')?wrapStatement(statement):statement;
+  };
+  const value=Reflect.get(target,key);
+  return typeof value==='function'?value.bind(target):value;
+ }});
+ const contexts=[];
+ let watchdog:ReturnType<typeof setTimeout>|undefined;
+ try{
+  const db=wrapDb(env.DB);
+  for(let i=0;i<20;i++){
+   const ctx=createExecutionContext();
+   contexts.push(ctx);
+   const response=await worker.fetch(new Request(`https://shadow-stop-${i}.test/v1/tags/counts?zone=zh`),{...env,DB:db,HOSTING_SERVICE_KEY:'fixture-issuer'},ctx);
+   expect(response.status).toBe(200);
+  }
+  const observed=await Promise.race([entered.promise.then(()=>true),new Promise<boolean>(resolve=>{watchdog=setTimeout(()=>resolve(false),750);})]);
+  expect(observed).toBe(true);
+  await env.DB.prepare("UPDATE community_settings SET value='false' WHERE key='public_aggregate_proof_shadow'").run();
+ }finally{
+  clearTimeout(watchdog);
+  release.resolve();
+  await Promise.all(contexts.map(waitOnExecutionContext));
+ }
+ expect(network).toHaveBeenCalledTimes(20);
+ expect(await env.DB.prepare('SELECT count(*) AS n FROM public_aggregate_proof WHERE expires_at>0 OR lease<>\'\'').first<number>('n')).toBe(0);
+ for(let i=0;i<20;i++)expect((await request(`https://shadow-off-${i}.test/v1/tags/counts?zone=zh`)).status).toBe(200);
+ expect(network).toHaveBeenCalledTimes(40);
+ const metrics=await opsMetrics(env.DB);
+ expect(metrics).toContain('hearthroom_aggregate_proof_shadow_total{operation="build",outcome="sampled"} 1');
+ expect(metrics).toContain('hearthroom_aggregate_proof_shadow_total{operation="build",outcome="stopped"} 1');
+});
+
+it.each(['provider_invalid_response','d1_claim_error'] as const)('records the bounded background cause %s without changing the public outcome',async cause=>{
+ await aggregateFixture(1);
+ const {current,network}=providerFixture('public');
+ await env.DB.prepare('DELETE FROM public_aggregate_proof').run();
+ await env.DB.prepare("INSERT INTO community_settings(key,value,updated_at) VALUES('public_aggregate_proof_shadow','true',1)").run();
+ const providerFailure=cause==='provider_invalid_response';
+ if(providerFailure)current.mode='missing';
+ const db=providerFailure?env.DB:new Proxy(env.DB,{get(target,key){
+  if(key==='withSession')return undefined;
+  if(key==='prepare')return (sql:string)=>{
+   if(sql.includes('INSERT INTO public_aggregate_proof'))throw new Error('Synthetic lease claim failure');
+   return target.prepare(sql);
+  };
+  const value=Reflect.get(target,key);
+  return typeof value==='function'?value.bind(target):value;
+ }});
+ for(let i=0;i<20;i++){
+  const response=await request(`https://shadow-${cause}-${i}.test/v1/tags/counts?zone=zh`,undefined,{},db);
+  expect(response.status).toBe(providerFailure?503:200);
+ }
+ expect(network).toHaveBeenCalledTimes(20);
+ expect(await opsMetrics(env.DB)).toContain(`hearthroom_aggregate_proof_shadow_failures_total{operation="build",outcome="${cause}"} 1`);
+});
+
 it('counts all contributors beyond two full visibility batches and reuses a warm proof',async()=>{
  await aggregateFixture(401);const {network}=providerFixture('public');
  for(let repeat=0;repeat<2;repeat++){

@@ -3087,6 +3087,7 @@ export default {
     }
     const d1 = withD1Session(request, {
       ...env,
+      proofShadowDb: env.DB,
       ...(controls.publicProjection ? { PUBLIC_CANDIDATE_PROJECTION_ACTIVE: true } : {}),
       ...(controls.cardQualityUi ? { CARD_QUALITY_UI_ACTIVE: true } : {}),
     });

@@ -9,6 +9,8 @@ import type {ManagedWork,WorkAccess,WorkRestriction} from './work-policy';
 import {upstream} from './upstream';
 import {bumpOp} from './ops-metrics';
 import {boardCache} from './board-cache';
+import {scheduleAggregateProofShadow} from './aggregate-proof-shadow';
+import {AggregateProofD1ScanError,VisibilityProviderUnavailable,type ReadFailureReason} from './work-read-failures';
 
 export type VisibilityReadSurface='list'|'detail'|'social'|'library'|'metadata'|'aggregate';
 async function observeRead<T>(env:Env,surface:VisibilityReadSurface,read:()=>Promise<T>,allowed:(result:T)=>boolean):Promise<T>{
@@ -27,7 +29,6 @@ const keyOf=(item:WorkReadIdentity)=>JSON.stringify([item.sourceRoleId,item.work
 
 // This response is current authority, never an operation receipt or cache entry.
 // A missing, duplicate or mismatched identity makes the entire check unavailable.
-type ReadFailureReason='timeout'|'transport'|'http_5xx'|'http_4xx'|'http_429'|'http_other'|'invalid_response'|'missing_key';
 class ReadFailure extends Error {
  constructor(readonly reason:ReadFailureReason,readonly retryable=false){super(reason);}
 }
@@ -76,7 +77,7 @@ export async function readCurrentWorkPolicies(env:Env,items:WorkReadIdentity[]):
    const failure=error instanceof ReadFailure?error:new ReadFailure('invalid_response');
    await bumpOp(env.DB,'visibility_provider_failure',attempt?'retry':'initial',failure.reason);
    if(attempt)await bumpOp(env.DB,'visibility_provider_retry','public_batch','exhausted');
-   if(attempt||!failure.retryable)throw new HttpError(503,'visibility_provider_unavailable');
+   if(attempt||!failure.retryable)throw new VisibilityProviderUnavailable(failure.reason);
    // One fresh authority read, never a cached grant. Do not retry backpressure,
    // authentication, malformed responses or mismatched policy identities.
    await new Promise(resolve=>setTimeout(resolve,100));
@@ -148,12 +149,15 @@ export async function provePublicAggregates(env:Env,zone?:string):Promise<void>{
  let after=0;
  let excluded:Set<string>|undefined;
  for(;;){
-  const result=await env.DB.prepare(`SELECT c.* FROM managed_work_access p JOIN cards c
-  ON c.provider=p.provider AND c.source_role_id=p.source_role_id
-  WHERE p.access='public' AND p.restriction='none' AND p.sync_state='complete'
-  AND p.moderation_revision=p.confirmed_moderation_revision AND c.status='approved' AND c.board_hidden=0 AND c.public_blocked=0
-  ${zone?"AND c.zone IN (?, 'all')":''} AND c.id>? ORDER BY c.id LIMIT ?`).bind(...(zone?[zone]:[]),after,WORK_READ_BUDGET).all<CardRow>();
-  if(result.results.length&&!excluded)excluded=await excludedAuthorKeys(env.DB);
+  let result:D1Result<CardRow>;
+  try{
+   result=await env.DB.prepare(`SELECT c.* FROM managed_work_access p JOIN cards c
+   ON c.provider=p.provider AND c.source_role_id=p.source_role_id
+   WHERE p.access='public' AND p.restriction='none' AND p.sync_state='complete'
+   AND p.moderation_revision=p.confirmed_moderation_revision AND c.status='approved' AND c.board_hidden=0 AND c.public_blocked=0
+   ${zone?"AND c.zone IN (?, 'all')":''} AND c.id>? ORDER BY c.id LIMIT ?`).bind(...(zone?[zone]:[]),after,WORK_READ_BUDGET).all<CardRow>();
+   if(result.results.length&&!excluded)excluded=await excludedAuthorKeys(env.DB);
+  }catch(cause){throw new AggregateProofD1ScanError('Public aggregate candidate read failed',{cause});}
   const visible=await filterPublicRows(env,result.results,'aggregate',excluded);
   if(visible.rows.length!==result.results.length)throw new HttpError(503,'visibility_sync_pending');
   if(result.results.length<WORK_READ_BUDGET)return;
@@ -193,14 +197,17 @@ export async function proveCachedPublicAggregates(
 
  // Expiration starts before the first authority batch. A slow or out-of-order
  // cache write cannot extend the life of permissions that were checked earlier.
- const expiresAt=Date.now()+AGGREGATE_PROOF_MS;
+ const startedAt=Date.now();
+ const expiresAt=startedAt+AGGREGATE_PROOF_MS;
  // Use a native settlement gate for cross-request waiters. The producer's
  // D1 and Cache API operations stay in its own Worker request context.
  const gate=Promise.withResolvers<number>();
  aggregateProofsInFlight.set(proofKey,gate.promise);
  ctx.waitUntil((async()=>{
   try{
-   await provePublicAggregates(env,zone);
+   const authority=provePublicAggregates(env,zone);
+   scheduleAggregateProofShadow(env,ctx,{requestUrl,zone,revision,startedAt,expiresAt,authority});
+   await authority;
    if(expiresAt<=Date.now())throw new HttpError(503,'visibility_provider_unavailable');
    gate.resolve(expiresAt);
    const remaining=expiresAt-Date.now();
