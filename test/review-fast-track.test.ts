@@ -66,6 +66,22 @@ const metric = async (outcome: string) => {
   return m ? Number(m[1]) : 0;
 };
 
+async function delistAndRestore() {
+  const card = (await env.DB.prepare('SELECT id FROM cards').first<{ id: number }>())!;
+  const moderate = (action: 'delist' | 'restore_listing') => post('/v1/moderation/cases', 'reviewer', {
+    cardId: card.id, action, reason: '重新檢查卡片在排行榜的狀態。', operationId: crypto.randomUUID(),
+    ...(action === 'delist' ? { confirmImmediateDelist: true } : {}),
+  });
+  const delist = await moderate('delist');
+  expect(delist.status, await delist.clone().text()).toBe(201);
+  expect(await json(delist)).toMatchObject({ status: 'confirmed' });
+  const restore = await moderate('restore_listing');
+  expect(restore.status, await restore.clone().text()).toBe(201);
+  const { id } = await json(restore);
+  expect((await post(`/v1/moderation/cases/${id}/vote`, 'mgr', { vote: 'confirm', reason: '已人工確認恢復。' })).status).toBe(200);
+  expect(await env.DB.prepare('SELECT board_hidden, public_blocked FROM cards').first()).toEqual({ board_hidden: 0, public_blocked: 0 });
+}
+
 describe('自動核准', () => {
   it('擴大旗標與現行判準一致時，新卡通過直接上架並計入新卡指標', async () => {
     Object.assign(env, { REVIEW_AI_AUTO_APPROVE_CRITERIA: 'v1' });
@@ -241,6 +257,26 @@ describe('自動核准', () => {
 });
 
 describe('不走快速通道（留在人工佇列）', () => {
+  it('曾被駁回的卡，即使後續有人工核准，更新仍須人審', async () => {
+    await humanDecide(await submit(), 'reject');
+    rolesOnMainSite({ roleId: 'role-1', authorNumId: 10001, name: 'Approved revision' });
+    const { update } = await liveCardWithUpdate();
+    Object.assign(env, { REVIEW_AI_AUTO_APPROVE_CRITERIA: 'v1' });
+    try {
+      expect((await suggest(update)).status).toBe(200);
+      expect(await statusOf(update)).toBe('pending');
+      expect(await metric('ineligible_status')).toBe(1);
+    } finally { Reflect.deleteProperty(env, 'REVIEW_AI_AUTO_APPROVE_CRITERIA'); }
+  });
+
+  it('曾被人工除名的卡，恢復後更新仍須人審', async () => {
+    const { update } = await liveCardWithUpdate();
+    await delistAndRestore();
+    expect((await suggest(update)).status).toBe(200);
+    expect(await statusOf(update)).toBe('pending');
+    expect(await metric('ineligible_status')).toBe(1);
+  });
+
   it('從未上架的新卡', async () => {
     const id = await submit();
     await suggest(id);
@@ -450,6 +486,16 @@ describe('寫入順序與競態（獨立審查 2026-11-25）', () => {
     expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action='review_fast_track_approve'").first()).toEqual({ n: 0 });
     expect(await checks(update)).toEqual(['ineligible_status']);
     expect(await env.DB.prepare('SELECT status, board_hidden FROM cards').first()).toEqual({ status: 'approved', board_hidden: 1 });
+  });
+
+  it('蓋章前被人工除名又恢復：仍須人審且放回領取', async () => {
+    const { update } = await liveCardWithUpdate();
+    fastTrackSeams.beforeStamp = delistAndRestore;
+    expect((await suggest(update)).status).toBe(200);
+    expect(await statusOf(update)).toBe('pending');
+    expect(await claimOf(update)).toBeNull();
+    expect(await stampCount(update)).toBe(0);
+    expect(await checks(update)).toEqual(['ineligible_status']);
   });
 
   it('核准的判定事件跟蓋章同一批；中途出錯也放回領取', async () => {

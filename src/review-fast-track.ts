@@ -31,7 +31,7 @@ export const FAST_TRACK_ELIGIBLE: readonly FastTrackOutcome[] = ["approved", "in
 interface Row {
   status: string; kind: string; card_id: number; flip_of: string | null; reopen_of: string | null; claimed_by: string | null; claimed_at: number | null;
   rating: string | null; rating_descriptors: string | null;
-  stamped: number; decided: number; held: number; dropped: number; drop_case_open: number; after_drop: number; previous_status: string | null;
+  stamped: number; decided: number; held: number; dropped: number; drop_case_open: number; after_drop: number; previous_status: string | null; human_review_history: number;
   card_status: string; approved_version_id: string | null; public_blocked: number; board_hidden: number; live_rating: string | null; live_descriptors: string | null;
   candidate_pending: number; live_state: string | null; live_submission_status: string | null; version_blocked: number; open_case: number; correcting: number; restricted: number;
 }
@@ -41,13 +41,20 @@ interface Row {
  * 結構條件（前三項）的 SQL：
  *   - 單子待審、沒有任何審核章、沒有託管核准決定、沒有人在有效期內領著；
  *   - 不是改判單、重新審核單；卡沒冷凍、單沒在不受理中、這張卡沒有還開著的不受理案件、不是不受理後改版重送；
- *   - 上次定案為駁回的改稿重送由人工處理；擴大通道也檢查這次的封存版本和託管發布許可；
+ *   - 曾被人工駁回、下架或除名的卡，即使之後核准或恢復，改稿重送仍由人工處理；
+ *   - 擴大通道也檢查這次的封存版本和託管發布許可；
  *   - 卡片目前已核准上架：cards.status='approved'、有上架版本、上架版本的單仍是通過、版本狀態 approved；
  *     沒被隱藏或封鎖（board_hidden、public_blocked）、上架版本沒被處置封鎖、沒有開著的處置案件、
  *     上架那張單沒有進行中的改判；託管作品是公開、沒有限制、同步完成；
  *   - 舊通道才要求分級與內容標示一致；擴大通道照一般核准路徑處理分級。
  */
 const previousStatus = () => `(SELECT p.status FROM review_submissions p WHERE ${EARLIER_DECIDED("p", "s")} ORDER BY p.submitted_at DESC, p.rowid DESC LIMIT 1)`;
+// 撤回核准也會把原單標為 rejected。撤回待審的改判單（flip_of）則沒有做新的駁回判定。
+// 除名在案件確認時生效，下架在案件建立時立即生效。恢復公開不會刪除原案件。
+const HUMAN_REVIEW_HISTORY = `(EXISTS(SELECT 1 FROM review_submissions p WHERE p.card_id=s.card_id
+  AND p.status='rejected' AND p.flip_of IS NULL)
+  OR EXISTS(SELECT 1 FROM moderation_cases m WHERE m.provider=c.provider AND m.source_role_id=c.source_role_id
+    AND (m.action='suspend' OR (m.action='delist' AND m.status='confirmed'))))`;
 const PENDING_PUBLICATION = `EXISTS(SELECT 1 FROM hosting_versions v WHERE v.submission_id=s.id AND v.state='pending'
   AND NOT EXISTS(SELECT 1 FROM managed_work_access m WHERE m.work_id=v.work_id
     AND NOT EXISTS(SELECT 1 FROM work_publication_permits g WHERE g.version_id=v.version_id AND g.state='prepared' AND g.epoch=m.epoch)))`;
@@ -60,7 +67,7 @@ async function loadRow(db: D1Database, submissionId: string): Promise<Row | null
       EXISTS(SELECT 1 FROM review_drops d WHERE d.submission_id=s.id AND d.restored_at IS NULL) AS dropped,
       EXISTS(SELECT 1 FROM review_drop_cases k WHERE k.card_id=s.card_id AND k.closed_at IS NULL) AS drop_case_open,
       COALESCE((SELECT f.after_drop FROM review_submission_features f WHERE f.submission_id=s.id), 0) AS after_drop,
-      ${previousStatus()} AS previous_status,
+      ${previousStatus()} AS previous_status, ${HUMAN_REVIEW_HISTORY} AS human_review_history,
       c.status AS card_status, c.approved_version_id, c.public_blocked, c.board_hidden, c.rating AS live_rating, c.rating_descriptors AS live_descriptors,
       lv.state AS live_state, ls.status AS live_submission_status,
       ${PENDING_PUBLICATION} AND NOT EXISTS(SELECT 1 FROM hosting_versions v JOIN moderation_blocked_versions b
@@ -91,7 +98,7 @@ function structural(r: Row, now: number, expanded: boolean, self = false): FastT
   if (r.status !== "pending" || r.stamped || r.decided || claimedLive) return "skipped_decided";
   if (r.flip_of || r.reopen_of || r.held || r.dropped || r.drop_case_open || r.after_drop) return "ineligible_status";
   if (r.public_blocked || r.board_hidden || r.version_blocked || r.open_case || r.correcting || r.restricted) return "ineligible_status";
-  if (r.previous_status === "rejected" || (expanded && (!r.candidate_pending || !r.rating))) return "ineligible_status";
+  if (r.previous_status === "rejected" || r.human_review_history || (expanded && (!r.candidate_pending || !r.rating))) return "ineligible_status";
   if (expanded && r.kind === "first" && !r.approved_version_id && r.card_status === "pending") return null;
   if (r.card_status !== "approved" || !r.approved_version_id || r.live_state !== "approved" || r.live_submission_status !== "approved") return "ineligible_status";
   if (!expanded && r.previous_status !== "approved") return "ineligible_status";
@@ -178,6 +185,7 @@ const eligibleAtWrite = () => `EXISTS(SELECT 1 FROM review_submissions s JOIN ca
   AND NOT EXISTS(SELECT 1 FROM moderation_blocked_versions b WHERE b.version_id=c.approved_version_id
     OR b.version_id=(SELECT v.version_id FROM hosting_versions v WHERE v.submission_id=s.id))
   AND ${previousStatus()} IS NOT 'rejected'
+  AND NOT ${HUMAN_REVIEW_HISTORY}
   AND (?9=0 OR ${PENDING_PUBLICATION})
   AND NOT EXISTS(SELECT 1 FROM moderation_cases m WHERE m.provider=c.provider AND m.source_role_id=c.source_role_id AND m.status IN ('pending','disputed'))
   AND NOT EXISTS(SELECT 1 FROM review_holds h WHERE h.card_id=s.card_id)
