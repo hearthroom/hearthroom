@@ -18,3 +18,9 @@ it('counts the draft the way the public list will: enabled entries, repeated tex
 it('reports under 1,000 as zero, the same as the tile', () => {
   expect(draftQualityLength(draft({ roleDetailDesc: text(300), roleWelcome: '' }), [])).toBe(0);
 });
+
+it('counts world members the editor holds in draft.world', () => {
+  // 1,200 設定 + 600 開場 + 成員資料 500 + 描述 1,700 = 4,000
+  const world = { maxSpeakers: 2, strictness: 'balanced', characters: [{ id: '', name: '甲', avatar: '', sex: '', profile: text(500, '甲'), description: text(1700, '乙'), lorebookId: '' }] };
+  expect(draftQualityLength(draft({ world }), [])).toBe(4000);
+});
