@@ -10,7 +10,7 @@ import {signShortcutKey} from '../src/shortcut';
 import {opsMetrics} from '../src/ops-metrics';
 import {workPolicyGateway} from '../src/work-policy';
 import {hostGateway} from '../src/hosting';
-import {HttpError} from '../src/types';
+import {HttpError,type Env} from '../src/types';
 import {authorLine} from '../src/head';
 
 beforeEach(async () => { await resetDb(); vi.spyOn(scoreGateway, 'read').mockResolvedValue({ eligible: true, turns: 6, credits: '0', requiredTurns: 6, paidTurns: 3, requiredCredits: '500' }); });
@@ -47,18 +47,48 @@ function providerFixture(access:'public'|'unlisted'|'private'='private'){
  });
  return {current,network};
 }
-async function board(){
+async function board(vars:Partial<Env>={}){
  const context=createExecutionContext();
- const response=await worker.fetch(new Request('https://c.test/v1/cards'),{...env,HOSTING_SERVICE_KEY:'fixture-issuer'},context);
+ const response=await worker.fetch(new Request('https://c.test/v1/cards'),{...env,HOSTING_SERVICE_KEY:'fixture-issuer',...vars},context);
  const body=await response.json() as {items:unknown[]};
  await waitOnExecutionContext(context);
  return {response,body};
 }
-async function request(path:string,token?:string,init:RequestInit={},db=env.DB){
+async function request(path:string,token?:string,init:RequestInit={},db=env.DB,vars:Partial<Env>={}){
  const context=createExecutionContext();
- const response=await worker.fetch(new Request(path.startsWith('http')?path:'https://c.test'+path,{...init,headers:{...init.headers,...(token?{Authorization:'Bearer '+token}:{})}}),{...env,DB:db,HOSTING_SERVICE_KEY:'fixture-issuer'},context);
+ const response=await worker.fetch(new Request(path.startsWith('http')?path:'https://c.test'+path,{...init,headers:{...init.headers,...(token?{Authorization:'Bearer '+token}:{})}}),{...env,DB:db,HOSTING_SERVICE_KEY:'fixture-issuer',...vars},context);
  await waitOnExecutionContext(context);return response;
 }
+
+function capturePublicReadEvents() {
+ const events:AnalyticsEngineDataPoint[]=[];
+ const vars={EVENTS:{writeDataPoint:(point:AnalyticsEngineDataPoint)=>{events.push(point);}}};
+ const captured=()=>events.map(point=>[point.blobs?.[2],point.doubles?.[3],point.blobs?.[13]]);
+ return {vars,captured};
+}
+
+it.each([
+ ['/v1/tags', 'FROM managed_work_access p JOIN cards c', 'D1_ERROR: D1 DB is overloaded. Requests queued for too long.', 'public_d1_overloaded'],
+ ['/v1/tags/counts', 'FROM managed_work_access p JOIN cards c', 'D1 DB storage operation exceeded timeout which caused object to be reset.', 'public_d1_timeout'],
+ ['/v1/cards', 'FROM moderation_clock', 'D1_ERROR: database admission failed (7429)', 'public_d1_overloaded'],
+ ['/v1/tags', 'FROM managed_work_access p JOIN cards c', 'D1_ERROR: SQLITE_CONSTRAINT for fixture 7429', 'public_other'],
+ ['/v1/cards', 'FROM moderation_clock', 'Unclassified fixture timed out', 'public_other'],
+])('classifies public read 500 on %s without exposing exception text',async(path,query,message,reason)=>{
+ const db=new Proxy(env.DB,{get(target,key){
+  if(key==='withSession')return undefined;
+  if(key==='prepare')return (sql:string)=>{
+   if(sql.includes(query))throw new Error(message);
+   return target.prepare(sql);
+  };
+  const value=Reflect.get(target,key);
+  return typeof value==='function'?value.bind(target):value;
+ }});
+ const {vars,captured}=capturePublicReadEvents();
+ const response=await request(`https://${reason}.test${path}`,undefined,{},db,vars);
+ expect(response.status).toBe(500);
+ expect(await response.json()).toEqual({error:'internal error'});
+ expect(captured()).toEqual([[path,500,reason]]);
+});
 it('revalidates a managed public candidate before returning a stale positive board result',async()=>{
  const {source}=await managedFixture();const {network}=providerFixture();
  const {response,body}=await board();
@@ -110,12 +140,14 @@ it('rechecks current Provider and local visibility for a shared first-screen can
 
 it.each(['network','timeout','503'] as const)('stops after one retry and returns no partial public data for persistent %s',async kind=>{
  await managedFixture();const {network}=providerFixture('public');
+ const {vars,captured}=capturePublicReadEvents();
  network.mockImplementation(async()=>{
   if(kind==='network')throw new TypeError('Synthetic connection reset');
   if(kind==='timeout')throw new DOMException('Synthetic deadline','TimeoutError');
   return Response.json({error:'synthetic_unavailable'},{status:503});
  });
- const result=await board();expect(result.response.status).toBe(503);expect(result.body).toEqual({error:'visibility_provider_unavailable'});expect(network).toHaveBeenCalledTimes(2);
+ const result=await board(vars);expect(result.response.status).toBe(503);expect(result.body).toEqual({error:'visibility_provider_unavailable'});expect(network).toHaveBeenCalledTimes(2);
+ expect(captured()).toEqual([['/v1/cards',503,'public_provider_unavailable']]);
  const metrics=await opsMetrics(env.DB);
  for(const attempt of ['initial','retry'])expect(metrics).toContain(`hearthroom_visibility_provider_failures_total{attempt="${attempt}",outcome="${kind==='network'?'transport':kind==='timeout'?'timeout':'http_5xx'}"} 1`);
  expect(metrics).toContain('hearthroom_visibility_provider_retries_total{operation="public_batch",outcome="exhausted"} 1');
@@ -184,7 +216,8 @@ it('reuses the zoned proof for tag counts only during its 30 second lifetime',as
  const {current,network}=providerFixture('public');
  const startedAt=Date.now();
  const now=vi.spyOn(Date,'now').mockReturnValue(startedAt);
- const cold=await request(path);
+ const {vars,captured}=capturePublicReadEvents();
+ const cold=await request(path,undefined,{},env.DB,vars);
  expect(cold.status).toBe(200);
  expect((await request(origin+'/v1/tags?zone=zh')).status).toBe(200);
  current.access='private';
@@ -194,9 +227,10 @@ it('reuses the zoned proof for tag counts only during its 30 second lifetime',as
  expect(await warm.json()).toEqual(await cold.json());
  expect(network).toHaveBeenCalledTimes(1);
  now.mockReturnValue(startedAt+30_000);
- const expired=await request(path);
+ const expired=await request(path,undefined,{},env.DB,vars);
  expect(expired.status).toBe(503);
  expect(await expired.json()).toEqual({error:'visibility_sync_pending'});
+ expect(captured()).toEqual([['/v1/tags/counts',200,''],['/v1/tags/counts',503,'public_proof_unavailable']]);
  expect(network).toHaveBeenCalledTimes(2);
 });
 

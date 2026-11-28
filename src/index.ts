@@ -109,7 +109,7 @@ import { bearerOf, blogWriterHint } from "./community-admin";
 import {reconcileWorkAccess} from './work-reconcile';
 import {workPolicyGateway} from "./work-policy";
 import {filterPublicRows,currentCardAccess,unlistedCardRow,proveCachedPublicAggregates,type VisibilityReadSurface} from './work-read';
-import { VisibilityProviderUnavailable } from './work-read-failures';
+import { publicReadFailureDetail, VisibilityProviderUnavailable } from './work-read-failures';
 import { providerOf, requestIdentity, reviewerRole, isHumanReviewer, isReviewAgent, memberByHandle, memberNsfw, memberProfile, missingMemberStatements, requireMember, requireReviewer, resolveMember, updateMemberNsfw, viewerAllowsNsfw, memberHiddenTags, updateMemberHiddenTags } from "./members";
 import { followList, ownFollowVisibility, parseFollowVisibility, publicFollowStats, updateFollowVisibility } from "./follow-visibility";
 import { configuredProviders, hasChat, parseProvider, requireConfigured, DEFAULT_PROVIDER, PROVIDER_NAMES, type ProviderId, reviewEnabled } from "./providers";
@@ -166,6 +166,7 @@ import { isPromoPurchasePath, promoRedirect } from './promo-links';
 import { qaContextRoutes, verifyQAContext, excludeQABrowser } from './qa-browser-context';
 
 const app = new Hono<{ Bindings: Env; Variables: { ev: Pending } }>();
+const isPublicFeedPath = (path: string) => path === '/v1/cards' || isPublicAggregatePath(path);
 
 // Public identities and avatar aliases cannot expose a test member, including
 // encoded direct URLs and HTML-head paths that otherwise fall back to the SPA.
@@ -208,6 +209,9 @@ app.use("*", async (c, next) => {
   // beacon 端點自己發事件；健康檢查沒有分析價值
   const path = new URL(c.req.url).pathname;
   if (path === "/v1/e" || path === "/v1/health" || path === "/v1/region") return;
+  if (c.res.status >= 500 && c.req.method === "GET" && isPublicFeedPath(c.req.path)) {
+    ev.detail = c.error ? publicReadFailureDetail(c.error) : "public_other";
+  }
   const campaign = ev.event === 'page_html' && c.req.method === 'GET'
     && clientKind(c.req.header('User-Agent')) !== 'bot'
     && c.res.status >= 200 && c.res.status < 300
