@@ -194,6 +194,11 @@ const METRICS = {
     help: 'Scheduled card quality snapshot sync attempts.',
     label: 'operation', operations: ['run'], outcomes: ['ok','busy','error'],
   },
+  card_quality_play_sync_ms: {
+    name: 'hearthroom_card_quality_play_sync_duration_milliseconds_total',
+    help: 'Elapsed milliseconds spent syncing card quality snapshots.',
+    label: 'operation', operations: ['run'], outcomes: ['ok','error'],
+  },
 } as const;
 export type OpsMetric = keyof typeof METRICS;
 

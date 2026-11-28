@@ -12,16 +12,23 @@ describe('card quality play cron', () => {
   it('rejects incomplete source responses, retains the snapshot and releases its lease', async () => {
     await env.DB.prepare(`INSERT INTO cards (id, provider, source_role_id, author_num_id, author_name, status, registered_at, last_synced_at)
       VALUES (100001, 'harbor', '07c5473a-bffc-47e7-a80e-1d87aa423d65', 11, 'Fixture', 'approved', 1, 1)`).run();
-    const read = vi.fn().mockResolvedValueOnce({}).mockResolvedValueOnce({
-      '07c5473a-bffc-47e7-a80e-1d87aa423d65': { players: 20, reached: 12, medianTurns: 5 },
-    });
-    const deps = { read, now: () => 1_000 };
+    let time = 1_000;
+    const read = vi.fn()
+      .mockImplementationOnce(async () => { time += 15; return {}; })
+      .mockImplementationOnce(async () => {
+        time += 23;
+        return { '07c5473a-bffc-47e7-a80e-1d87aa423d65': { players: 20, reached: 12, medianTurns: 5 } };
+      });
+    const deps = { read, now: () => time };
     await expect(syncCardQualityPlay(env, deps)).rejects.toThrow();
     expect(await env.DB.prepare('SELECT cursor, lease_until FROM card_quality_play_sync WHERE singleton=1').first()).toEqual({ cursor: 0, lease_until: 0 });
     await expect(syncCardQualityPlay(env, deps)).resolves.toBe('ok');
     expect(await env.DB.prepare('SELECT players, reached, median_turns FROM card_quality_play WHERE card_id=100001').first()).toEqual({ players: 20, reached: 12, median_turns: 5 });
-    expect(await opsMetrics(env.DB)).toContain('hearthroom_card_quality_play_sync_total{operation="run",outcome="error"} 1');
-    expect(await opsMetrics(env.DB)).toContain('hearthroom_card_quality_play_sync_total{operation="run",outcome="ok"} 1');
+    const metrics = await opsMetrics(env.DB);
+    expect(metrics).toContain('hearthroom_card_quality_play_sync_total{operation="run",outcome="error"} 1');
+    expect(metrics).toContain('hearthroom_card_quality_play_sync_total{operation="run",outcome="ok"} 1');
+    expect(metrics).toContain('hearthroom_card_quality_play_sync_duration_milliseconds_total{operation="run",outcome="error"} 15');
+    expect(metrics).toContain('hearthroom_card_quality_play_sync_duration_milliseconds_total{operation="run",outcome="ok"} 23');
   });
 });
 
