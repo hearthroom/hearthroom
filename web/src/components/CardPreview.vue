@@ -61,17 +61,23 @@ async function load() {
 const PHONE = "(max-width: 760px)";
 const phone = ref(typeof matchMedia === "function" ? matchMedia(PHONE).matches : false);
 const place = ref<{ left: number; top: number } | null>(null);
+/** 用底部面板：手機，或平板上磚的兩側都放不下 480 寬的浮層（硬塞會蓋住被點的那張磚） */
+const sheet = ref(phone.value);
 const POP_W = 480;
 const GAP = 12;
 function position() {
   const opener = target.value?.opener;
   const tile = opener?.closest<HTMLElement>(".card") ?? opener;
-  if (phone.value || !tile) { place.value = null; return; }
+  if (phone.value || !tile) { sheet.value = true; place.value = null; return; }
   const r = tile.getBoundingClientRect();
   const vw = document.documentElement.clientWidth;
-  const right = r.left + r.width / 2 < vw / 2;
-  let left = right ? r.right + GAP : r.left - GAP - POP_W;
-  left = Math.max(GAP, Math.min(left, vw - POP_W - GAP));
+  // 左半邊的磚先試右側、右半邊的先試左側；那一側放不下就換另一側，兩側都放不下就改用底部面板
+  const fitsRight = vw - r.right - 2 * GAP >= POP_W, fitsLeft = r.left - 2 * GAP >= POP_W;
+  const preferRight = r.left + r.width / 2 < vw / 2;
+  const side = preferRight ? (fitsRight ? "right" : fitsLeft ? "left" : null) : (fitsLeft ? "left" : fitsRight ? "right" : null);
+  if (!side) { sheet.value = true; place.value = null; return; }
+  sheet.value = false;
+  const left = side === "right" ? r.right + GAP : r.left - GAP - POP_W;
   // 上緣對齊被點的磚，但整個浮層要留在視窗裡（磚在畫面下半時往上挪，不壓到頁首）
   const height = box.value?.getBoundingClientRect().height ?? 0;
   const header = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--header-h")) || 60;
@@ -125,17 +131,17 @@ watch(() => route.fullPath, () => { if (target.value) closeCardPreview(); });
 <template>
   <Teleport to="body">
     <template v-if="card">
-      <div class="cpv-scrim" :class="{ 'cpv-scrim--soft': !phone }" aria-hidden="true" @click="close" />
+      <div class="cpv-scrim" :class="{ 'cpv-scrim--soft': !sheet }" aria-hidden="true" @click="close" />
       <section
         ref="box"
         class="cpv"
-        :class="phone ? 'cpv--sheet' : 'cpv--pop'"
+        :class="sheet ? 'cpv--sheet' : 'cpv--pop'"
         :style="popStyle"
         role="dialog"
         aria-modal="true"
         aria-labelledby="cpv-title"
       >
-        <span v-if="phone" class="cpv__grab" aria-hidden="true" />
+        <span v-if="sheet" class="cpv__grab" aria-hidden="true" />
         <header class="cpv__head">
           <div class="cpv__cover" :class="{ 'cpv__cover--concealed': target?.concealed && thumb }">
             <img v-if="thumb" :src="thumb" alt="" @error="thumbFailed = true" />
