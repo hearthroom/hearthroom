@@ -12,7 +12,6 @@ import {workPolicyGateway} from '../src/work-policy';
 import {hostGateway} from '../src/hosting';
 import {HttpError} from '../src/types';
 import {authorLine} from '../src/head';
-import {boardCache} from '../src/board-cache';
 
 beforeEach(async () => { await resetDb(); vi.spyOn(scoreGateway, 'read').mockResolvedValue({ eligible: true, turns: 6, credits: '0', requiredTurns: 6, paidTurns: 3, requiredCredits: '500' }); });
 afterEach(()=>{vi.restoreAllMocks();restoreUpstream();});
@@ -193,12 +192,11 @@ it('reuses the zoned proof for tag counts only during its 30 second lifetime',as
  const warm=await request(path);
  expect(warm.status).toBe(200);
  expect(await warm.json()).toEqual(await cold.json());
- expect(network).toHaveBeenCalledTimes(2);
+ expect(network).toHaveBeenCalledTimes(1);
  now.mockReturnValue(startedAt+30_000);
  const expired=await request(path);
  expect(expired.status).toBe(503);
  expect(await expired.json()).toEqual({error:'visibility_sync_pending'});
- // The still-current rejection from the background refresh is shared.
  expect(network).toHaveBeenCalledTimes(2);
 });
 
@@ -248,8 +246,7 @@ it('shares a proof across aggregate routes in one zone and rechecks authority at
   const response=await request(path);
   expect(response.status).toBe(503);expect(await response.json()).toEqual({error:'visibility_sync_pending'});
  }
- // Both requests share the same zone's rejection during the retry delay.
- expect(network).toHaveBeenCalledTimes(3);
+ expect(network).toHaveBeenCalledTimes(4);
 });
 
 it('invalidates warm aggregate results immediately when local visibility changes',async()=>{
@@ -304,21 +301,6 @@ it('counts all contributors beyond two full visibility batches and reuses a warm
  expect(batches.map(batch=>batch.length)).toEqual([200,200,1]);
  expect(new Set(batches.flat().map(item=>item.sourceRoleId)).size).toBe(401);
  expect(await opsMetrics(env.DB)).toContain('hearthroom_visibility_reads_total{surface="aggregate",outcome="allow"} 3');
-});
-
-it('stops starting Provider batches when the shared proof lease expires',async()=>{
- await aggregateFixture(201);const {network}=providerFixture('public');
- const startedAt=Date.now();const now=vi.spyOn(Date,'now').mockReturnValue(startedAt);
- const read=network.getMockImplementation()!;
- network.mockImplementation(async(input,init)=>{
-  const result=await read(input,init);
-  now.mockReturnValue(startedAt+30_000);
-  return result;
- });
- const response=await request('/v1/tags/counts?zone=zh');
- expect(response.status).toBe(503);
- expect(await response.json()).toEqual({error:'visibility_provider_unavailable'});
- expect(network).toHaveBeenCalledTimes(1);
 });
 
 it.each(['/v1/tags','/v1/authors','/v1/fandoms','/v1/suggest?q=Aggregate'])('proves every batch for shared aggregate %s',async path=>{
@@ -466,130 +448,6 @@ it('shares the full-catalog proof across author HTML and cold aggregate response
  const expired=await request(origin+'/authors/'+handle);
  expect(expired.status).toBe(503);
  expect(await expired.json()).toEqual({error:'visibility_sync_pending'});
- expect(network).toHaveBeenCalledTimes(2);
-});
-
-it('reuses a current aggregate proof after an edge-cache miss without repeating the Provider scan', async () => {
- await managedFixture();
- const {network}=providerFixture('public');
- const host='shared-proof-'+crypto.randomUUID()+'.test';
- const origin='https://'+host;
- const path=origin+'/v1/tags/counts?zone=zh';
- expect((await request(path)).status).toBe(200);
- const durable=await env.DB.prepare('SELECT expires_at FROM public_aggregate_proof WHERE instr(scope,?)>0')
-  .bind(host).first<number>('expires_at');
- expect(durable).toBeGreaterThan(Date.now());
- const open=caches.open.bind(caches);
- vi.spyOn(caches,'open').mockImplementation(name=>open(name.endsWith('-aggregate-proof-v2') ? name+'-cold' : name));
- const fromShared=await request(path);
- expect(fromShared.status).toBe(200);
- expect(fromShared.headers.get('Server-Timing')).toContain('aggregate-proof;desc="hit"');
- expect(network).toHaveBeenCalledTimes(1);
-});
-
-it('waits for a refresh owned by another isolate instead of scanning the catalog again', async () => {
- await managedFixture();
- const {network}=providerFixture('public');
- const origin='https://leased-proof-'+crypto.randomUUID()+'.test';
- const scope=JSON.stringify([boardCache.namespace,origin,'zh']);
- const revision=await env.DB.prepare('SELECT revision FROM moderation_clock WHERE id=1').first<number>('revision');
- await env.DB.prepare("INSERT INTO public_aggregate_proof(scope,revision,lease,lease_until) VALUES(?,?,'other-isolate',?)")
-  .bind(scope,revision,Date.now()+2_500).run();
- const result=request(origin+'/v1/tags/counts?zone=zh');
- await new Promise(resolve=>setTimeout(resolve,60));
- await env.DB.prepare("UPDATE public_aggregate_proof SET expires_at=?,lease='',lease_until=0 WHERE scope=?")
-  .bind(Date.now()+29_000,scope).run();
- const response=await result;
- expect(response.status).toBe(200);
- expect(response.headers.get('Server-Timing')).toContain('aggregate-proof;desc="hit"');
- expect(network).not.toHaveBeenCalled();
-});
-
-it('returns a still-valid aggregate proof while one background refresh runs', async () => {
- await managedFixture();
- const {network}=providerFixture('public');
- const origin='https://refresh-proof.test';
- const path=origin+'/v1/tags/counts?zone=zh';
- const start=Date.now();
- const clock=vi.spyOn(Date,'now').mockReturnValue(start);
- expect((await request(path)).status).toBe(200);
- const read=network.getMockImplementation()!;
- const entered=Promise.withResolvers<void>();
- const release=Promise.withResolvers<void>();
- network.mockImplementationOnce(async (...args)=>{
-  entered.resolve();
-  await release.promise;
-  return read(...args);
- });
- clock.mockReturnValue(start+23_000);
- const context=createExecutionContext();
- const requestWarm=()=>worker.fetch(new Request(path),{...env,HOSTING_SERVICE_KEY:'fixture-issuer'},context);
- try {
-  const warm=await requestWarm();
-  expect(warm.status).toBe(200);
-  expect(warm.headers.get('Server-Timing')).toContain('aggregate-proof;desc="hit"');
-  await vi.waitFor(()=>expect(network).toHaveBeenCalledTimes(2),{timeout:1500});
-  await entered.promise;
-  expect((await requestWarm()).status).toBe(200);
-  expect(network).toHaveBeenCalledTimes(2);
- } finally {
-  release.resolve();
-  await waitOnExecutionContext(context);
- }
- clock.mockReturnValue(start+30_001);
- expect((await request(path)).status).toBe(200);
- expect(network).toHaveBeenCalledTimes(2);
-});
-
-it('shares a known revocation with a peer edge instead of letting it reuse a revoked proof', async () => {
- await managedFixture();
- const {current,network}=providerFixture('public');
- const origin='https://revoked-proof-'+crypto.randomUUID()+'.test';
- const path=origin+'/v1/tags/counts?zone=zh';
- const start=Date.now();
- const clock=vi.spyOn(Date,'now').mockReturnValue(start);
- const open=caches.open.bind(caches);
- let edge='first';
- vi.spyOn(caches,'open').mockImplementation(name=>open(name.endsWith('-aggregate-proof-v2') ? name+'-'+edge : name));
- expect((await request(path)).status).toBe(200);
- edge='second';
- expect((await request(path)).status).toBe(200);
- expect(network).toHaveBeenCalledTimes(1);
- clock.mockReturnValue(start+23_000);
- current.access='private';
- edge='first';
- expect((await request(path)).status).toBe(200);
- expect(network).toHaveBeenCalledTimes(2);
- edge='second';
- const rejected=await request(path);
- expect(rejected.status).toBe(503);
- expect(await rejected.json()).toEqual({error:'visibility_sync_pending'});
- expect(network).toHaveBeenCalledTimes(2);
-});
-
-it('cannot publish the result of a scan after the moderation clock changes', async () => {
- await managedFixture();
- const {network}=providerFixture('public');
- const origin='https://changed-proof-'+crypto.randomUUID()+'.test';
- const path=origin+'/v1/tags/counts?zone=zh';
- const read=network.getMockImplementation()!;
- const entered=Promise.withResolvers<void>();
- const release=Promise.withResolvers<void>();
- network.mockImplementationOnce(async (...args)=>{
-  entered.resolve();
-  await release.promise;
-  return read(...args);
- });
- const pending=request(path);
- try {
-  await vi.waitFor(()=>expect(network).toHaveBeenCalledTimes(1),{timeout:1500});
-  await entered.promise;
-  await env.DB.prepare('UPDATE moderation_clock SET revision=revision+1 WHERE id=1').run();
- } finally {
-  release.resolve();
- }
- expect((await pending).status).toBe(503);
- expect((await request(path)).status).toBe(200);
  expect(network).toHaveBeenCalledTimes(2);
 });
 

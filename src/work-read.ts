@@ -8,6 +8,7 @@ import {type Env,HttpError} from './types';
 import type {ManagedWork,WorkAccess,WorkRestriction} from './work-policy';
 import {upstream} from './upstream';
 import {bumpOp} from './ops-metrics';
+import {boardCache} from './board-cache';
 
 export type VisibilityReadSurface='list'|'detail'|'social'|'library'|'metadata'|'aggregate';
 async function observeRead<T>(env:Env,surface:VisibilityReadSurface,read:()=>Promise<T>,allowed:(result:T)=>boolean):Promise<T>{
@@ -33,12 +34,12 @@ class ReadFailure extends Error {
 function transportFailure(error:unknown):ReadFailure{
  return new ReadFailure(error instanceof Error&&['TimeoutError','AbortError'].includes(error.name)?'timeout':'transport',true);
 }
-async function policyAttempt(env:Env,key:string,items:WorkReadIdentity[],timeoutMs:number):Promise<CurrentWorkRead[]>{
+async function policyAttempt(env:Env,key:string,items:WorkReadIdentity[]):Promise<CurrentWorkRead[]>{
  let response:Response;
  try{
   response=await fetch(`${apiBaseOf(env,'harbor')}/open/v1/hosting/work-access/batch`,{
    method:'POST',headers:{'X-Hosting-Key':key,'Content-Type':'application/json'},body:JSON.stringify({items}),
-   redirect:'manual',signal:AbortSignal.timeout(timeoutMs),
+   redirect:'manual',signal:AbortSignal.timeout(3000),
   });
  }catch(error){throw transportFailure(error);}
  if(!response.ok){
@@ -61,23 +62,21 @@ async function policyAttempt(env:Env,key:string,items:WorkReadIdentity[],timeout
  const found=new Map(body.items.map(item=>[keyOf(item),item]));
  return items.map(item=>found.get(keyOf(item))!);
 }
-export async function readCurrentWorkPolicies(env:Env,items:WorkReadIdentity[],deadline=Infinity):Promise<CurrentWorkRead[]>{
+export async function readCurrentWorkPolicies(env:Env,items:WorkReadIdentity[]):Promise<CurrentWorkRead[]>{
  if(!items.length)return [];
  if(items.length>WORK_READ_BUDGET)throw new HttpError(503,'visibility_read_budget_exceeded');
  const key=hostingKey(env,'harbor');
  for(let attempt=0;attempt<2;attempt++){
-  const remaining=deadline-Date.now();
-  if(remaining<=0)throw new HttpError(503,'visibility_provider_unavailable');
   try{
    if(!key)throw new ReadFailure('missing_key');
-   const result=await policyAttempt(env,key,items,Math.min(3000,remaining));
+   const result=await policyAttempt(env,key,items);
    if(attempt)await bumpOp(env.DB,'visibility_provider_retry','public_batch','recovered');
    return result;
   }catch(error){
    const failure=error instanceof ReadFailure?error:new ReadFailure('invalid_response');
    await bumpOp(env.DB,'visibility_provider_failure',attempt?'retry':'initial',failure.reason);
    if(attempt)await bumpOp(env.DB,'visibility_provider_retry','public_batch','exhausted');
-   if(attempt||!failure.retryable||deadline-Date.now()<=100)throw new HttpError(503,'visibility_provider_unavailable');
+   if(attempt||!failure.retryable)throw new HttpError(503,'visibility_provider_unavailable');
    // One fresh authority read, never a cached grant. Do not retry backpressure,
    // authentication, malformed responses or mismatched policy identities.
    await new Promise(resolve=>setTimeout(resolve,100));
@@ -106,10 +105,10 @@ type PublicVisibilityRow = Pick<CardRow, 'id'|'provider'|'author_num_id'|'source
 
 // Legacy rows retain their original contract until explicit enrollment. Once
 // enrolled, both the durable D1 fence and current PG policy constrain discovery.
-export async function filterPublicRows<T extends PublicVisibilityRow>(env:Env,rows:T[],surface:VisibilityReadSurface='list',preloadedExcluded?:ReadonlySet<string>,deadline?:number):Promise<{rows:T[];checked:boolean}>{
- return observeRead(env,surface,()=>publicRows(env,rows,preloadedExcluded,deadline),result=>result.rows.length===rows.length);
+export async function filterPublicRows<T extends PublicVisibilityRow>(env:Env,rows:T[],surface:VisibilityReadSurface='list',preloadedExcluded?:ReadonlySet<string>):Promise<{rows:T[];checked:boolean}>{
+ return observeRead(env,surface,()=>publicRows(env,rows,preloadedExcluded),result=>result.rows.length===rows.length);
 }
-async function publicRows<T extends PublicVisibilityRow>(env:Env,rows:T[],preloadedExcluded?:ReadonlySet<string>,deadline?:number):Promise<{rows:T[];checked:boolean}>{
+async function publicRows<T extends PublicVisibilityRow>(env:Env,rows:T[],preloadedExcluded?:ReadonlySet<string>):Promise<{rows:T[];checked:boolean}>{
  if(rows.length>WORK_READ_BUDGET)throw new HttpError(503,'visibility_read_budget_exceeded');
  const hidden=await testCardIdsForRows(env.DB,rows,preloadedExcluded);
  rows=rows.filter(r=>!hidden.has(String(r.id)));
@@ -120,7 +119,7 @@ async function publicRows<T extends PublicVisibilityRow>(env:Env,rows:T[],preloa
    &&p.sync_state==='complete'&&p.moderation_revision===p.confirmed_moderation_revision;
  });
  const identities=candidates.map(row=>({sourceRoleId:row.source_role_id,workId:local.get(row.source_role_id)!.work_id,targetRoleId:row.approved_hosted_role_id??row.source_role_id}));
- const current=await readCurrentWorkPolicies(env,identities,deadline);
+ const current=await readCurrentWorkPolicies(env,identities);
  const allowed=new Set(candidates.filter((row,index)=>{
   const p=local.get(row.source_role_id)!,r=current[index];
   return r.managed&&r.epoch>=p.epoch&&r.access==='public'&&r.restriction==='none'&&r.targetReadable&&r.listed&&r.shareRoleId===identities[index].targetRoleId;
@@ -145,24 +144,80 @@ export async function revalidateBoardBody(env:Env,body:string):Promise<string>{
 // proof checks every managed contributor in bounded batches.
 // Keyset pagination keeps the per-query/RPC budget independent of catalog size;
 // a diverged or unavailable batch still rejects the entire aggregate.
-export async function provePublicAggregates(env:Env,zone?:string,deadline=Infinity):Promise<void>{
+export async function provePublicAggregates(env:Env,zone?:string):Promise<void>{
  let after=0;
  let excluded:Set<string>|undefined;
  for(;;){
-  if(Date.now()>=deadline)throw new HttpError(503,'visibility_provider_unavailable');
   const result=await env.DB.prepare(`SELECT c.* FROM managed_work_access p JOIN cards c
   ON c.provider=p.provider AND c.source_role_id=p.source_role_id
   WHERE p.access='public' AND p.restriction='none' AND p.sync_state='complete'
   AND p.moderation_revision=p.confirmed_moderation_revision AND c.status='approved' AND c.board_hidden=0 AND c.public_blocked=0
   ${zone?"AND c.zone IN (?, 'all')":''} AND c.id>? ORDER BY c.id LIMIT ?`).bind(...(zone?[zone]:[]),after,WORK_READ_BUDGET).all<CardRow>();
   if(result.results.length&&!excluded)excluded=await excludedAuthorKeys(env.DB);
-  const visible=await filterPublicRows(env,result.results,'aggregate',excluded,deadline);
+  const visible=await filterPublicRows(env,result.results,'aggregate',excluded);
   if(visible.rows.length!==result.results.length)throw new HttpError(503,'visibility_sync_pending');
   if(result.results.length<WORK_READ_BUDGET)return;
   after=Number(result.results.at(-1)!.id);
  }
 }
 
+const AGGREGATE_PROOF_MS = 30_000;
+const aggregateProofsInFlight = new Map<string, Promise<number>>();
+
+/** A successful catalog proof can be shared by the aggregate routes in one zone. */
+export async function proveCachedPublicAggregates(
+ env:Env,ctx:Pick<ExecutionContext,'waitUntil'>,requestUrl:string,zone:string|undefined,revision:number,
+):Promise<{expiresAt:number; hit:boolean}>{
+ const url=new URL('/__aggregate-proof',requestUrl);
+ url.searchParams.set('zone',zone??'all');
+ url.searchParams.set('revision',String(revision));
+ const key=new Request(url);
+ let cache:Cache|undefined;
+ try{
+  cache=await caches.open(`${boardCache.namespace}-aggregate-proof`);
+  const stored=await cache.match(key);
+  const expiresAt=Number(stored?.headers.get('X-Proof-Expires-At'));
+  const now=Date.now();
+  if(Number.isSafeInteger(expiresAt)&&expiresAt>now&&expiresAt<=now+AGGREGATE_PROOF_MS)return {expiresAt,hit:true};
+ }catch{console.warn('Public aggregate proof cache read unavailable');}
+
+ // Only the initiating request performs I/O. Other requests in the same
+ // isolate receive the expiry of that proof, never a cached failure.
+ const proofKey = key.url;
+ const pending = aggregateProofsInFlight.get(proofKey);
+ if(pending){
+  const expiresAt=await pending;
+  if(expiresAt<=Date.now())throw new HttpError(503,'visibility_provider_unavailable');
+  return {expiresAt,hit:true};
+ }
+
+ // Expiration starts before the first authority batch. A slow or out-of-order
+ // cache write cannot extend the life of permissions that were checked earlier.
+ const expiresAt=Date.now()+AGGREGATE_PROOF_MS;
+ // Use a native settlement gate for cross-request waiters. The producer's
+ // D1 and Cache API operations stay in its own Worker request context.
+ const gate=Promise.withResolvers<number>();
+ aggregateProofsInFlight.set(proofKey,gate.promise);
+ ctx.waitUntil((async()=>{
+  try{
+   await provePublicAggregates(env,zone);
+   if(expiresAt<=Date.now())throw new HttpError(503,'visibility_provider_unavailable');
+   gate.resolve(expiresAt);
+   const remaining=expiresAt-Date.now();
+   if(!cache||remaining<1000)return;
+   const entry=new Response(null,{headers:{
+    'Cache-Control':`public, max-age=${Math.floor(remaining/1000)}`,
+    'X-Proof-Expires-At':String(expiresAt),
+   }});
+   await cache.put(key,entry).catch(()=>{console.warn('Public aggregate proof cache write unavailable');});
+  }catch(err){
+   gate.reject(err);
+  }finally{
+   aggregateProofsInFlight.delete(proofKey);
+  }
+ })());
+ return {expiresAt:await gate.promise,hit:false};
+}
 
 export interface CurrentCardAccess {
  managed:boolean;access:WorkAccess;reachable:boolean;indexable:boolean;shareRoleId:string;
