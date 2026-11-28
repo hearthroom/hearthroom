@@ -6430,6 +6430,5 @@
   "quality.pres.rules": "표시 규칙 {n}개",
   "quality.dataTitle": "카드 데이터",
   "quality.loadFailed": "데이터를 불러오지 못했어요",
-  "quality.retry": "다시 시도",
-  "quality.editor.label": "목록 분량"
+  "quality.retry": "다시 시도"
 }
