@@ -11,9 +11,11 @@ const PAGE_SIZE = 64;
 const CALCULATION_LIMIT = 10;
 const BOARD_SIZE = 30;
 const BOARD_CANDIDATE_LIMIT = 2 * BOARD_SIZE;
+const PAUSED_UNTIL = Number.MAX_SAFE_INTEGER;
 const ZONES = ['zh', 'en', 'ja', 'ko'] as const;
+const RANKING_BOARDS = ZONES.flatMap(zone => (['week', 'month'] as const).map(window => ({ zone, window })));
 const PRIORITY_BOARDS = [
-  ...ZONES.flatMap(zone => (['week', 'month'] as const).map(window => ({ zone, window }))),
+  ...RANKING_BOARDS,
   ...ZONES.flatMap(zone => (['new', 'day'] as const).map(window => ({ zone, window }))),
 ];
 
@@ -39,9 +41,9 @@ export async function backfillCardQualityLengths(env: Env, now: number): Promise
   const db = env.DB;
   const lease = crypto.randomUUID();
   const claim = await db.prepare(`UPDATE card_quality_length_scan SET lease=?,run_after=?
-    WHERE singleton=1 AND run_after<=? RETURNING cursor_time,cursor_id,priority_board,priority_ids`)
+    WHERE singleton=1 AND run_after<=? RETURNING cursor_time,cursor_id,priority_board,priority_ids,recent_only`)
     .bind(lease, now + 4 * MINUTE, now).first<{
-      cursor_time: number; cursor_id: number; priority_board: number; priority_ids: string;
+      cursor_time: number; cursor_id: number; priority_board: number; priority_ids: string; recent_only: number;
     }>();
   if (!claim) return;
 
@@ -50,6 +52,10 @@ export async function backfillCardQualityLengths(env: Env, now: number): Promise
   let cursorId = claim.cursor_id;
   let priorityBoard = claim.priority_board;
   let priorityIds = claim.priority_ids;
+  if (claim.recent_only && priorityBoard < RANKING_BOARDS.length) {
+    priorityBoard = RANKING_BOARDS.length;
+    priorityIds = '[]';
+  }
   let saved = 0;
   let failed = 0;
   let nextAt = now + MINUTE;
@@ -100,6 +106,11 @@ export async function backfillCardQualityLengths(env: Env, now: number): Promise
       const pending = page.results.slice(visited).map(({ id, retried }) => ({ id, retried })).concat(retry);
       priorityIds = JSON.stringify(pending);
       if (!pending.length) priorityBoard++;
+      if (claim.recent_only && priorityBoard === PRIORITY_BOARDS.length) nextAt = PAUSED_UNTIL;
+      return;
+    }
+    if (claim.recent_only) {
+      nextAt = PAUSED_UNTIL;
       return;
     }
     const page = await db.prepare(`WITH page AS (
