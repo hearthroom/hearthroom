@@ -60,3 +60,15 @@ it('backs up approved versions newest first with one active sweep, bounded failu
   await backfillCardQualityLengths(local, now + 3_600_000);
   expect(requests).toEqual(['sealed-newest', 'sealed-older', 'sealed-older']);
 });
+
+it('limits one scheduled minute to ten sealed reads across concurrent invocations', async () => {
+  const now = Date.now();
+  for (let i = 0; i < 25; i++) await listed(`cap-${i}`, now - i);
+  const fetchRevision = vi.fn(async () => new Response(null, { status: 404 }));
+  vi.stubGlobal('fetch', fetchRevision);
+  const local = { ...env, HOSTING_SERVICE_KEY: 'fixture-issuer' };
+  await Promise.all([backfillCardQualityLengths(local, now), backfillCardQualityLengths(local, now)]);
+  expect(fetchRevision).toHaveBeenCalledTimes(10);
+  await backfillCardQualityLengths(local, now + 60_000);
+  expect(fetchRevision).toHaveBeenCalledTimes(20);
+});

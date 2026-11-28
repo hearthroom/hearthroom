@@ -5,7 +5,7 @@ import type { Env } from './types';
 
 const MINUTE = 60_000;
 const PAGE_SIZE = 64;
-const CALCULATION_LIMIT = 20;
+const CALCULATION_LIMIT = 10;
 
 type Candidate = { id: number; registered_at: number; version_id: string | null; revision_id: string | null; needs_length: number };
 
