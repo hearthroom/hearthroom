@@ -10,7 +10,7 @@ import CardQualityData from "./CardQualityData.vue";
 import { ApiError } from "@/lib/api";
 import { loadCardQuality } from "@/lib/card-preview";
 import { useCardQualityCapability } from "@/lib/card-quality-capability";
-import { qualityCharacters, qualityRatio } from "@/lib/card-quality-format";
+import { qualityCharacters, qualityPercent } from "@/lib/card-quality-format";
 import type { CommunityCard } from "@/lib/types";
 import type { CardQualityDetail } from "../../../shared/card-quality";
 
@@ -47,13 +47,13 @@ const empty = computed(() => {
 });
 const shown = computed(() => enabled.value && !absent.value && !empty.value);
 
-/* 收合時的一行摘要：「聊滿 5 回合 164/200・篇幅 2.3 萬字」，新卡只有篇幅；數據還沒到就先用磚上那份 */
+/* 收合時的一行摘要：「續玩率 82%・篇幅 2.3 萬字」，新卡只有篇幅；數據還沒到就先用磚上那份 */
 const summary = computed(() => {
   // 數據到了就只看數據（合格人數跌回門檻下時 deepPlay 是 null，不能拿磚上那份舊的補回來）
   const deep = detail.value ? detail.value.deepPlay : props.card.qualitySignal?.deepPlay ?? null;
   const total = detail.value ? detail.value.length?.total ?? null : props.card.qualitySignal?.lengthCharacters ?? null;
   const parts: string[] = [];
-  if (deep) parts.push(`${t("quality.deep.label", { n: deep.turns })} ${qualityRatio(deep.reached, deep.players)}`);
+  if (deep) parts.push(`${t("quality.retention.label")} ${qualityPercent(deep.reached, deep.players)}`);
   if (typeof total === "number") parts.push(`${t("quality.tile.length")} ${qualityCharacters(total)}`);
   return parts.join(t("quality.summarySep"));
 });

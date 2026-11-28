@@ -41,13 +41,13 @@ async function mount(cards: CommunityCard[]) {
 // 讀屏念的整句（畫面上是同一行的說明與數字）
 const lines = () => [...root.querySelectorAll(".card__quality")].map((p) => p.querySelector(".sr-only")?.textContent?.trim() ?? "");
 
-it("adds one data line to every tile: length before the threshold, deep play after, blank without numbers", async () => {
+it("adds one data line to every tile: length before the threshold, retention rate after, blank without numbers", async () => {
   await mount([
     card(1, { qualitySignal: { lengthCharacters: 14000, deepPlay: null } }),
     card(2, { qualitySignal: { lengthCharacters: 23000, deepPlay: { reached: 164, players: 200, turns: 5 } } }),
     card(3, { qualitySignal: null }),
   ]);
-  expect(lines()).toEqual(["篇幅 1.4 萬字", "聊滿 5 回合 164/200", ""]);
+  expect(lines()).toEqual(["篇幅 1.4 萬字", "續玩率 82%", ""]);
   expect(root.querySelectorAll(".card__quality")).toHaveLength(3);
   // 沒有數字的那張不放預覽鈕
   expect(root.querySelectorAll(".card__preview")).toHaveLength(2);
@@ -74,8 +74,20 @@ it("opens the preview from the cover button, shows the data, and returns focus o
   expect(f.quality).toHaveBeenCalledWith("7");
   expect(root.querySelector(".card")!.classList.contains("card--previewing")).toBe(true);
   const text = dialog.textContent ?? "";
-  for (const s of ["164/200", "82%", "聊滿 5 回合", "200 位玩家中，164 位聊滿 5 回合", "4.6", "132", "14 回合", "2.3 萬字", "3,000 字", "18 條・1.9 萬字", "3 個・1,000 字", "開場網頁", "顯示規則 2 條", "進入卡片"]) expect(text).toContain(s);
+  for (const s of ["續玩率", "82%", "4.6", "132", "14 回合", "2.3 萬字", "3,000 字", "18 條・1.9 萬字", "3 個・1,000 字", "開場網頁", "顯示規則 2 條", "進入卡片"]) expect(text).toContain(s);
   expect(text).not.toContain("面板");
+  expect(text).not.toContain("164/200");
+  // 問號鈕：預設收起，點開才有怎麼算、分子分母與合格玩家資格
+  const help = dialog.querySelector<HTMLButtonElement>('button[aria-label="續玩率怎麼算"]')!;
+  const body = document.getElementById(help.getAttribute("aria-controls")!)!;
+  expect(help.getAttribute("aria-expanded")).toBe("false");
+  expect(body.style.display).toBe("none");
+  help.click(); await settle();
+  expect(help.getAttribute("aria-expanded")).toBe("true");
+  expect(body.style.display).toBe("");
+  expect(body.textContent).toContain("開聊的合格玩家中，玩了 5 回合以上的比例。");
+  expect(body.textContent).toContain("200 位玩家中 164 位");
+  expect(body.textContent).toContain("同一裝置的多個帳號算一人");
   expect(dialog.querySelector('a[href="/cards/7"]')).not.toBeNull();
   expect(document.activeElement?.getAttribute("aria-label")).toBe("關閉預覽");
   document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
