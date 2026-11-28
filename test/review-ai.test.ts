@@ -70,6 +70,97 @@ const decide = async (id: string, member: string, verdict: 'approve' | 'reject')
 const status = async (id: string) => (await env.DB.prepare('SELECT status FROM review_submissions WHERE id=?').bind(id).first<{ status: string }>())!.status;
 
 describe('審卡員讀卡', () => {
+  it('只讓審卡員分段讀開場呈現，跳過前一段後仍取得完整結尾', async () => {
+    const { id, sealed } = await submitCard();
+    const body = '正'.repeat(7_999) + '🌙最後一行';
+    await decide(id, humanId, 'reject');
+    sealed.mockResolvedValue({ greetings: { welcome: '[opening]' },
+      authorAsset: { rules: [{ find: '[opening]', replace: `<p>${body}</p>` }] } } as never);
+    const path = `/v1/review-ai/submissions/${id}/opening`;
+    expect((await get(path, 'human')).status).toBe(403);
+    const first = await get(path, 'key');
+    expect(first.headers.get('Cache-Control')).toBe('private, no-store');
+    const page = await json(first);
+    expect(page).toMatchObject({ state: 'ready', text: '正'.repeat(7_999), nextOffset: 7_999, ruleHits: 1 });
+    expect(await json(await get(`${path}?offset=${page.nextOffset}`, 'key'))).toMatchObject({ text: '🌙最後一行', nextOffset: null });
+    expect((await get(`${path}?offset=-1`, 'key')).status).toBe(400);
+  });
+
+  it('截圖素材只保留離線畫面需要的標記和樣式', async () => {
+    const { id, sealed } = await submitCard();
+    await decide(id, humanId, 'reject');
+    sealed.mockResolvedValue({ authorAsset: { openingMode: 'page', openingPage:
+      '<style>.view{color:blue}</style><script>advance()</script><section class="view"><button onclick="advance()">檢查引擎</button><img src="https://example.com/img" alt="示意圖"></section>' } } as never);
+    const res = await get(`/v1/review-ai/submissions/${id}/opening?format=preview`, 'key');
+    expect(res.status).toBe(200);
+    const body = await json(res);
+    expect(body).toMatchObject({ surface: 'page', coverage: 'partial', previewKind: 'offline_static' });
+    expect(body.previewHtml).toContain('<button>檢查引擎</button>');
+    expect(body.previewHtml).toContain('.view{color:blue}');
+    expect(body.previewHtml).toContain("default-src 'none'");
+    expect(body.previewHtml).not.toMatch(/onclick|advance\(\)|https:\/\/example/);
+  });
+
+  it('更新差異保留長欄位後段的改動並沿用封存基準，不補寫摘要', async () => {
+    const { id, sealed } = await submitCard();
+    const same = '背景資料。'.repeat(660);
+    await env.DB.prepare("INSERT INTO review_submission_diffs(submission_id,base_kind,base_revision,state,created_at) VALUES(?,'approved','sealed-base','pending',?)")
+      .bind(id, Date.now()).run();
+    sealed.mockImplementation(async (_env, revision) => ({ document: { roleDetailDesc: same + (revision === 'sealed-base' ? '原選項' : '新事件') } }) as never);
+    const path = `/v1/review-ai/submissions/${id}/diff`;
+    expect((await get(path, 'human')).status).toBe(403);
+    expect(await json(await get(path, 'key'))).toMatchObject({ state: 'ready', baseKind: 'approved', fields: [
+      { key: 'setting', before: expect.stringContaining('原選項'), after: expect.stringContaining('新事件') },
+    ] });
+    expect(await env.DB.prepare('SELECT state,summary FROM review_submission_diffs WHERE submission_id=?').bind(id).first())
+      .toEqual({ state: 'pending', summary: null });
+  });
+
+  it('判例只回較早、不同卡的人工決定，依卡型列出兩邊與正式理由', async () => {
+    const priorPass = await submitCard('precedent-approved');
+    await decide(priorPass.id, humanId, 'approve');
+    const priorDeny = await submitCard('precedent-rejected', AUTHOR + 1);
+    await decide(priorDeny.id, humanId, 'reject');
+    const target = await submitCard('precedent-target');
+    await decide(target.id, humanId, 'reject');
+    const future = await submitCard('precedent-future', AUTHOR + 2);
+    await decide(future.id, humanId, 'reject');
+    const setTime = (id: string, at: number) => env.DB.batch([
+      env.DB.prepare('UPDATE review_submissions SET submitted_at=?, decided_at=? WHERE id=?').bind(at - 100, at, id),
+      env.DB.prepare('UPDATE review_events SET at=? WHERE submission_id=? AND action IN (\'approve\',\'reject\')').bind(at, id),
+      env.DB.prepare("UPDATE hosting_versions SET public_role=json_set(public_role, '$.tags', json('[\"角色扮演\"]')) WHERE submission_id=?").bind(id),
+    ]);
+    await setTime(priorPass.id, 1_100);
+    await setTime(priorDeny.id, 1_300);
+    await setTime(target.id, 1_700);
+    await setTime(future.id, 2_000);
+    await env.DB.prepare("UPDATE review_stamps SET note='合成駁回說明' WHERE submission_id=?").bind(priorDeny.id).run();
+    await env.DB.prepare("UPDATE review_events SET actor_kind='system' WHERE submission_id=? AND action='reject'").bind(future.id).run();
+    const path = `/v1/review-ai/submissions/${target.id}/precedents`;
+    expect((await get(path, 'human')).status).toBe(403);
+    const results = await json(await get(`${path}?type=${encodeURIComponent('角色扮演')}`, 'key'));
+    expect(results).toMatchObject({ approved: [{ decision: 'approved', reasons: [] }],
+      rejected: [{ decision: 'rejected', reasons: ['opening.no_reply_hook'], note: '合成駁回說明' }] });
+    expect(JSON.stringify(results)).not.toContain(target.id);
+    expect(await json(await get(`${path}?reason=opening.no_reply_hook&before=1200`, 'key'))).toMatchObject({ rejected: [] });
+  });
+
+  it('作者歷史連到公開核准版的字數與五回合留存，封存回放不帶今天的留存', async () => {
+    const prior = await submitCard('history-approved');
+    await decide(prior.id, humanId, 'approve');
+    const card = await getCard(env.DB, 'history-approved', 'harbor');
+    const target = await submitCard('history-target');
+    await env.DB.prepare('UPDATE review_submissions SET decided_at=1000 WHERE id=?').bind(prior.id).run();
+    await env.DB.prepare('INSERT INTO card_quality_play(card_id,players,reached,median_turns) VALUES(?,25,10,3)').bind(card!.id).run();
+    const path = `/v1/review-ai/submissions/${target.id}/author-history`;
+    expect((await get(path, 'human')).status).toBe(403);
+    expect(await json(await get(path, 'key'))).toMatchObject({ decisions: [{ decision: 'approved' }],
+      published: [{ cardId: String(card!.id), characters: expect.any(Number), continuation: { turns: 5, rate: 0.4 } }] });
+    await decide(target.id, humanId, 'reject');
+    expect(await json(await get(path, 'key'))).toMatchObject({ decisions: [{ decision: 'approved' }],
+      published: [{ characters: expect.any(Number), continuation: null }] });
+  });
+
   it('讀待審單的封存內容，不領取、不帶人工決定；人類審核員不能用這條路', async () => {
     const { id } = await submitCard();
     const res = await get(`/v1/review-ai/submissions/${id}`, 'key');
@@ -572,6 +663,37 @@ describe('仲裁：不受理中的單與改判', () => {
 });
 
 describe('判準 v4 的讀卡輸入', () => {
+  it('量實際呈現而非原始標記，剪掉摘錄尾巴前仍能看見助手提問線索', () => {
+    const body = '場景'.repeat(1600);
+    const last = '需要我幫你續寫嗎？';
+    const input = aiCardInput({
+      document: { roleDetailDesc: '使用者：寫一段故事\n助手：這是開場' },
+      greetings: { welcome: '[OPEN]' },
+      authorAsset: { rules: [{ find: '[OPEN]', replace: `<p>，${body}</p><p>${last}</p>` }] },
+    }, { tags: [], fandom: '' }, { applyRules: true });
+    expect(input.card.openings.welcomeRendered).not.toContain(last);
+    expect(input.card.openings.observations).toEqual({
+      hasDisplayRules: true, hasOpeningPage: false, settingTranscriptPattern: true,
+      primary: { source: 'display_rules', coverage: 'partial',
+        visibleCharacters: 1 + body.length + last.length,
+        startsWithFragmentPunctuation: true, endsWithAssistantQuestionPattern: true },
+    });
+  });
+
+  it('網頁模式量主要入口，戲內請求與單獨的角色稱呼不當成助手痕跡', () => {
+    const input = aiCardInput({
+      document: { roleDetailDesc: '助手：工地領班的職稱。' },
+      greetings: { welcome: '，原始占位字。' },
+      authorAsset: { openingMode: 'page', openingPage: '<script>load()</script><p>「先關水閥嗎？」</p>' },
+    }, { tags: [], fandom: '' }, { applyRules: true });
+    expect(input.card.openings.observations).toEqual({
+      hasDisplayRules: false, hasOpeningPage: true, settingTranscriptPattern: false,
+      primary: { source: 'page', coverage: 'partial',
+        visibleCharacters: '「先關水閥嗎？」'.length,
+        startsWithFragmentPunctuation: false, endsWithAssistantQuestionPattern: false },
+    });
+  });
+
   it('長 HTML 替換仍留下開場文字，依序套用規則並摘要備選開場與開場網頁', () => {
     const input = aiCardInput({
       greetings: { welcome: '[scene]', alternates: ['[ALT]'] },

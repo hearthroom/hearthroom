@@ -91,7 +91,7 @@ export type DiffView =
   | { state: 'ready'; baseKind: 'approved' | 'rejected'; diff: ReviewDiff };
 
 /** 審核頁的完整差異：即時讀兩邊的封存版，不落本站。讀不到就回 unreadable（畫面顯示無法比較）。 */
-export async function diffView(env: Env, submissionId: string): Promise<DiffView> {
+export async function diffView(env: Env, submissionId: string, { cacheSummary = true } = {}): Promise<DiffView> {
   const row = await rowOf(env.DB, submissionId);
   if (!row) return { state: 'missing' };
   if (!row.base_revision) return { state: 'no_base' };
@@ -100,7 +100,7 @@ export async function diffView(env: Env, submissionId: string): Promise<DiffView
     if (!pair) return { state: 'no_base' };
     const diff = diffSettings(pair.base, pair.current);
     // 順手把摘要補上（審核員打開時就有了，不必等排程）
-    if (row.state === 'pending') await env.DB.prepare("UPDATE review_submission_diffs SET state='done',summary=?,computed_at=? WHERE submission_id=? AND state='pending'").bind(JSON.stringify(diff.summary), Date.now(), submissionId).run();
+    if (cacheSummary && row.state === 'pending') await env.DB.prepare("UPDATE review_submission_diffs SET state='done',summary=?,computed_at=? WHERE submission_id=? AND state='pending'").bind(JSON.stringify(diff.summary), Date.now(), submissionId).run();
     await bumpOp(env.DB, 'review_diff', 'view', 'success');
     return { state: 'ready', baseKind: row.base_kind, diff };
   } catch {

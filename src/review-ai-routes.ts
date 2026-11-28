@@ -2,7 +2,7 @@ import { Hono, type Context } from "hono";
 import { requireReviewer, reviewerRole } from "./members";
 import { bumpOp } from "./ops-metrics";
 import { getSubmission, type SubmissionRow } from "./review";
-import { currentCriteria, setCurrentCriteria, AI_FLAGS, AI_HANDOFF_CAUSES, AI_HANDOFF_REASONS, AI_REASONS, AI_VERDICTS, aiCardInput, aiPhaseOf, aiReadPhase, aiReport, aiSubmissionMeta, AI_BACKFILL_WINDOW_MS, canReveal, parseSuggestion, saveSuggestion, suggestionsOf, UNSURE_REASON_ERROR } from "./review-ai";
+import { currentCriteria, setCurrentCriteria, AI_FLAGS, AI_HANDOFF_CAUSES, AI_HANDOFF_REASONS, AI_REASONS, AI_VERDICTS, aiCardInput, aiOpeningText, aiPhaseOf, aiReadPhase, aiReport, aiSubmissionMeta, AI_BACKFILL_WINDOW_MS, canReveal, parseSuggestion, saveSuggestion, suggestionsOf, UNSURE_REASON_ERROR } from "./review-ai";
 import { loadSnapshot } from "./review-snapshot";
 import { originalityReport } from "./originality";
 import { diffView } from "./review-diff-store";
@@ -17,6 +17,9 @@ import { upstream } from "./upstream";
 import { fastTrackStats, tryFastTrack } from "./review-fast-track";
 import { queuePush } from "./community/push";
 import { agentAuthorCardList, agentAuthorProfile, agentLiveCard, agentOriginality, getAuthorNote, putAuthorNote } from "./review-ai-evidence";
+import { reviewAuthorHistory, reviewPrecedents } from "./review-ai-history";
+import { isReviewReason } from "../shared/review-reasons";
+import { MAX_OPENING_MARKUP, openingMarkup } from "./review-opening";
 
 /**
  * AI 審卡影子模式的路由。審卡員（AI 審核帳號）用 /v1/review-ai/*；審核員看揭曉、寫覆核用 /v1/review/:id/ai*。
@@ -43,7 +46,8 @@ async function requireHuman(c: Ctx) {
 }
 
 type Op = "queue" | "read" | "suggest" | "tag" | "reveal" | "inaccurate" | "report" | "arbitration_list" | "arbitration_read" | "arbitrate" | "references" | "notes"
-  | "originality" | "author" | "author_cards" | "card" | "author_note_read" | "author_note_write" | "persuade";
+  | "originality" | "author" | "author_cards" | "card" | "author_note_read" | "author_note_write" | "persuade"
+  | "opening" | "precedents" | "author_history" | "update_diff";
 async function counted<T>(c: Ctx, op: Op, run: () => Promise<T>): Promise<T> {
   try {
     const out = await run();
@@ -131,7 +135,7 @@ async function aiOriginality(db: D1Database, s: SubmissionRow, settings: Record<
  */
 async function aiUpdateDiff(env: Env, s: SubmissionRow) {
   // 新卡被駁回後重送也有差異（基準＝上次被駁回版），所以不看 kind，照差異表有沒有這張單
-  const view = await diffView(env, s.id).catch(() => ({ state: "unreadable" as const }));
+  const view = await diffView(env, s.id, { cacheSummary: false }).catch(() => ({ state: "unreadable" as const }));
   if (view.state === "missing") return null;
   if (view.state !== "ready") return { state: view.state };
   const clipText = (t: string) => (t.length > 1500 ? `${t.slice(0, 1500)}…[截斷]` : t);
@@ -169,6 +173,64 @@ async function readableSubmission(c: Ctx) {
   aiReadPhase(s, Date.now());
   return s;
 }
+
+function evidenceBefore(c: Ctx): number | null {
+  const value = c.req.query("before");
+  if (value === undefined) return null;
+  const before = Number(value);
+  if (!/^\d+$/.test(value) || !Number.isSafeInteger(before) || before < 1) throw new HttpError(400, "invalid_arguments", undefined, { field: "before" });
+  return before;
+}
+
+reviewAiRoutes.get("/v1/review-ai/submissions/:id/opening", (c) => counted(c, "opening", async () => {
+  const s = await readableSubmission(c);
+  const surface = c.req.query("surface") ?? "primary";
+  if (!/^(primary|page|welcome|alternate-[1-9]\d?)$/.test(surface)) throw new HttpError(400, "invalid_arguments", undefined, { field: "surface" });
+  const rawOffset = c.req.query("offset") ?? "0";
+  const offset = Number(rawOffset);
+  if (!/^\d+$/.test(rawOffset) || offset > MAX_OPENING_MARKUP + 10) throw new HttpError(400, "invalid_arguments", undefined, { field: "offset" });
+  const format = c.req.query("format") ?? "text";
+  if (format !== "text" && format !== "preview") throw new HttpError(400, "invalid_arguments", undefined, { field: "format" });
+  return c.json(aiOpeningText(await readContent(c.env, s), surface, offset, format === "preview"), 200, NO_STORE);
+}));
+
+reviewAiRoutes.get("/v1/review-ai/submissions/:id/precedents", (c) => counted(c, "precedents", async () => {
+  const s = await readableSubmission(c);
+  const reason = c.req.query("reason")?.trim() || null;
+  const type = c.req.query("type")?.trim() || null;
+  if (reason !== null && !isReviewReason(reason)) throw new HttpError(400, "invalid_arguments", undefined, { field: "reason" });
+  if ((type === null && reason === null) || (type !== null && type.length > 80)) throw new HttpError(400, "invalid_arguments", undefined, { field: "type" });
+  return c.json(await reviewPrecedents(c.env.DB, s, evidenceBefore(c) ?? s.submitted_at, reason, type), 200, NO_STORE);
+}));
+
+reviewAiRoutes.get("/v1/review-ai/submissions/:id/author-history", (c) => counted(c, "author_history", async () => {
+  const s = await readableSubmission(c);
+  return c.json(await reviewAuthorHistory(c.env.DB, s, evidenceBefore(c), Date.now()), 200, NO_STORE);
+}));
+
+/** Center each pair on its first difference so edits at the end of long fields remain visible. */
+function changedExcerpt(before: string, after: string) {
+  let same = 0;
+  while (same < before.length && same < after.length && before[same] === after[same]) same++;
+  const start = Math.max(0, same - 180);
+  const limit = start + 2_000;
+  const excerpt = (value: string) => (start ? "[前段略]…" : "") + value.slice(start, limit) + (limit < value.length ? "…[後段略]" : "");
+  return { before: excerpt(before), after: excerpt(after) };
+}
+
+reviewAiRoutes.get("/v1/review-ai/submissions/:id/diff", (c) => counted(c, "update_diff", async () => {
+  const s = await readableSubmission(c);
+  const view = await diffView(c.env, s.id, { cacheSummary: false });
+  if (view.state !== "ready") return c.json(view, 200, NO_STORE);
+  return c.json({ state: "ready", baseKind: view.baseKind, summary: view.diff.summary,
+    fields: view.diff.fields.map(({ key, before, after }) => {
+      if (key === "asset.cardCss") return { key, before: null, after: null };
+      if (key === "asset.openingPage") return { key, ...changedExcerpt(openingMarkup(before, MAX_OPENING_MARKUP).text, openingMarkup(after, MAX_OPENING_MARKUP).text) };
+      return { key, ...changedExcerpt(before, after) };
+    }),
+    rules: view.diff.rules.items.slice(0, 20),
+  }, 200, NO_STORE);
+}));
 
 /** 完整查重（跟審核頁同一份）：每張相似卡的卡號、名稱、相似度、早晚、狀態，與這張卡設定裡跟它重疊的原文（共 4,000 字內） */
 reviewAiRoutes.get("/v1/review-ai/submissions/:id/originality", (c) => counted(c, "originality", async () => {

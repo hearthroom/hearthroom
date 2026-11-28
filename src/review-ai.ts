@@ -1,4 +1,4 @@
-import { openingMarkup, openingRules, type OpeningRule } from "./review-opening";
+import { MAX_OPENING_MARKUP, openingMarkup, openingPreviewDocument, openingRules, type OpeningRule } from "./review-opening";
 import { applyBatchMarks, authorProfiles, deviceSignals } from "./review-profile";
 import { weeklyLimitAt, weeklyUsageForMember } from "./quota";
 import { internalTermsIn } from "./author-note-guard";
@@ -59,13 +59,39 @@ export function aiReadPhase(s: Pick<SubmissionRow, "status" | "submitted_at">, n
   return aiPhaseOf(s, now);
 }
 
-/** 送給 AI 的卡片內容：只有判斷用心程度需要的文字，長文截斷；統計數字用全文算。 */
-/** applyRules：只有審卡員讀卡時才執行作者的顯示規則（其他路由不需要，也不冒效能風險） */
-export function aiCardInput(settings: Record<string, unknown>, meta: { tags: string[]; fandom: string }, opts: { applyRules?: boolean } = {}) {
+function openingContext(settings: Record<string, unknown>) {
   const doc = (settings.document ?? {}) as Record<string, unknown>;
   const greetings = (settings.greetings ?? {}) as Record<string, unknown>;
   const asset = (settings.authorAsset ?? {}) as Record<string, unknown>;
   const pageHtml = typeof asset.openingPage === "string" ? asset.openingPage : "";
+  const mode = text(asset.openingMode) || (asset.cardFormat === "fengyue" ? "page" : "greeting");
+  const rawRules = Array.isArray(settings.reviewDisplayRules) ? settings.reviewDisplayRules : asset.rules;
+  const rules = (Array.isArray(rawRules) ? rawRules : []).filter((r): r is OpeningRule => !!r && typeof r === "object");
+  const activeRules = rules.filter((r) => r.enabled !== false && typeof r.find === "string" && r.find.trim());
+  return { doc, greetings, asset, pageHtml, mode, rules, activeRules, welcome: text(greetings.welcome),
+    alternates: list(greetings.alternates), names: { char: text(doc.roleName), user: text(doc.userName) } };
+}
+
+export function aiOpeningText(settings: Record<string, unknown>, surface: string, offset: number, preview = false) {
+  const ctx = openingContext(settings);
+  const selected = surface === "primary" ? (ctx.mode === "page" && ctx.pageHtml ? "page" : "welcome") : surface;
+  const raw = selected === "page" ? ctx.pageHtml : selected === "welcome" ? ctx.welcome : ctx.alternates[Number(selected.slice(10)) - 1];
+  if (raw === undefined || (selected === "page" && !raw)) return { state: "missing" } as const;
+  const view = selected === "page" ? openingMarkup(raw, MAX_OPENING_MARKUP) : openingRules(ctx.activeRules, MAX_OPENING_MARKUP, preview)(raw, ctx.names);
+  const coverage = "coverage" in view ? view.coverage : view.dynamic || view.inputClipped ? "partial" : "complete";
+  if (preview) return { state: "ready", surface: selected, coverage, previewKind: "offline_static",
+    previewHtml: "previewHtml" in view ? view.previewHtml : openingPreviewDocument(raw) } as const;
+  // Cap the response independently of the projection. Resume at a Unicode boundary.
+  const end = Math.min(offset + 8_000, view.text.length);
+  const boundary = /[\uD800-\uDBFF]/u.test(view.text[end - 1] ?? "") && end < view.text.length ? end - 1 : end;
+  return { state: "ready", surface: selected, coverage, structure: view.structure, observations: view.observations,
+    ruleHits: "hits" in view ? view.hits : 0, offset, text: view.text.slice(offset, boundary),
+    nextOffset: boundary < view.text.length ? boundary : null } as const;
+}
+
+/** 送給 AI 的卡片內容：長文截斷；統計數字用全文算。只有審卡員讀卡才套用顯示規則。 */
+export function aiCardInput(settings: Record<string, unknown>, meta: { tags: string[]; fandom: string }, opts: { applyRules?: boolean } = {}) {
+  const { doc, greetings, asset, pageHtml, mode, rules, activeRules, welcome, alternates, names } = openingContext(settings);
   const page = openingMarkup(pageHtml);
   const books = Array.isArray(settings.worldbooks) ? settings.worldbooks : settings.worldbook ? [settings.worldbook] : [];
   type Entry = { name?: unknown; content?: unknown; isEnabled?: unknown; isConstant?: unknown; keywords?: unknown };
@@ -74,13 +100,7 @@ export function aiCardInput(settings: Record<string, unknown>, meta: { tags: str
     .filter((e) => e.isEnabled !== false)
     .map((e) => ({ name: text(e.name), content: text(e.content), constant: e.isConstant === true, keywords: list(e.keywords).length }));
   const setting = text(doc.roleDetailDesc);
-  const welcome = text(greetings.welcome);
-  const rawRules = Array.isArray(settings.reviewDisplayRules) ? settings.reviewDisplayRules : asset.rules;
-  const rules = (Array.isArray(rawRules) ? rawRules : []).filter((r): r is OpeningRule => !!r && typeof r === "object");
-  const activeRules = rules.filter((r) => r.enabled !== false && typeof r.find === "string" && r.find.trim());
   const render = opts.applyRules ? openingRules(activeRules) : null;
-  const alternates = list(greetings.alternates);
-  const names = { char: text(doc.roleName), user: text(doc.userName) };
   const welcomeView = render?.(welcome, names);
   const alternateViews = render ? alternates.slice(0, LIMITS.alternates).map((a) => render(a, names)) : [];
   const cardText = setting + welcome + alternates.join("");
@@ -91,6 +111,16 @@ export function aiCardInput(settings: Record<string, unknown>, meta: { tags: str
   } : null;
   const scanned = setting + welcome;
   const tail = welcome.slice(-200);
+  const pageCoverage = page.dynamic || page.clipped ? "partial" : "complete";
+  const pagePrimary = mode === "page" && !!pageHtml;
+  const observations = {
+    hasDisplayRules: activeRules.some((r) => r.promptOnly !== true && (!Array.isArray(r.targets) || r.targets.includes("ai"))),
+    hasOpeningPage: !!pageHtml,
+    settingTranscriptPattern: /(?:^|\n)\s*(?:user|human|使用者|用戶|用户)\s*[:：]/i.test(setting)
+      && /(?:^|\n)\s*(?:assistant|chatgpt|助手|助理)\s*[:：]/i.test(setting),
+    primary: pagePrimary ? { source: "page", coverage: pageCoverage, ...page.observations }
+      : welcomeView ? { source: welcomeView.hits ? "display_rules" : "greeting", coverage: welcomeView.coverage, ...welcomeView.observations } : null,
+  };
   return {
     card: {
       name: text(doc.roleName),
@@ -104,7 +134,7 @@ export function aiCardInput(settings: Record<string, unknown>, meta: { tags: str
       examples: clip(text(doc.talkExample), LIMITS.text),
       openings: {
         // 開場網頁：玩家進卡先看到的互動頁（選項、按鈕的字）。mode=page 時它就是開場，welcome 可能是空的
-        mode: text(asset.openingMode) || (asset.cardFormat === "fengyue" ? "page" : "greeting"),
+        mode,
         page: page.text,
         welcome: clip(welcome, LIMITS.opening),
         alternates: alternates.slice(0, LIMITS.alternates).map((a) => clip(a, LIMITS.alternate)),
@@ -117,10 +147,11 @@ export function aiCardInput(settings: Record<string, unknown>, meta: { tags: str
           welcome: presentation(welcomeView),
           alternates: alternateViews.map(presentation),
           page: pageHtml ? {
-            text: page.text, coverage: page.dynamic || page.clipped ? "partial" : "complete",
+            text: page.text, coverage: pageCoverage,
             structure: page.structure,
           } : null,
         },
+        ...(opts.applyRules ? { observations } : {}),
       },
       // 世界書：設定可以寫在世界書裡（常駐條目每輪都在，召回條目依關鍵字帶入）。index 是全部條目的目錄（不含內文）
       lorebook: {

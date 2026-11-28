@@ -1,4 +1,4 @@
-import { parseFragment, type DefaultTreeAdapterTypes } from "parse5";
+import { parseFragment, serialize, type DefaultTreeAdapterTypes } from "parse5";
 import { RE2JS } from "re2js";
 
 export interface OpeningRule {
@@ -11,7 +11,8 @@ export interface OpeningRule {
   trimStrings?: unknown;
 }
 
-const MAX_MARKUP = 262_144;
+export const MAX_OPENING_MARKUP = 262_144;
+const MAX_MARKUP = MAX_OPENING_MARKUP;
 const MAX_GREETING = 32_768;
 const MAX_RULES = 20;
 const MAX_PATTERN = 512;
@@ -23,6 +24,40 @@ const CONTROL = /^(a|button|input|select|textarea|summary)$/;
 const HIDDEN = /^(head|noscript|script|style|template)$/;
 
 type Node = DefaultTreeAdapterTypes.ChildNode;
+
+const PREVIEW_TAG = /^(a|article|aside|b|blockquote|br|button|caption|code|dd|details|div|dl|dt|em|fieldset|figure|figcaption|footer|h[1-6]|header|hr|i|img|input|label|legend|li|main|nav|ol|option|p|pre|section|select|small|span|strong|style|summary|table|tbody|td|textarea|th|thead|tr|u|ul)$/;
+const PREVIEW_ATTR = /^(alt|aria-label|checked|class|colspan|disabled|height|hidden|id|open|placeholder|role|rowspan|selected|style|title|type|value|width|data-[\w-]+)$/;
+
+/** The reviewer takes a static, offline screenshot. Preserve presentation while removing active HTML. */
+export function openingPreviewDocument(markup: string) {
+  const fragment = parseFragment(markup.slice(0, MAX_MARKUP));
+  const parents: (DefaultTreeAdapterTypes.DocumentFragment | DefaultTreeAdapterTypes.Element)[] = [fragment];
+  while (parents.length) {
+    const parent = parents.pop()!;
+    parent.childNodes = parent.childNodes.filter((node) => {
+      if ("value" in node) return true;
+      if (!("tagName" in node) || node.namespaceURI !== "http://www.w3.org/1999/xhtml" || !PREVIEW_TAG.test(node.tagName)) return false;
+      node.attrs = node.attrs.filter(({ name, value }) => PREVIEW_ATTR.test(name)
+        || (node.tagName === "img" && name === "src" && /^data:image\/(?:png|jpe?g|gif|webp);base64,[a-z0-9+/=]+$/i.test(value)));
+      parents.push(node);
+      return true;
+    });
+  }
+  const policy = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'";
+  return `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${policy}"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:12px;background:#fff;color:#161616;font:16px system-ui;white-space:pre-line;overflow-wrap:anywhere}img{max-width:100%}</style>${serialize(fragment)}`;
+}
+
+function openingObservations(visible: string) {
+  let visibleCharacters = 0;
+  for (const character of visible) if (!/\s/u.test(character)) visibleCharacters++;
+  const tail = visible.slice(-160).split("\n").pop() ?? "";
+  return {
+    visibleCharacters,
+    startsWithFragmentPunctuation: /^[,，、;；:：。.!！?？]/u.test(visible),
+    endsWithAssistantQuestionPattern: /^(?:請問)?(?:你)?(?:要不要|想不想|需要(?:我)?|想要我|希望我|要我)(?:幫你|為你)?(?:續寫|繼續|接著寫|調整|修改|改寫|補充).*[？?]$/u.test(tail)
+      || /^(?:would you like|do you want|shall i|should i) (?:me to )?(?:continue|revise|rewrite|expand)\b.*\?$/i.test(tail),
+  };
+}
 
 export function openingMarkup(html: string, budget = MAX_EXCERPT) {
   const capped = html.slice(0, MAX_MARKUP);
@@ -57,11 +92,12 @@ export function openingMarkup(html: string, budget = MAX_EXCERPT) {
   const full = pieces.join("").replace(/[ \t\u00a0]+/g, " ").replace(/\s*\n\s*/g, "\n").trim();
   structure.characterIntro ||= /角色介紹|角色介绍|人物介紹|人物介绍|character (intro|bio|profile)/i.test(full);
   structure.statusPanel ||= /狀態欄|状态栏|狀態面板|状态面板|status (bar|panel)/i.test(full);
-  const clipped = full.length > budget || capped.length !== html.length;
-  return { text: full.slice(0, budget) + (full.length > budget ? "…[截斷]" : ""), chars: full.length, structure, dynamic, clipped };
+  const inputClipped = capped.length !== html.length;
+  const clipped = full.length > budget || inputClipped;
+  return { text: full.slice(0, budget) + (full.length > budget ? "…[截斷]" : ""), chars: full.length, structure, dynamic, clipped, inputClipped, observations: openingObservations(full) };
 }
 
-export function openingRules(rules: OpeningRule[]) {
+export function openingRules(rules: OpeningRule[], budget = MAX_EXCERPT, preview = false) {
   const applicable = rules.filter((r) => r.enabled !== false && r.promptOnly !== true
     && (!Array.isArray(r.targets) || r.targets.includes("ai")) && typeof r.find === "string" && r.find.trim());
   const compiled: { regex: RE2JS; replace: string; sticky: boolean; trims: string[] }[] = [];
@@ -118,7 +154,8 @@ export function openingRules(rules: OpeningRule[]) {
       current = parts.join("") + current.slice(end);
     }
     current = current.replace(/\{\{\s*(char|user)\s*\}\}/gi, (token, key: string) => names[key.toLowerCase() as keyof typeof names] || token);
-    const view = openingMarkup(current);
-    return { ...view, hits, skipped, coverage: incomplete || view.clipped || view.dynamic ? "partial" as const : "complete" as const };
+    const view = openingMarkup(current, budget);
+    return { ...view, hits, skipped, coverage: incomplete || view.clipped || view.dynamic ? "partial" as const : "complete" as const,
+      previewHtml: preview ? openingPreviewDocument(current) : undefined };
   };
 }
