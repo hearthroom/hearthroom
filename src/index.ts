@@ -36,7 +36,7 @@ import { snapshot } from './snapshot-cache';
 import { readCardQuality } from './card-quality';
 import { backfillCardQualityLengths } from './card-quality-backfill';
 import { cardLink, linkPreview } from './card-link';
-import { cardStateRoutes } from './card-state-routes';
+import { AUTHOR_SHARED_STATE_PATH, cardStateRoutes } from './card-state-routes';
 import { boardKey, readBoardCache, supportsSharedFirstScreen, writeBoardCache } from "./board-cache";
 export { boardCache } from "./board-cache";
 import { coverState, readCoverFlags, saveAuthorCover, saveReviewerCover } from "./cover-sensitive";
@@ -109,6 +109,7 @@ import { bearerOf, blogWriterHint } from "./community-admin";
 import {reconcileWorkAccess} from './work-reconcile';
 import {workPolicyGateway} from "./work-policy";
 import {filterPublicRows,currentCardAccess,unlistedCardRow,proveCachedPublicAggregates,type VisibilityReadSurface} from './work-read';
+import { VisibilityProviderUnavailable } from './work-read-failures';
 import { providerOf, requestIdentity, reviewerRole, isHumanReviewer, isReviewAgent, memberByHandle, memberNsfw, memberProfile, missingMemberStatements, requireMember, requireReviewer, resolveMember, updateMemberNsfw, viewerAllowsNsfw, memberHiddenTags, updateMemberHiddenTags } from "./members";
 import { followList, ownFollowVisibility, parseFollowVisibility, publicFollowStats, updateFollowVisibility } from "./follow-visibility";
 import { configuredProviders, hasChat, parseProvider, requireConfigured, DEFAULT_PROVIDER, PROVIDER_NAMES, type ProviderId, reviewEnabled } from "./providers";
@@ -310,7 +311,16 @@ app.onError(async (err, c) => {
   if (err instanceof HttpError) {
     if(err.message==='region_unavailable'){c.header('Cache-Control','private, no-store');await bumpOp(c.env.DB,'country_region',c.req.path==='/v1/me/settings'?'save':'admission','denied');}
     if(c.req.path==='/v1/me/card-sync')console.error('card_sync_failed',{code:err.message.startsWith('sync_')?err.message:'sync_identity_failed',...err.detail});
-    if (ev) ev.outcome = err.status === 404 ? "not_found" : err.status === 403 ? "forbidden" : err.status === 502 ? "upstream_error" : "rejected";
+    if (ev) {
+      ev.outcome = err.status === 404 ? "not_found" : err.status === 403 ? "forbidden" : err.status === 502 ? "upstream_error" : "rejected";
+      if (err.status === 503 && c.req.routePath === AUTHOR_SHARED_STATE_PATH) {
+        const operation = c.req.method === "PUT" ? "toggle" : "read";
+        const reason = ["declaration_unavailable", "visibility_sync_pending", "visibility_provider_unavailable"].includes(err.message)
+          ? err.message : "other";
+        const policyTimeout = err instanceof VisibilityProviderUnavailable && err.reason === "timeout";
+        ev.detail = `shared_state_${operation}_${policyTimeout ? "visibility_provider_timeout" : reason}`;
+      }
+    }
     return c.json({ error: err.message, ...err.extra, ...(err.detail ? {detail:err.detail} : {}) }, err.status);
   }
   if (ev) ev.outcome = "internal";

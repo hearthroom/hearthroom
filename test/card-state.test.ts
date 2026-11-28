@@ -1,5 +1,5 @@
 import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import worker from "../src/index";
 import { upsertCard } from "../src/cards";
 import { opsMetrics } from "../src/ops-metrics";
@@ -346,9 +346,52 @@ it("測試帳號當作者：設定頁看到的草稿數字就是重設與清空�
   }
 });
 
-it("作者設定讀不到宣告時回可重試的 503，不回一份看起來像「沒宣告」的空設定", async () => {
+function captureSharedStateEvents() {
+  const events: AnalyticsEngineDataPoint[] = [];
+  return { events, vars: { EVENTS: { writeDataPoint: (point: AnalyticsEngineDataPoint) => events.push(point) } } };
+}
+
+it("作者設定讀不到宣告時保留 503，並記錄固定的讀宣告分類", async () => {
+  const { events, vars } = captureSharedStateEvents();
   upstream.fetchSharedState = async () => { throw new HttpError(502, "upstream failed"); };
-  expect(await call("/v1/me/cards/src-1/shared-state", { token: "author" })).toMatchObject({ status: 503, body: { error: "declaration_unavailable" } });
+  expect(await call("/v1/me/cards/src-1/shared-state", { token: "author", vars })).toEqual({ status: 503, body: { error: "declaration_unavailable" } });
+  expect(events.map((point) => [point.blobs?.[2], point.doubles?.[3], point.blobs?.[13]])).toEqual([
+    ["/v1/me/cards/:roleId/shared-state", 503, "shared_state_read_declaration_unavailable"],
+  ]);
+});
+
+it("共用狀態開關分開記錄本機權限不同步與 Provider 權限不可用", async () => {
+  const { events, vars } = captureSharedStateEvents();
+  const member = await makeMember(10001);
+  await env.DB.prepare("INSERT INTO works VALUES(?,?,?,?,?)").bind("shared-state-work", member, "harbor", "src-1", 1).run();
+  await env.DB.prepare("INSERT INTO managed_work_access(work_id,provider,source_role_id,access,epoch,restriction,approved_role_id,moderation_revision) VALUES(?,'harbor',?,'public',1,'none',?,1)")
+    .bind("shared-state-work", "src-1", "src-1").run();
+  const path = "/v1/me/cards/src-1/shared-state";
+  const options = { token: "author", method: "PUT", body: { enabled: false }, vars };
+  expect(await call(path, options)).toEqual({ status: 503, body: { error: "visibility_sync_pending" } });
+  await env.DB.prepare("UPDATE managed_work_access SET confirmed_moderation_revision=moderation_revision WHERE work_id=?").bind("shared-state-work").run();
+  expect(await call(path, { ...options, vars: { ...vars, HOSTING_SERVICE_KEY: "" } })).toEqual({ status: 503, body: { error: "visibility_provider_unavailable" } });
+  const providerFetch = vi.spyOn(globalThis, "fetch").mockRejectedValue(new DOMException("fixture deadline", "TimeoutError"));
+  try {
+    expect(await call(path, { ...options, vars: { ...vars, HOSTING_SERVICE_KEY: "fixture" } })).toEqual({ status: 503, body: { error: "visibility_provider_unavailable" } });
+    expect(providerFetch).toHaveBeenCalledTimes(2);
+  } finally {
+    providerFetch.mockRestore();
+  }
+  expect(events.map((point) => point.blobs?.[13])).toEqual([
+    "shared_state_toggle_visibility_sync_pending",
+    "shared_state_toggle_visibility_provider_unavailable",
+    "shared_state_toggle_visibility_provider_timeout",
+  ]);
+});
+
+it("共用狀態意外的 typed 503 只記固定分類，其他路由不套用", async () => {
+  const { events, vars } = captureSharedStateEvents();
+  upstream.fetchMe = async () => { throw new HttpError(503, "unclassified fixture detail"); };
+  const result = await call("/v1/me/cards/src-1/shared-state", { token: "author", vars });
+  expect(result).toEqual({ status: 503, body: { error: "unclassified fixture detail" } });
+  expect((await call("/v1/me/cards", { token: "author", vars })).status).toBe(503);
+  expect(events.map((point) => point.blobs?.[13])).toEqual(["shared_state_read_other", ""]);
 });
 
 describe("還沒有卡片列的新卡（沒送審、沒設能見度的私卡；CLI 試玩卡）：只給作者本人", () => {

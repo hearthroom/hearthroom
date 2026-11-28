@@ -13,6 +13,7 @@ import { HttpError, type Env } from "./types";
  * 錯誤碼（舞台照抄成 SDK 的錯誤）：shared_disabled（平台或作者關了）、not_declared、option_invalid、
  * delta_invalid、not_eligible（沒玩過這張卡）、rate_limited、limit_reached（改票次數或每人上限）、goal_reached。
  */
+export const AUTHOR_SHARED_STATE_PATH = "/v1/me/cards/:roleId/shared-state";
 export const cardStateRoutes = new Hono<{ Bindings: Env }>();
 type Ctx = Context<{ Bindings: Env }>;
 
@@ -127,7 +128,7 @@ async function authorState(c: Ctx): Promise<{ member: Member; state: CardState }
   return { member, state };
 }
 
-cardStateRoutes.get("/v1/me/cards/:roleId/shared-state", async (c) => {
+cardStateRoutes.get(AUTHOR_SHARED_STATE_PATH, async (c) => {
   const { state } = await authorState(c);
   // 讀不到宣告不能回空設定：編輯頁會把「沒宣告」當成整塊不顯示，作者就看不到讀取失敗
   if (state.declUnavailable) throw new HttpError(503, "declaration_unavailable");
@@ -144,7 +145,7 @@ cardStateRoutes.get("/v1/me/cards/:roleId/shared-state", async (c) => {
   }, 200, NO_STORE);
 });
 
-cardStateRoutes.put("/v1/me/cards/:roleId/shared-state", async (c) => {
+cardStateRoutes.put(AUTHOR_SHARED_STATE_PATH, async (c) => {
   const { member, state } = await authorState(c);
   const body = (await c.req.json().catch(() => null)) as { enabled?: unknown } | null;
   if (typeof body?.enabled !== "boolean") throw new HttpError(400, "enabled_required");
