@@ -70,3 +70,22 @@ it('allows a later page to refresh when an earlier page cannot be read', async (
     .toEqual({ reached: 10, median_turns: 4.5 });
   expect(await env.DB.prepare('SELECT cursor FROM card_quality_play_sync WHERE singleton=1').first()).toEqual({ cursor: 0 });
 });
+
+it('renews verification for unchanged values only after a successful read', async () => {
+  const role = '753c6dd4-772a-43f9-b16f-0aaa45dd721f';
+  await env.DB.prepare(`INSERT INTO cards (id, provider, source_role_id, author_num_id, author_name, status, registered_at, last_synced_at)
+    VALUES (100001, 'harbor', ?, 11, 'Fixture', 'approved', 1, 1)`).bind(role).run();
+  const read = vi.fn().mockResolvedValue({ [role]: { players: 20, reached: 6, medianTurns: 4 } });
+  let now = 1_000;
+  const deps = { read, now: () => now };
+  const verified = () => env.DB.prepare('SELECT verified_at FROM card_quality_play WHERE card_id=100001').first('verified_at');
+  await syncCardQualityPlay(env, deps);
+  await expect(verified()).resolves.toBe(1_000);
+  now = 2_000;
+  await syncCardQualityPlay(env, deps);
+  await expect(verified()).resolves.toBe(2_000);
+  now = 3_000;
+  read.mockRejectedValueOnce(new Error('upstream failure'));
+  await expect(syncCardQualityPlay(env, deps)).rejects.toThrow('upstream failure');
+  await expect(verified()).resolves.toBe(2_000);
+});
