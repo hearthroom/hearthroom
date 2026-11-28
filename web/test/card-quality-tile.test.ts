@@ -11,7 +11,7 @@ vi.mock("../src/lib/card-quality-capability", async () => {
   f.enabled = ref(true);
   return { useCardQualityCapability: () => f.enabled };
 });
-vi.mock("../src/lib/api", () => ({ fetchCardQuality: f.quality }));
+vi.mock("../src/lib/api", async (original) => ({ ...(await original<typeof import("../src/lib/api")>()), fetchCardQuality: f.quality }));
 import CardGrid from "../src/components/CardGrid.vue";
 import CardPreview from "../src/components/CardPreview.vue";
 import { closeCardPreview } from "../src/lib/card-preview";
@@ -49,7 +49,8 @@ it("adds one data line to every tile: length before the threshold, deep play aft
   ]);
   expect(lines()).toEqual(["篇幅 1.4 萬字", "聊滿 5 回合 164/200", ""]);
   expect(root.querySelectorAll(".card__quality")).toHaveLength(3);
-  expect(root.querySelectorAll(".card__preview")).toHaveLength(3);
+  // 沒有數字的那張不放預覽鈕
+  expect(root.querySelectorAll(".card__preview")).toHaveLength(2);
 });
 
 it("keeps the old tile when the server has not turned the feature on", async () => {
@@ -95,4 +96,14 @@ it("shows a retry line when the data does not load, and keeps the way into the c
   // 未滿門檻、沒有評分與留言：整塊玩家數據不出現
   expect(dialog.textContent).not.toContain("玩家數據");
   expect(dialog.textContent).toContain("2.3 萬字");
+});
+
+it("treats a card the server has no numbers for as empty, not as a load failure", async () => {
+  const { ApiError } = await import("../src/lib/api");
+  f.quality.mockRejectedValue(new ApiError(404, "not found"));
+  await mount([card(9, { qualitySignal: { lengthCharacters: 0, deepPlay: null } })]);
+  root.querySelector<HTMLButtonElement>(".card__preview")!.click(); await settle();
+  const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
+  expect(dialog.textContent).not.toContain("數據載入不了");
+  expect(dialog.querySelector('a[href="/cards/9"]')).not.toBeNull();
 });
