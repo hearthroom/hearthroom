@@ -90,3 +90,12 @@ it('publishes ratings at five votes and denies R18 data to an unauthorized viewe
   await env.DB.prepare('DELETE FROM card_scores WHERE card_id=? AND member_id=?').bind(row.id, 'member-55').run();
   expect(await (await read()).json()).toMatchObject({ rating: null });
 });
+
+it('does not expose statistics through numbers assigned by a retired provider', async () => {
+  const retired = await upsertCard(env.DB, role({ roleId: 'retired-quality-card' }), Date.now(), {
+    provider: 'lunatalk', status: 'approved',
+  });
+  const url = 'https://c.test/v1/cards/' + retired.id;
+  expect((await SELF.fetch(url)).status).toBe(404);
+  expect((await SELF.fetch(url + '/quality')).status).toBe(404);
+});

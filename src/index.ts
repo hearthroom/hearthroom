@@ -816,8 +816,8 @@ app.get('/v1/cards/:id/honors',async c=>{
 });
 app.get('/v1/cards/:id/quality', async c => {
   c.header('Cache-Control', 'private, no-store');
-  const row = await getCard(c.env.DB, c.req.param('id'), providerOf(c));
-  if (!row || row.public_blocked) throw new HttpError(404, 'card not found');
+  const { row } = await cardLink(c.env, c.req.param('id'), providerOf(c));
+  if (!row) throw new HttpError(404, 'card not found');
   const access = await checkedCardAccess(c, row);
   if (!access.reachable) throw new HttpError(404, 'card not found');
   await assertRegionCard(c, row);
