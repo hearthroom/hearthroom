@@ -6430,6 +6430,5 @@
   "quality.pres.rules": "{n} display rule | {n} display rules",
   "quality.dataTitle": "Card data",
   "quality.loadFailed": "Couldn't load the data",
-  "quality.retry": "Try again",
-  "quality.editor.label": "Length on card lists"
+  "quality.retry": "Try again"
 }
