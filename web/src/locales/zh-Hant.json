@@ -6406,7 +6406,6 @@
   "quality.retention.label": "續玩率",
   "quality.retention.help": "續玩率怎麼算",
   "quality.retention.explain": "開聊的合格玩家中，玩了 {n} 回合以上的比例。",
-  "quality.retention.count": "{players} 位玩家中 {reached} 位",
   "quality.retention.rules": "合格玩家不含作者本人，同一裝置的多個帳號算一人，而且要玩過其他作者的卡；重新生成的回覆不算回合。",
   "quality.preview": "預覽「{name}」",
   "quality.close": "關閉預覽",

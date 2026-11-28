@@ -86,7 +86,8 @@ it("opens the preview from the cover button, shows the data, and returns focus o
   expect(help.getAttribute("aria-expanded")).toBe("true");
   expect(body.style.display).toBe("");
   expect(body.textContent).toContain("開聊的合格玩家中，玩了 5 回合以上的比例。");
-  expect(body.textContent).toContain("200 位玩家中 164 位");
+  // 任何地方都不顯示玩家人數（owner 2026-11-28）
+  expect(dialog.textContent).not.toMatch(/200|164/);
   expect(body.textContent).toContain("同一裝置的多個帳號算一人");
   expect(dialog.querySelector('a[href="/cards/7"]')).not.toBeNull();
   expect(document.activeElement?.getAttribute("aria-label")).toBe("關閉預覽");
