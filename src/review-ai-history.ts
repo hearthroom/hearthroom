@@ -1,5 +1,5 @@
 import { parseReviewReasons } from "../shared/review-reasons";
-import { cardQualitySignal } from "./card-quality";
+import { QUALITY_MIN_PLAYERS, QUALITY_TURNS } from "../shared/card-quality";
 import type { SubmissionRow } from "./review";
 import { HttpError } from "./types";
 
@@ -71,9 +71,12 @@ export async function reviewAuthorHistory(db: D1Database, target: SubmissionRow,
     decisions: decisions.results.map((r) => ({ decision: r.decision, kind: r.kind, decidedAt: r.decided_at,
       reasons: r.decision === "rejected" ? parseReviewReasons(r.reject_reasons) : [] })),
     published: published.results.map((r) => {
-      const { lengthCharacters, deepPlay } = cardQualitySignal(r);
-      return { cardId: String(r.card_id), characters: lengthCharacters,
-        continuation: deepPlay ? { ...deepPlay, rate: deepPlay.reached / deepPlay.players } : null };
+      // Reviewer evidence keeps the cohort counts and fractional rate.
+      const players = r.quality_players, reached = r.quality_reached;
+      const continuation = players !== null && players >= QUALITY_MIN_PLAYERS && reached !== null
+        ? { players, reached, turns: QUALITY_TURNS, rate: reached / players }
+        : null;
+      return { cardId: String(r.card_id), characters: r.quality_chars, continuation };
     }),
   };
 }

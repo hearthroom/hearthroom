@@ -170,7 +170,7 @@ describe('審卡員讀卡', () => {
     const path = `/v1/review-ai/submissions/${target.id}/author-history`;
     expect((await get(path, 'human')).status).toBe(403);
     expect(await json(await get(path, 'key'))).toMatchObject({ decisions: [{ decision: 'approved' }],
-      published: [{ cardId: String(card!.id), characters: expect.any(Number), continuation: { turns: 5, rate: 0.4 } }] });
+      published: [{ cardId: String(card!.id), characters: expect.any(Number), continuation: { players: 25, reached: 10, turns: 5, rate: 0.4 } }] });
     await decide(target.id, humanId, 'reject');
     expect(await json(await get(path, 'key'))).toMatchObject({ decisions: [{ decision: 'approved' }],
       published: [{ characters: expect.any(Number), continuation: null }] });
