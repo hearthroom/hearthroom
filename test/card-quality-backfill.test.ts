@@ -23,7 +23,7 @@ async function listed(source: string, timestamp: number, sealed = true) {
 }
 
 it('backs up approved versions newest first with one active sweep, bounded failures and aggregate metrics', async () => {
-  await env.DB.prepare("UPDATE card_quality_length_scan SET priority_board=8").run();
+  await env.DB.prepare("UPDATE card_quality_length_scan SET priority_board=16").run();
   const now = Date.now();
   await listed('older', now - 20);
   await listed('legacy-without-seal', now - 10, false);
@@ -117,7 +117,7 @@ it('warms the weekly and monthly first screens before advancing the general swee
 });
 it('limits one scheduled minute to ten sealed reads across concurrent invocations', async () => {
   const now = Date.now();
-  await env.DB.prepare("UPDATE card_quality_length_scan SET priority_board=8").run();
+  await env.DB.prepare("UPDATE card_quality_length_scan SET priority_board=16").run();
   for (let i = 0; i < 25; i++) await listed(`cap-${i}`, now - i);
   const fetchRevision = vi.fn(async () => new Response(null, { status: 404 }));
   vi.stubGlobal('fetch', fetchRevision);
@@ -126,4 +126,22 @@ it('limits one scheduled minute to ten sealed reads across concurrent invocation
   expect(fetchRevision).toHaveBeenCalledTimes(10);
   await backfillCardQualityLengths(local, now + 60_000);
   expect(fetchRevision).toHaveBeenCalledTimes(20);
+});
+
+it('warms a recently approved version from before rollout even when the general cursor is older', async () => {
+  const now = Date.now();
+  await listed('approved-from-old-submission', now - 2_000);
+  await env.DB.prepare('UPDATE card_quality_length_scan SET priority_board=8,cursor_time=?,cursor_id=0')
+    .bind(now - 86_400_000).run();
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+    const id = new URL(url).pathname.split('/').at(-2)!;
+    return Response.json({ responses: {
+      [`/role/detail?roleId=${id}`]: { roleDetailDesc: '正文'.repeat(700) },
+      [`/worldbook/bindings?roleId=${id}`]: { bindings: [] },
+      [`/role/author-asset?roleId=${id}`]: {},
+    } });
+  }));
+  await backfillCardQualityLengths({ ...env, HOSTING_SERVICE_KEY: 'fixture-issuer' }, now);
+  expect(await env.DB.prepare("SELECT total_chars FROM card_quality_lengths WHERE version_id='approved-from-old-submission'").first())
+    .toEqual({ total_chars: 1_000 });
 });

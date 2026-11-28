@@ -11,8 +11,11 @@ const PAGE_SIZE = 64;
 const CALCULATION_LIMIT = 10;
 const BOARD_SIZE = 30;
 const BOARD_CANDIDATE_LIMIT = 2 * BOARD_SIZE;
-const PRIORITY_BOARDS = (['zh', 'en', 'ja', 'ko'] as const)
-  .flatMap(zone => (['week', 'month'] as const).map(window => ({ zone, window })));
+const ZONES = ['zh', 'en', 'ja', 'ko'] as const;
+const PRIORITY_BOARDS = [
+  ...ZONES.flatMap(zone => (['week', 'month'] as const).map(window => ({ zone, window }))),
+  ...ZONES.flatMap(zone => (['new', 'day'] as const).map(window => ({ zone, window }))),
+];
 
 type Candidate = { id: number; registered_at: number; version_id: string | null; revision_id: string | null; needs_length: number };
 type PriorityCandidate = Candidate & { retried: number };
@@ -71,7 +74,10 @@ export async function backfillCardQualityLengths(env: Env, now: number): Promise
     if (board) {
       if (priorityIds === '[]') {
         const ids = await visibleBoardIds(env, {
-          zone: board.zone, sort: 'hot', since: now - RANK_DURATION[board.window], boardWindow: board.window,
+          ...(board.window === 'new'
+            ? { sort: 'new' }
+            : { sort: 'hot', since: now - RANK_DURATION[board.window], boardWindow: board.window }),
+          zone: board.zone,
           limit: BOARD_CANDIDATE_LIMIT, offset: 0, skipCount: true,
         });
         priorityIds = JSON.stringify(ids.map(id => ({ id })));
