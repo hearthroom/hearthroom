@@ -189,6 +189,11 @@ const METRICS = {
     operations: ["publish", "unpublish", "discard", "owner_action", "revoke", "sync", "policy_backfill"],
     outcomes: ["success", "denied", "conflict", "error", "rejected", "deferred", "noop"],
   },
+  card_quality_play_sync: {
+    name: 'hearthroom_card_quality_play_sync_total',
+    help: 'Scheduled card quality snapshot sync attempts.',
+    label: 'operation', operations: ['run'], outcomes: ['ok','busy','error'],
+  },
 } as const;
 export type OpsMetric = keyof typeof METRICS;
 
