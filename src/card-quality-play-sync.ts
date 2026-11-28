@@ -38,6 +38,10 @@ export async function syncCardQualityPlay(
 ): Promise<'ok' | 'busy'> {
   const started = now();
   const lease = crypto.randomUUID();
+  const recordRun = (outcome: 'ok' | 'error') => Promise.all([
+    bumpOp(env.DB, 'card_quality_play_sync', 'run', outcome),
+    bumpOp(env.DB, 'card_quality_play_sync_ms', 'run', outcome, Math.max(0, now() - started)),
+  ]);
   try {
     const acquired = await env.DB.prepare(`UPDATE card_quality_play_sync SET lease=?, lease_until=?
       WHERE singleton=1 AND lease_until<=? RETURNING cursor`).bind(lease, started + LEASE_MS, started).first<{ cursor: number }>();
@@ -86,10 +90,10 @@ export async function syncCardQualityPlay(
       if (!saved.meta.changes) throw new Error('quality sync lease expired');
       if (!cursor) break;
     }
-    await bumpOp(env.DB, 'card_quality_play_sync', 'run', 'ok');
+    await recordRun('ok');
     return 'ok';
   } catch (error) {
-    await bumpOp(env.DB, 'card_quality_play_sync', 'run', 'error');
+    await recordRun('error');
     throw error;
   } finally {
     await env.DB.prepare("UPDATE card_quality_play_sync SET lease='',lease_until=0 WHERE singleton=1 AND lease=?").bind(lease).run();
