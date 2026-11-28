@@ -281,7 +281,7 @@ it('uses a current shared proof on a cold edge and refreshes it without delaying
  const origin='https://tags-shared-proof.test';
  const startedAt=Date.now();
  const revision=(await env.DB.prepare('SELECT revision FROM moderation_clock WHERE id=1').first<number>('revision'))!;
- const scope=JSON.stringify(['v3',origin,'zh']);
+ const scope=JSON.stringify(['v3','other','zh']);
  await env.DB.prepare('INSERT INTO public_aggregate_proof(scope,revision,expires_at) VALUES(?,?,?)')
   .bind(scope,revision,startedAt+14_000).run();
  const now=vi.spyOn(Date,'now').mockReturnValue(startedAt);
@@ -334,6 +334,15 @@ it.each(['/v1/tags','/v1/tags/counts'])('revalidates %s if content lookup crosse
  const denied=await request(path);
  expect(denied.status).toBe(503);
  expect(await denied.json()).toEqual({error:'visibility_sync_pending'});
+});
+
+it('does not allocate separate durable proofs for arbitrary wildcard hostnames',async()=>{
+ await aggregateFixture(1);
+ const {network}=providerFixture('public');
+ const urls=['https://mirror-a.hearthroom.club/v1/tags?zone=zh','https://mirror-b.hearthroom.club/v1/tags/counts?zone=zh'];
+ for(const url of urls)expect((await request(url)).status).toBe(200);
+ expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM public_aggregate_proof').first<number>('n')).toBe(1);
+ expect(network).toHaveBeenCalledTimes(1);
 });
 
 // Real D1 contributors span multiple policy batches; the Provider mock remains

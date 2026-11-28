@@ -3,6 +3,7 @@
 import { bumpOp } from './ops-metrics';
 import { HttpError, type Env } from './types';
 import { provePublicAggregates } from './work-read';
+import { siteRootOf } from '../shared/site-hosts';
 
 const PROOF_MS = 30_000;
 const REFRESH_BEFORE_MS = 15_000;
@@ -115,7 +116,9 @@ function startProof(env: Env, ctx: Context, scope: string, zone: string | undefi
 
 export async function getPublicAggregateProof(env: Env, ctx: Context, requestUrl: string, zone?: string): Promise<Proof> {
   // Version the key so receipts from the retired shared implementation are ignored.
-  const scope = JSON.stringify(['v3', new URL(requestUrl).origin, zone ?? 'all']);
+  // Wildcard worker routes must not let request hostnames allocate D1 rows.
+  const site = siteRootOf(new URL(requestUrl).hostname) ?? 'other';
+  const scope = JSON.stringify(['v3', site, zone ?? 'all']);
   const row = await readProof(env.DB, scope);
   const key = JSON.stringify([scope, row.clock_revision]);
   const now = Date.now();
