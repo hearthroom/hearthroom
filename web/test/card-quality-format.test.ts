@@ -25,5 +25,6 @@ it("keeps small ratios exact and abbreviates five-digit player counts", () => {
   expect(qualityRatio(15, 1042)).toBe("15/1,042");
   expect(qualityRatio(15, 12345)).not.toContain("12,345");
   expect(qualityPercent(164, 200)).toBe("82%");
+  expect(qualityPercent(199, 200)).toBe("99%");
   expect(qualityPercent(0, 0)).toBe("");
 });
