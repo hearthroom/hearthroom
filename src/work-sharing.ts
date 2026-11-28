@@ -171,5 +171,14 @@ workSharingRoutes.get('/v1/me/cards/:id/visibility',async c=>{
  const {source,row}=await ownerCardSource(c.env,c.req.param('id'));
  const token=c.req.header('Authorization')!.replace(/^Bearer\s+/i,'');
  const {workVisibility}=await readOwnerVisibility(c.env,source,token,row);
- return c.json({workVisibility});
+ const pendingCancellation=workVisibility.syncState==='changing' ? await c.env.DB.prepare(`
+  SELECT a.operation_id AS operationId,'cancel_review' AS action,
+   json_extract(a.intent,'$.expectedPolicyRevision') AS expectedPolicyRevision,
+   json_extract(a.intent,'$.expectedApprovalRevision') AS expectedApprovalRevision
+  FROM managed_work_access w JOIN author_visibility_operations a
+   ON a.work_id=w.work_id AND a.provider_operation_id=w.sync_operation_id
+  WHERE w.provider='harbor' AND w.source_role_id=? AND w.sync_state='changing'
+   AND a.member_id=? AND a.state='pending' AND json_extract(a.intent,'$.action')='cancel_review'
+ `).bind(source,member.id).first() : null;
+ return c.json({workVisibility,...(pendingCancellation?{pendingCancellation}:{})});
 });

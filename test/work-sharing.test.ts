@@ -6,6 +6,7 @@ import {identitiesFor,makeMember,makeReviewer,resetDb,restoreUpstream,role,ratin
 import {reconcileWorkAccess} from '../src/work-reconcile';
 import {hostGateway} from '../src/hosting';
 import {opsMetrics} from '../src/ops-metrics';
+import {groupSubmissionIds} from '../src/review-drop';
 import {unregister} from '../src/cards';
 import {upstream} from '../src/upstream';
 
@@ -271,12 +272,17 @@ it('blocks a claimed review while the author cancellation owns its publication p
  expect(waiting.status).toBe(409);
  expect(await waiting.json()).toMatchObject({error:'review_withdrawal_pending'});
  expect(await (await request('/v1/review/queue','reader')).json()).toMatchObject({items:[],counts:{new:0}});
+ expect(await groupSubmissionIds(env.DB,submission,'author')).toEqual([]);
+ expect((await request(`${reviewPath}/drop`,'reader',{})).status).toBe(409);
 
  const statusPath=`/v1/me/cards/${card.id}/visibility/operations/${intent.operationId}`;
  const status=await request(statusPath);
  expect(status.status).toBe(202);
  expect(await status.json()).toMatchObject({operation:{state:'pending',retryable:true}});
  expect((await request(statusPath,'reader')).status).toBe(403);
+ const ownerState=await request(`/v1/me/cards/${card.id}/visibility`);
+ expect(await ownerState.json()).toMatchObject({workVisibility:{syncState:'changing'},pendingCancellation:intent});
+ expect((await request(`/v1/me/cards/${card.id}/visibility`,'reader')).status).toBe(403);
  expect(behavior.commands).toBe(0);
  behavior.unavailable=false;
  expect((await request(`/v1/me/cards/${card.id}/visibility`,'owner',intent)).status).toBe(200);

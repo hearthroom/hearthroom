@@ -14,7 +14,7 @@ export function createVisibilityController(options:{id:string;provider:ProviderI
  async function token(){const t=await options.token();if(!t)throw new Error('auth');return t;}
  function clear(){command=null;try{localStorage.removeItem(key);}catch{}}
  function remember(next:VisibilityCommand){command=next;try{localStorage.setItem(key,JSON.stringify(next));}catch{}}
- async function latest(t:string){const result=await fetchWorkVisibility(options.id,t,options.provider);if(!result.workVisibility)throw new Error('missing projection');value.value=result.workVisibility;}
+ async function latest(t:string){const result=await fetchWorkVisibility(options.id,t,options.provider);if(!result.workVisibility)throw new Error('missing projection');value.value=result.workVisibility;return result.pendingCancellation;}
  async function check():Promise<void>{
   if(!command)return load();
   phase.value='checking';message.value='';
@@ -35,7 +35,11 @@ export function createVisibilityController(options:{id:string;provider:ProviderI
  }
  async function load():Promise<void>{
   if(command)return check();phase.value='loading';message.value='';
-  try{await latest(await token());phase.value=value.value?.syncState==='complete'?'ready':'unknown';}catch{phase.value='error';}
+  try{
+   const pendingCancellation=await latest(await token());
+   if(pendingCancellation){remember(pendingCancellation);await check();return;}
+   phase.value=value.value?.syncState==='complete'?'ready':'unknown';
+  }catch{phase.value='error';}
  }
  function canResume(){
   const v=value.value,c=command;if(!v||!c||v.syncState!=='complete'||v.policyRevision!==c.expectedPolicyRevision||v.approvalRevision!==c.expectedApprovalRevision)return false;

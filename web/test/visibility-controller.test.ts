@@ -39,6 +39,8 @@ it('lets the author resend only the saved cancellation after Provider reports no
  mocks.operation.mockImplementation(async(_id,key)=>({operation:{operationId:key,state:'pending',retryable:true}}));
  const first=setup();await first.load();await first.cancelReview();
  const original=mocks.change.mock.calls[0][3];
+ localStorage.clear();
+ mocks.read.mockResolvedValue({workVisibility:policy({syncState:'changing'}),pendingCancellation:original});
  const reopened=setup();await reopened.load();await reopened.check();
  expect(reopened.phase.value).toBe('retryable');
  expect(reopened.resumeAction.value).toBe('cancelReview');

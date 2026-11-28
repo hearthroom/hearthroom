@@ -1,5 +1,5 @@
 import {effectiveCover,type CoverFlags} from "./cover-sensitive";
-import { CLAIM_TTL_MS, getSubmission } from './review';
+import { CLAIM_TTL_MS, getSubmission, NOT_WITHDRAWING } from './review';
 import { reviewerRole } from './members';
 import { queueContext, reviewEventStatement, type QueueContext } from './review-v2';
 import { HttpError, pickLocale, type Localized } from './types';
@@ -25,9 +25,11 @@ async function dropBlocker(db: D1Database, id: string, memberId: string, now: nu
   const row = await db.prepare(`SELECT s.status, s.reopen_of, s.flip_of, s.claimed_by, s.claimed_at,
       EXISTS(SELECT 1 FROM review_holds h WHERE h.card_id=s.card_id) AS held,
       EXISTS(SELECT 1 FROM work_review_decisions w WHERE w.submission_id=s.id) AS deciding,
+      ${NOT_WITHDRAWING} AS can_review,
       ${ACTIVE_DROP('s')} AS dropped
-    FROM review_submissions s WHERE s.id=?`).bind(id).first<{ status: string; reopen_of: string | null; flip_of: string | null; claimed_by: string | null; claimed_at: number | null; held: number; deciding: number; dropped: number }>();
+    FROM review_submissions s WHERE s.id=?`).bind(id).first<{ status: string; reopen_of: string | null; flip_of: string | null; claimed_by: string | null; claimed_at: number | null; held: number; deciding: number; can_review: number; dropped: number }>();
   if (!row) return 'review_not_found';
+  if (!row.can_review) return 'review_withdrawal_pending';
   if (row.status !== 'pending' || row.deciding) return 'review_decided';
   if (row.reopen_of) return 'review_drop_reopen';
   // 改判單是管理員自己開的，不是作者的送審：要放棄就撤回改判
@@ -50,7 +52,7 @@ export async function dropSubmission(db: D1Database, input: { submissionId: stri
   const ctx = input.ctx ?? await queueContext(db, row.id);
   const caseId = crypto.randomUUID(), dropId = crypto.randomUUID();
   // 寫入當下再確認一次全部條件：上面的檢查與這裡之間，別人可能剛領走、冷凍或蓋完章
-  const eligible = `s.id=? AND s.status='pending' AND s.reopen_of IS NULL AND s.flip_of IS NULL AND ${NOT_DROPPED('s')}
+  const eligible = `s.id=? AND s.status='pending' AND s.reopen_of IS NULL AND s.flip_of IS NULL AND ${NOT_DROPPED('s')} AND ${NOT_WITHDRAWING}
     AND NOT EXISTS(SELECT 1 FROM review_holds h WHERE h.card_id=s.card_id)
     AND NOT EXISTS(SELECT 1 FROM work_review_decisions w WHERE w.submission_id=s.id)
     AND (s.claimed_by IS NULL OR s.claimed_by=? OR s.claimed_at<=?)`;
@@ -108,14 +110,14 @@ export async function groupSubmissionIds(db: D1Database, anchorId: string, scope
     const author = await db.prepare('SELECT member_id FROM hosting_versions WHERE submission_id=?').bind(anchorId).first<{ member_id: string }>();
     if (!author) return null;
     const rows = await db.prepare(`SELECT s.id FROM review_submissions s JOIN hosting_versions v ON v.submission_id=s.id
-      WHERE v.member_id=? AND s.status='pending' AND s.reopen_of IS NULL AND s.flip_of IS NULL AND ${NOT_DROPPED('s')} ORDER BY s.submitted_at, s.rowid`).bind(author.member_id).all<{ id: string }>();
+      WHERE v.member_id=? AND s.status='pending' AND s.reopen_of IS NULL AND s.flip_of IS NULL AND ${NOT_DROPPED('s')} AND ${NOT_WITHDRAWING} ORDER BY s.submitted_at, s.rowid`).bind(author.member_id).all<{ id: string }>();
     return rows.results.map((r) => r.id);
   }
   const device = await db.prepare('SELECT device_hash FROM review_submission_devices WHERE submission_id=?').bind(anchorId).first<{ device_hash: string }>();
   if (!device) return null;
   const rows = await db.prepare(`SELECT s.id FROM review_submissions s JOIN review_submission_devices sd ON sd.submission_id=s.id
     JOIN hosting_versions v ON v.submission_id=s.id
-    WHERE sd.device_hash=? AND s.status='pending' AND s.reopen_of IS NULL AND s.flip_of IS NULL AND ${NOT_DROPPED('s')}
+    WHERE sd.device_hash=? AND s.status='pending' AND s.reopen_of IS NULL AND s.flip_of IS NULL AND ${NOT_DROPPED('s')} AND ${NOT_WITHDRAWING}
     AND NOT EXISTS(SELECT 1 FROM quota_device_exemptions e WHERE e.member_id=v.member_id AND e.revoked_at IS NULL)
     ORDER BY s.submitted_at, s.rowid`).bind(device.device_hash).all<{ id: string }>();
   return rows.results.map((r) => r.id);
@@ -132,7 +134,9 @@ export async function groupItems(db: D1Database, ids: string[], viewer: { member
   // 一組可能上百張：名單綁成一個 JSON 陣列（D1 一個查詢最多 100 個綁定參數）
   const rows = await db.prepare(`SELECT s.id, s.card_id, s.rating, s.claimed_by, s.claimed_at, v.public_role,
       EXISTS(SELECT 1 FROM review_holds h WHERE h.card_id=s.card_id) AS held, ${ACTIVE_DROP('s')} AS dropped
-    FROM review_submissions s JOIN hosting_versions v ON v.submission_id=s.id WHERE s.id IN (SELECT value FROM json_each(?)) ORDER BY s.submitted_at, s.rowid`)
+    FROM review_submissions s JOIN hosting_versions v ON v.submission_id=s.id
+    WHERE s.id IN (SELECT value FROM json_each(?)) AND s.status='pending' AND ${NOT_WITHDRAWING}
+    ORDER BY s.submitted_at, s.rowid`)
     .bind(JSON.stringify(ids)).all<{ id: string; card_id: number; rating: string | null; claimed_by: string | null; claimed_at: number | null; public_role: string | null; held: number; dropped: number }>();
   return rows.results.map((r) => {
     const role = r.public_role ? (JSON.parse(r.public_role) as { names?: Localized; welcome?: string; backgroundUrl?: string | null; avatarUrl?: string | null }) : {};
@@ -212,7 +216,7 @@ export async function listDropped(db: D1Database, viewer: { memberId: string; ad
   const args = [viewer.memberId, ...(filter === 'aged' ? [viewer.now - DROP_REVIEW_AGE_MS] : [])];
   const base = `FROM review_drops d JOIN review_drop_cases k ON k.id=d.case_id JOIN review_submissions s ON s.id=d.submission_id
     JOIN cards c ON c.id=s.card_id LEFT JOIN hosting_versions v ON v.submission_id=s.id LEFT JOIN members m ON m.id=d.actor_member_id
-    WHERE d.restored_at IS NULL AND s.status='pending' AND (v.member_id IS NULL OR v.member_id<>?) AND ${where}`;
+    WHERE d.restored_at IS NULL AND s.status='pending' AND ${NOT_WITHDRAWING} AND (v.member_id IS NULL OR v.member_id<>?) AND ${where}`;
   const total = await db.prepare(`SELECT COUNT(*) AS n ${base}`).bind(...args).first<{ n: number }>();
   const rows = await db.prepare(`SELECT s.id, s.card_id, s.rating, s.submitted_at, d.source, k.opened_at,
       COALESCE(json_extract(v.public_role,'$.names'),c.names) AS names,
