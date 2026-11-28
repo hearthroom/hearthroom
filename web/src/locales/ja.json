@@ -6428,6 +6428,5 @@
   "quality.pres.rules": "表示ルール{n}件",
   "quality.dataTitle": "カードのデータ",
   "quality.loadFailed": "データを読み込めませんでした",
-  "quality.retry": "再試行",
-  "quality.editor.label": "一覧の文字量"
+  "quality.retry": "再試行"
 }

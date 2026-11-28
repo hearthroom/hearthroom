@@ -6428,6 +6428,5 @@
   "quality.pres.rules": "顯示規則 {n} 條",
   "quality.dataTitle": "卡片數據",
   "quality.loadFailed": "數據載入不了",
-  "quality.retry": "重試",
-  "quality.editor.label": "列表上的篇幅"
+  "quality.retry": "重試"
 }
