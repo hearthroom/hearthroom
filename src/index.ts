@@ -108,7 +108,8 @@ import { PRESET_TAG_CATALOG, TAG_GROUPS, tagNamesFor } from "../shared/tag-catal
 import { bearerOf, blogWriterHint } from "./community-admin";
 import {reconcileWorkAccess} from './work-reconcile';
 import {workPolicyGateway} from "./work-policy";
-import {filterPublicRows,currentCardAccess,unlistedCardRow,proveCachedPublicAggregates,type VisibilityReadSurface} from './work-read';
+import {filterPublicRows,currentCardAccess,unlistedCardRow,type VisibilityReadSurface} from './work-read';
+import { proveCachedPublicAggregates } from './public-aggregate-proof';
 import { providerOf, requestIdentity, reviewerRole, isHumanReviewer, isReviewAgent, memberByHandle, memberNsfw, memberProfile, missingMemberStatements, requireMember, requireReviewer, resolveMember, updateMemberNsfw, viewerAllowsNsfw, memberHiddenTags, updateMemberHiddenTags } from "./members";
 import { followList, ownFollowVisibility, parseFollowVisibility, publicFollowStats, updateFollowVisibility } from "./follow-visibility";
 import { configuredProviders, hasChat, parseProvider, requireConfigured, DEFAULT_PROVIDER, PROVIDER_NAMES, type ProviderId, reviewEnabled } from "./providers";
