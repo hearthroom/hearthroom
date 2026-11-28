@@ -101,12 +101,14 @@ export async function readLocalHarborPolicies(db:D1Database,uniqueSources:readon
  return new Map(result.results.map(policy=>[policy.source_role_id,policy]));
 }
 
+type PublicVisibilityRow = Pick<CardRow, 'id'|'provider'|'author_num_id'|'source_role_id'|'status'|'board_hidden'|'public_blocked'|'approved_hosted_role_id'>;
+
 // Legacy rows retain their original contract until explicit enrollment. Once
 // enrolled, both the durable D1 fence and current PG policy constrain discovery.
-export async function filterPublicRows(env:Env,rows:CardRow[],surface:VisibilityReadSurface='list',preloadedExcluded?:ReadonlySet<string>):Promise<{rows:CardRow[];checked:boolean}>{
+export async function filterPublicRows<T extends PublicVisibilityRow>(env:Env,rows:T[],surface:VisibilityReadSurface='list',preloadedExcluded?:ReadonlySet<string>):Promise<{rows:T[];checked:boolean}>{
  return observeRead(env,surface,()=>publicRows(env,rows,preloadedExcluded),result=>result.rows.length===rows.length);
 }
-async function publicRows(env:Env,rows:CardRow[],preloadedExcluded?:ReadonlySet<string>):Promise<{rows:CardRow[];checked:boolean}>{
+async function publicRows<T extends PublicVisibilityRow>(env:Env,rows:T[],preloadedExcluded?:ReadonlySet<string>):Promise<{rows:T[];checked:boolean}>{
  if(rows.length>WORK_READ_BUDGET)throw new HttpError(503,'visibility_read_budget_exceeded');
  const hidden=await testCardIdsForRows(env.DB,rows,preloadedExcluded);
  rows=rows.filter(r=>!hidden.has(String(r.id)));
