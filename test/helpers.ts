@@ -22,7 +22,6 @@ export async function resetDb(): Promise<void> {
   // D1 batch executes in order. Preserve dependency/trigger cleanup order while
   // resetting the database in one RPC instead of a round trip for every table.
   const statements:D1PreparedStatement[]=[];
-  statements.push(env.DB.prepare('DELETE FROM public_aggregate_proof'));
   statements.push(env.DB.prepare('DELETE FROM review_length_exemptions'));
   statements.push(env.DB.prepare('DELETE FROM quota_device_exemptions'));
   statements.push(env.DB.prepare('DELETE FROM reward_devices'));

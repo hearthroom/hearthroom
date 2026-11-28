@@ -1,3 +1,5 @@
+/// <reference lib="es2024.promise" />
+
 import {excludedAuthorKeys,testCardIdsForRows} from './test-accounts';
 import type {CardRow} from './cards';
 import {apiBaseOf} from './providers';
@@ -6,6 +8,7 @@ import {type Env,HttpError} from './types';
 import type {ManagedWork,WorkAccess,WorkRestriction} from './work-policy';
 import {upstream} from './upstream';
 import {bumpOp} from './ops-metrics';
+import {boardCache} from './board-cache';
 
 export type VisibilityReadSurface='list'|'detail'|'social'|'library'|'metadata'|'aggregate';
 async function observeRead<T>(env:Env,surface:VisibilityReadSurface,read:()=>Promise<T>,allowed:(result:T)=>boolean):Promise<T>{
@@ -141,11 +144,10 @@ export async function revalidateBoardBody(env:Env,body:string):Promise<string>{
 // proof checks every managed contributor in bounded batches.
 // Keyset pagination keeps the per-query/RPC budget independent of catalog size;
 // a diverged or unavailable batch still rejects the entire aggregate.
-export async function provePublicAggregates(env:Env,zone?:string,expiresAt=Infinity):Promise<void>{
+export async function provePublicAggregates(env:Env,zone?:string):Promise<void>{
  let after=0;
  let excluded:Set<string>|undefined;
  for(;;){
-  if(Date.now()>=expiresAt)throw new HttpError(503,'visibility_provider_unavailable');
   const result=await env.DB.prepare(`SELECT c.* FROM managed_work_access p JOIN cards c
   ON c.provider=p.provider AND c.source_role_id=p.source_role_id
   WHERE p.access='public' AND p.restriction='none' AND p.sync_state='complete'
@@ -157,6 +159,64 @@ export async function provePublicAggregates(env:Env,zone?:string,expiresAt=Infin
   if(result.results.length<WORK_READ_BUDGET)return;
   after=Number(result.results.at(-1)!.id);
  }
+}
+
+const AGGREGATE_PROOF_MS = 30_000;
+const aggregateProofsInFlight = new Map<string, Promise<number>>();
+
+/** A successful catalog proof can be shared by the aggregate routes in one zone. */
+export async function proveCachedPublicAggregates(
+ env:Env,ctx:Pick<ExecutionContext,'waitUntil'>,requestUrl:string,zone:string|undefined,revision:number,
+):Promise<{expiresAt:number; hit:boolean}>{
+ const url=new URL('/__aggregate-proof',requestUrl);
+ url.searchParams.set('zone',zone??'all');
+ url.searchParams.set('revision',String(revision));
+ const key=new Request(url);
+ let cache:Cache|undefined;
+ try{
+  cache=await caches.open(`${boardCache.namespace}-aggregate-proof`);
+  const stored=await cache.match(key);
+  const expiresAt=Number(stored?.headers.get('X-Proof-Expires-At'));
+  const now=Date.now();
+  if(Number.isSafeInteger(expiresAt)&&expiresAt>now&&expiresAt<=now+AGGREGATE_PROOF_MS)return {expiresAt,hit:true};
+ }catch{console.warn('Public aggregate proof cache read unavailable');}
+
+ // Only the initiating request performs I/O. Other requests in the same
+ // isolate receive the expiry of that proof, never a cached failure.
+ const proofKey = key.url;
+ const pending = aggregateProofsInFlight.get(proofKey);
+ if(pending){
+  const expiresAt=await pending;
+  if(expiresAt<=Date.now())throw new HttpError(503,'visibility_provider_unavailable');
+  return {expiresAt,hit:true};
+ }
+
+ // Expiration starts before the first authority batch. A slow or out-of-order
+ // cache write cannot extend the life of permissions that were checked earlier.
+ const expiresAt=Date.now()+AGGREGATE_PROOF_MS;
+ // Use a native settlement gate for cross-request waiters. The producer's
+ // D1 and Cache API operations stay in its own Worker request context.
+ const gate=Promise.withResolvers<number>();
+ aggregateProofsInFlight.set(proofKey,gate.promise);
+ ctx.waitUntil((async()=>{
+  try{
+   await provePublicAggregates(env,zone);
+   if(expiresAt<=Date.now())throw new HttpError(503,'visibility_provider_unavailable');
+   gate.resolve(expiresAt);
+   const remaining=expiresAt-Date.now();
+   if(!cache||remaining<1000)return;
+   const entry=new Response(null,{headers:{
+    'Cache-Control':`public, max-age=${Math.floor(remaining/1000)}`,
+    'X-Proof-Expires-At':String(expiresAt),
+   }});
+   await cache.put(key,entry).catch(()=>{console.warn('Public aggregate proof cache write unavailable');});
+  }catch(err){
+   gate.reject(err);
+  }finally{
+   aggregateProofsInFlight.delete(proofKey);
+  }
+ })());
+ return {expiresAt:await gate.promise,hit:false};
 }
 
 export interface CurrentCardAccess {

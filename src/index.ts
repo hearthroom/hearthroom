@@ -108,8 +108,7 @@ import { PRESET_TAG_CATALOG, TAG_GROUPS, tagNamesFor } from "../shared/tag-catal
 import { bearerOf, blogWriterHint } from "./community-admin";
 import {reconcileWorkAccess} from './work-reconcile';
 import {workPolicyGateway} from "./work-policy";
-import {filterPublicRows,currentCardAccess,unlistedCardRow,type VisibilityReadSurface} from './work-read';
-import { confirmPublicAggregateProof, getPublicAggregateProof } from './public-aggregate-proof';
+import {filterPublicRows,currentCardAccess,unlistedCardRow,proveCachedPublicAggregates,type VisibilityReadSurface} from './work-read';
 import { providerOf, requestIdentity, reviewerRole, isHumanReviewer, isReviewAgent, memberByHandle, memberNsfw, memberProfile, missingMemberStatements, requireMember, requireReviewer, resolveMember, updateMemberNsfw, viewerAllowsNsfw, memberHiddenTags, updateMemberHiddenTags } from "./members";
 import { followList, ownFollowVisibility, parseFollowVisibility, publicFollowStats, updateFollowVisibility } from "./follow-visibility";
 import { configuredProviders, hasChat, parseProvider, requireConfigured, DEFAULT_PROVIDER, PROVIDER_NAMES, type ProviderId, reviewEnabled } from "./providers";
@@ -477,57 +476,28 @@ function boardResponse(body: string, adult: boolean, layer: "edge" | "kv" | "ori
   } });
 }
 
-async function withAggregateProof(
-  c: Context<{ Bindings: Env; Variables: { ev: Pending } }>, zone: string | undefined,
-  respond: (proof: { revision: number; expiresAt: number }, timing: string) => Promise<Response | null>,
-): Promise<Response> {
-  const started = performance.now();
-  const record = isPublicAggregatePath(c.req.path);
-  const startPrimarySession = () => {
-    if (c.env.freshAggregateDb) c.env = { ...c.env, DB: c.env.freshAggregateDb() };
-  };
-  for (let attempt = 0; attempt < 2; attempt++) {
-    if (record) note(c, { detail: attempt ? "aggregate_proof_recheck" : "aggregate_proof_unavailable" });
-    // Earlier middleware may have read D1 already. Start the guard at primary.
-    startPrimarySession();
-    const current = await getPublicAggregateProof(c.env, c.executionCtx, c.req.url, zone);
-    let proof: { revision: number; expiresAt: number } = current;
-    if (!current.hit) {
-      // Moderation or another producer may have revoked the proof while this
-      // request waited. Anchor the response queries at the new primary read.
-      startPrimarySession();
-      const confirmed = await confirmPublicAggregateProof(c.env.DB, c.req.url, zone);
-      if (!confirmed) continue;
-      proof = confirmed;
-    }
-    const timing = `aggregate-proof;desc="${current.hit && !attempt ? "hit" : "miss"}";dur=${(performance.now() - started).toFixed(1)}`;
-    if (record && !attempt) note(c, { detail: current.hit ? "aggregate_proof_hit" : "aggregate_proof_miss" });
-    const response = await respond(proof, timing);
-    if (response && proof.expiresAt > Date.now()) return response;
-    if (!attempt) c.executionCtx.waitUntil(bumpOp(c.env.DB, 'aggregate_proof', 'response', 'recheck'));
-  }
-  throw new HttpError(503, "visibility_provider_unavailable");
-}
-
 /** Cache responses by verified access, and by proof lifetime for public aggregates. */
-async function cachedJson(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>, compute: (allowNsfw: boolean) => Promise<unknown>, opts: { edgeOnly?: boolean; allowNsfw?: () => Promise<boolean>; fresh?: (body: string) => Promise<string> } = {}) {
-  const render = async ({ revision, expiresAt }: { revision: number; expiresAt?: number }, timing: string) => {
-    const allowNsfw = await opts.allowNsfw?.() ?? false;
-    const key = await boardKey(c.req.url, revision, allowNsfw, undefined, expiresAt);
-    const started = performance.now();
-    const hit = await readBoardCache(c.env, c.executionCtx, key, expiresAt !== undefined);
-    const cacheTiming = `${timing}, cache;dur=${(performance.now() - started).toFixed(1)}`;
-    const queryStarted = performance.now();
-    const body = hit?.body ?? JSON.stringify(await compute(allowNsfw));
-    const outputTiming = hit ? cacheTiming : `${cacheTiming}, query;dur=${(performance.now() - queryStarted).toFixed(1)}`;
-    const output = opts.fresh ? await opts.fresh(body) : body;
-    if (expiresAt !== undefined && expiresAt <= Date.now()) return null;
-    if (!hit) writeBoardCache(c.env, c.executionCtx, key, body, { edgeOnly: expiresAt !== undefined || opts.edgeOnly, expiresAt });
-    return boardResponse(output, allowNsfw, hit?.layer ?? "origin", outputTiming);
-  };
-  if (isPublicAggregatePath(c.req.path)) return withAggregateProof(c, parseZone(c.req.query("zone")), render);
+async function cachedJson(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>, compute: () => Promise<unknown>, opts: { edgeOnly?: boolean; allowNsfw?: boolean; fresh?: (body: string) => Promise<string> } = {}) {
   const moderation = await moderationRevision(c);
-  return (await render(moderation, moderation.timing))!;
+  const proofStarted = performance.now();
+  const proof = isPublicAggregatePath(c.req.path)
+    ? await proveCachedPublicAggregates(c.env, c.executionCtx, c.req.url, parseZone(c.req.query("zone")), moderation.revision)
+    : undefined;
+  const proofTiming = proof ? `, aggregate-proof;desc="${proof.hit ? "hit" : "miss"}";dur=${(performance.now() - proofStarted).toFixed(1)}` : "";
+  const allowNsfw = opts.allowNsfw ?? false;
+  const key = await boardKey(c.req.url, moderation.revision, allowNsfw, undefined, proof?.expiresAt);
+  const started = performance.now();
+  // A proof lives at the edge that validated it, so its matching response does too.
+  const hit = await readBoardCache(c.env, c.executionCtx, key, Boolean(proof));
+  const cacheTiming = `${moderation.timing}${proofTiming}, cache;dur=${(performance.now() - started).toFixed(1)}`;
+  const queryStarted = performance.now();
+  const body = hit?.body ?? JSON.stringify(await compute());
+  const timing = hit ? cacheTiming : `${cacheTiming}, query;dur=${(performance.now() - queryStarted).toFixed(1)}`;
+  // fresh：快取裡放不得的欄位（作者的關注／粉絲可見度），每次讀時另外補上
+  const output = opts.fresh ? await opts.fresh(body) : body;
+  if (proof && proof.expiresAt <= Date.now()) throw new HttpError(503, "visibility_provider_unavailable");
+  if (!hit) writeBoardCache(c.env, c.executionCtx, key, body, { edgeOnly: Boolean(proof) || opts.edgeOnly, expiresAt: proof?.expiresAt });
+  return boardResponse(output, allowNsfw, hit?.layer ?? "origin", timing);
 }
 
 /** 榜單與搜尋。匿名可讀。 */
@@ -678,20 +648,21 @@ app.get("/v1/cards", async (c) => {
  * 類型列每顆籤後面的張數（catalogTagCounts）與分級選單各級的張數（ratingCounts，不套分級本身）：條件跟榜單一樣，快取也走榜單那一套
  * （看的人開沒開成人內容分開放，審核一動就換一份）。
  */
-app.get("/v1/tags/counts", (c) => {
+app.get("/v1/tags/counts", async (c) => {
   const zone = parseZone(c.req.query("zone"));
-  return withAggregateProof(c, zone, async (proof, timing) => {
-    const allowNsfw = await viewerAllowsNsfw(c);
-    const key = await boardKey(c.req.url, proof.revision, allowNsfw);
-    const hit = await readBoardCache(c.env, c.executionCtx, key);
-    const filters = hit ? undefined : tagFilters(c);
-    if (filters === null) return c.json({ error: "too_many_tags" }, 400);
-    const scope = { zone, ...filters, allowNsfw, maxRating: maxRatingOf(c) };
-    const body = hit?.body ?? JSON.stringify(await catalogAndRatingCounts(c.env.DB, scope));
-    if (proof.expiresAt <= Date.now()) return null;
-    if (!hit) writeBoardCache(c.env, c.executionCtx, key, body);
-    return boardResponse(body, allowNsfw, hit?.layer ?? "origin", timing);
-  });
+  const [allowNsfw, moderation] = await Promise.all([viewerAllowsNsfw(c), moderationRevision(c)]);
+  const proofStarted = performance.now();
+  const proof = await proveCachedPublicAggregates(c.env, c.executionCtx, c.req.url, zone, moderation.revision);
+  const timing = `${moderation.timing}, aggregate-proof;desc="${proof.hit ? "hit" : "miss"}";dur=${(performance.now() - proofStarted).toFixed(1)}`;
+  const key = await boardKey(c.req.url, moderation.revision, allowNsfw);
+  const hit = await readBoardCache(c.env, c.executionCtx, key);
+  const filters = hit ? undefined : tagFilters(c);
+  if (filters === null) return c.json({ error: "too_many_tags" }, 400);
+  const scope = { zone, ...filters, allowNsfw, maxRating: maxRatingOf(c) };
+  const body = hit?.body ?? JSON.stringify(await catalogAndRatingCounts(c.env.DB, scope));
+  if (proof.expiresAt <= Date.now()) throw new HttpError(503, "visibility_provider_unavailable");
+  if (!hit) writeBoardCache(c.env, c.executionCtx, key, body);
+  return boardResponse(body, allowNsfw, hit?.layer ?? "origin", timing);
 });
 
 /** 平台預設分類與玩法固定目錄（四組＋五語顯示名）：公開上架至少需命中其中一項的顯示名。 */
@@ -760,8 +731,9 @@ app.get("/v1/suggest", async (c) => {
 });
 
 /** 作者榜：按作品在本站的合計排。 */
-app.get("/v1/authors", (c) => {
-  return cachedJson(c, async (allowNsfw) => {
+app.get("/v1/authors", async (c) => {
+  const allowNsfw = await viewerAllowsNsfw(c);
+  return cachedJson(c, async () => {
     const sortParam = c.req.query("sort");
     const sort = sortParam === "cards" || sortParam === "hot" ? sortParam : "talk";
     const limit = Math.max(1, clamp(c.req.query("limit"), 24, 100));
@@ -772,7 +744,7 @@ app.get("/v1/authors", (c) => {
       sort, limit, offset, allowNsfw,
     });
     return { items: rows.map(toAuthor), hasNext, limit, offset, sort };
-  }, { allowNsfw: () => viewerAllowsNsfw(c), fresh: async (body) => {
+  }, { allowNsfw, fresh: async (body) => {
     const page = JSON.parse(body) as { items: { handle: string | null }[] };
     const stats = await publicFollowStats(c.env.DB, page.items.map((a) => a.handle ?? ""));
     // 沒有成員列的作者（只有上游身分）不能被關注：人數 0
@@ -3059,20 +3031,21 @@ app.get("*", async (c) => {
     res.headers.set("Cache-Control", access?.managed ? "private, no-store" : "no-store");
     return res;
   }
-  return withAggregateProof(c, undefined, async (proof, timing) => {
-    const memberId = await memberByHandle(c.env.DB, m[3]!);
-    const author = memberId ? await getAuthor(c.env.DB, memberId) : null;
-    const remaining = proof.expiresAt - Date.now();
-    if (remaining <= 0) return null;
-    if (!author) return new Response(shell.body, { status: 404, headers: shell.headers });
-    const res = renderHead(shell, {
-      lang: locale, title: `${author.author_name} · ${siteName(locale)}`, description: authorLine(locale, author.card_count, author.talk_total ?? 0), image: author.author_avatar || null, url: self, type: "profile",
-    });
-    // An HTTP cache must not extend the visibility proof's lifetime.
-    res.headers.set("Cache-Control", `public, max-age=${Math.min(PAGE_TTL, Math.floor(remaining / 1000))}, must-revalidate`);
-    res.headers.set("Server-Timing", timing);
-    return res;
+  const [memberId, moderation] = await Promise.all([memberByHandle(c.env.DB, m[3]!), moderationRevision(c)]);
+  const proofStarted = performance.now();
+  const proof = await proveCachedPublicAggregates(c.env, c.executionCtx, c.req.url, undefined, moderation.revision);
+  const proofTiming = `aggregate-proof;desc="${proof.hit ? "hit" : "miss"}";dur=${(performance.now() - proofStarted).toFixed(1)}`;
+  const author = memberId ? await getAuthor(c.env.DB, memberId) : null;
+  const remaining = proof.expiresAt - Date.now();
+  if (remaining <= 0) throw new HttpError(503, "visibility_provider_unavailable");
+  if (!author) return new Response(shell.body, { status: 404, headers: shell.headers });
+  const res = renderHead(shell, {
+    lang: locale, title: `${author.author_name} · ${siteName(locale)}`, description: authorLine(locale, author.card_count, author.talk_total ?? 0), image: author.author_avatar || null, url: self, type: "profile",
   });
+  // An HTTP cache must not extend the visibility proof's lifetime.
+  res.headers.set("Cache-Control", `public, max-age=${Math.min(PAGE_TTL, Math.floor(remaining / 1000))}, must-revalidate`);
+  res.headers.set("Server-Timing", `${moderation.timing}, ${proofTiming}`);
+  return res;
 });
 
 // One successful check per isolate. A legacy schema is never cached as ready:
@@ -3117,13 +3090,9 @@ export default {
       ...(controls.publicProjection ? { PUBLIC_CANDIDATE_PROJECTION_ACTIVE: true } : {}),
       ...(controls.cardQualityUi ? { CARD_QUALITY_UI_ACTIVE: true } : {}),
     });
-    const bind = (db: D1Database) => metricsFlushMs > 0 ? bindMetricsDb(db, env.DB, ctx, metricsFlushMs) : db;
-    const requestEnv = {
-      ...d1.env,
-      DB: bind(d1.env.DB),
-      freshAggregateDb: () => bind(typeof env.DB.withSession === 'function'
-        ? env.DB.withSession('first-primary') as unknown as D1Database : env.DB),
-    };
+    const requestEnv = d1.env.DB && metricsFlushMs > 0
+      ? { ...d1.env, DB: bindMetricsDb(d1.env.DB, env.DB, ctx, metricsFlushMs) }
+      : d1.env;
     return d1.finish(await app.fetch(request, requestEnv, ctx));
   },
   async scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext) {
