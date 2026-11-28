@@ -22,8 +22,8 @@ async function mount(c: CommunityCard) {
 
 it("on phones starts folded into one line and opens from the title row", async () => {
   phone(true);
-  f.quality.mockResolvedValue({ length: { total: 23000, setting: 3000, worldbook: { entries: 0, characters: 0 }, openings: { count: 1, characters: 0 }, presentation: { openingPage: false, displayRules: 0, panel: false } }, deepPlay: { reached: 164, players: 200, turns: 5, medianTurns: 6.5 }, rating: null, comments: null });
-  await mount(card("101", { lengthCharacters: 23000, deepPlay: { reached: 164, players: 200, turns: 5 } }));
+  f.quality.mockResolvedValue({ length: { total: 23000, setting: 3000, worldbook: { entries: 0, characters: 0 }, openings: { count: 1, characters: 0 }, presentation: { openingPage: false, displayRules: 0, panel: false } }, deepPlay: { rate: 82, medianTurns: 6.5 }, rating: null, comments: null });
+  await mount(card("101", { lengthCharacters: 23000, deepPlay: { rate: 82 } }));
   const toggle = root.querySelector<HTMLButtonElement>("button[aria-expanded]")!;
   expect(toggle.getAttribute("aria-expanded")).toBe("false");
   expect(toggle.textContent).toContain("續玩率 82%・篇幅 2.3 萬字");
@@ -38,7 +38,7 @@ it("on phones starts folded into one line and opens from the title row", async (
 it("uses the fresh numbers once loaded, even when the card fell back under the player threshold", async () => {
   phone(true);
   f.quality.mockResolvedValue({ length: { total: 23000, setting: null, worldbook: { entries: 0, characters: 0 }, openings: { count: 0, characters: 0 }, presentation: { openingPage: false, displayRules: 0, panel: false } }, deepPlay: null, rating: null, comments: null });
-  await mount(card("102", { lengthCharacters: 23000, deepPlay: { reached: 20, players: 20, turns: 5 } }));
+  await mount(card("102", { lengthCharacters: 23000, deepPlay: { rate: 100 } }));
   const summary = root.querySelector("button[aria-expanded]")!.textContent!;
   expect(summary).toContain("篇幅 2.3 萬字");
   expect(summary).not.toContain("續玩率");

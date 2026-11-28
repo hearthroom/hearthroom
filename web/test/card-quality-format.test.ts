@@ -1,6 +1,6 @@
 import { afterEach, expect, it } from "vitest";
 import { i18n, loadLocale } from "../src/lib/i18n";
-import { qualityCharacters, qualityPercent, qualityRatio } from "../src/lib/card-quality-format";
+import { qualityCharacters, qualityRate } from "../src/lib/card-quality-format";
 
 const at = (code: string) => { i18n.global.locale.value = code as never; };
 afterEach(() => at("zh-Hant"));
@@ -20,14 +20,11 @@ it("writes rounded card length in each language without adding a second rounding
   }
 });
 
-it("keeps small ratios exact and abbreviates five-digit player counts", () => {
-  expect(qualityRatio(164, 200)).toBe("164/200");
-  expect(qualityRatio(15, 1042)).toBe("15/1,042");
-  expect(qualityRatio(15, 12345)).not.toContain("12,345");
-  expect(qualityPercent(164, 200)).toBe("82%");
-  expect(qualityPercent(199, 200)).toBe("99%");
-  expect(qualityPercent(0, 0)).toBe("");
-});
+it("writes the server's whole-number retention rate as a percentage", () => {
+  expect(qualityRate(82)).toBe("82%");
+  expect(qualityRate(0)).toBe("0%");
+  expect(qualityRate(100)).toBe("100%");
+})
 
 it("writes the short cover date: year only after a year, narrow relative time before", async () => {
   const { relativeTimeShort } = await import("../src/lib/format");
