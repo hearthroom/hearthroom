@@ -69,13 +69,14 @@ export async function syncCardQualityPlay(
       const fence = 'EXISTS(SELECT 1 FROM card_quality_play_sync WHERE singleton=1 AND lease=? AND lease_until>?)';
       const checkAt = now();
       const [, , saved] = await env.DB.batch([
-        env.DB.prepare(`INSERT INTO card_quality_play(card_id,players,reached,median_turns)
-          SELECT c.id,json_extract(j.value,'$.play.players'),json_extract(j.value,'$.play.reached'),COALESCE(json_extract(j.value,'$.play.medianTurns'),0)
+        env.DB.prepare(`INSERT INTO card_quality_play(card_id,players,reached,median_turns,verified_at)
+          SELECT c.id,json_extract(j.value,'$.play.players'),json_extract(j.value,'$.play.reached'),COALESCE(json_extract(j.value,'$.play.medianTurns'),0),?
           FROM json_each(?) j CROSS JOIN cards c ON c.id=json_extract(j.value,'$.id')
           WHERE c.provider='harbor' AND c.status='approved' AND COALESCE(c.approved_hosted_role_id,c.source_role_id)=json_extract(j.value,'$.role')
             AND json_extract(j.value,'$.play') IS NOT NULL AND ${fence}
-          ON CONFLICT(card_id) DO UPDATE SET players=excluded.players,reached=excluded.reached,median_turns=excluded.median_turns
-          WHERE players<>excluded.players OR reached<>excluded.reached OR median_turns IS NOT excluded.median_turns`).bind(payload, lease, checkAt),
+          ON CONFLICT(card_id) DO UPDATE SET players=excluded.players,reached=excluded.reached,
+            median_turns=excluded.median_turns,verified_at=excluded.verified_at
+          WHERE card_quality_play.verified_at<=excluded.verified_at`).bind(checkAt, payload, lease, checkAt),
         env.DB.prepare(`DELETE FROM card_quality_play WHERE card_id IN (
           SELECT c.id FROM json_each(?) j CROSS JOIN cards c ON c.id=json_extract(j.value,'$.id')
           WHERE json_extract(j.value,'$.play') IS NULL AND COALESCE(c.approved_hosted_role_id,c.source_role_id)=json_extract(j.value,'$.role')
