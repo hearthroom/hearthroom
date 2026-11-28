@@ -7,7 +7,7 @@ import { makeMember, resetDb, role } from './helpers';
 
 beforeEach(async () => {
   await resetDb();
-  await env.DB.prepare("UPDATE card_quality_length_scan SET cursor_time=9007199254740991,cursor_id=0,lease='',run_after=0,priority_board=0,priority_ids='[]'").run();
+  await env.DB.prepare("UPDATE card_quality_length_scan SET cursor_time=9007199254740991,cursor_id=0,lease='',run_after=0,priority_board=0,priority_ids='[]',recent_only=0").run();
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -131,7 +131,7 @@ it('limits one scheduled minute to ten sealed reads across concurrent invocation
 it('warms a recently approved version from before rollout even when the general cursor is older', async () => {
   const now = Date.now();
   await listed('approved-from-old-submission', now - 2_000);
-  await env.DB.prepare('UPDATE card_quality_length_scan SET priority_board=8,cursor_time=?,cursor_id=0')
+  await env.DB.prepare('UPDATE card_quality_length_scan SET recent_only=1,cursor_time=?,cursor_id=0')
     .bind(now - 86_400_000).run();
   vi.stubGlobal('fetch', vi.fn(async (url: string) => {
     const id = new URL(url).pathname.split('/').at(-2)!;
@@ -144,4 +144,16 @@ it('warms a recently approved version from before rollout even when the general 
   await backfillCardQualityLengths({ ...env, HOSTING_SERVICE_KEY: 'fixture-issuer' }, now);
   expect(await env.DB.prepare("SELECT total_chars FROM card_quality_lengths WHERE version_id='approved-from-old-submission'").first())
     .toEqual({ total_chars: 1_000 });
+});
+
+it('parks a recent-only run after its last first screen instead of resuming the general sweep', async () => {
+  const now = Date.now();
+  await listed('older-general-sweep-card', now - 45 * 86_400_000);
+  await env.DB.prepare("UPDATE card_quality_length_scan SET recent_only=1,priority_board=16").run();
+  const fetchRevision = vi.fn(async () => new Response(null, { status: 404 }));
+  vi.stubGlobal('fetch', fetchRevision);
+  await backfillCardQualityLengths({ ...env, HOSTING_SERVICE_KEY: 'fixture-issuer' }, now);
+  expect(fetchRevision).not.toHaveBeenCalled();
+  expect(await env.DB.prepare('SELECT run_after,lease FROM card_quality_length_scan WHERE singleton=1').first())
+    .toEqual({ run_after: Number.MAX_SAFE_INTEGER, lease: '' });
 });
