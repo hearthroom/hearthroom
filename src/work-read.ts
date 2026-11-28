@@ -25,6 +25,9 @@ const keyOf=(item:WorkReadIdentity)=>JSON.stringify([item.sourceRoleId,item.work
 // This response is current authority, never an operation receipt or cache entry.
 // A missing, duplicate or mismatched identity makes the entire check unavailable.
 type ReadFailureReason='timeout'|'transport'|'http_5xx'|'http_4xx'|'http_429'|'http_other'|'invalid_response'|'missing_key';
+export class VisibilityProviderUnavailable extends HttpError {
+ constructor(readonly reason:ReadFailureReason){super(503,'visibility_provider_unavailable');}
+}
 class ReadFailure extends Error {
  constructor(readonly reason:ReadFailureReason,readonly retryable=false){super(reason);}
 }
@@ -73,7 +76,7 @@ export async function readCurrentWorkPolicies(env:Env,items:WorkReadIdentity[]):
    const failure=error instanceof ReadFailure?error:new ReadFailure('invalid_response');
    await bumpOp(env.DB,'visibility_provider_failure',attempt?'retry':'initial',failure.reason);
    if(attempt)await bumpOp(env.DB,'visibility_provider_retry','public_batch','exhausted');
-   if(attempt||!failure.retryable)throw new HttpError(503,'visibility_provider_unavailable');
+   if(attempt||!failure.retryable)throw new VisibilityProviderUnavailable(failure.reason);
    // One fresh authority read, never a cached grant. Do not retry backpressure,
    // authentication, malformed responses or mismatched policy identities.
    await new Promise(resolve=>setTimeout(resolve,100));
@@ -141,17 +144,25 @@ export async function revalidateBoardBody(env:Env,body:string):Promise<string>{
 // proof checks every managed contributor in bounded batches.
 // Keyset pagination keeps the per-query/RPC budget independent of catalog size;
 // a diverged or unavailable batch still rejects the entire aggregate.
+export class AggregateProofDeadline extends HttpError {
+ constructor(){super(503,'visibility_provider_unavailable');}
+}
+export class AggregateProofD1ScanError extends Error {}
+
 export async function provePublicAggregates(env:Env,zone?:string,expiresAt=Infinity):Promise<void>{
  let after=0;
  let excluded:Set<string>|undefined;
  for(;;){
-  if(Date.now()>=expiresAt)throw new HttpError(503,'visibility_provider_unavailable');
-  const result=await env.DB.prepare(`SELECT c.* FROM managed_work_access p JOIN cards c
-  ON c.provider=p.provider AND c.source_role_id=p.source_role_id
-  WHERE p.access='public' AND p.restriction='none' AND p.sync_state='complete'
-  AND p.moderation_revision=p.confirmed_moderation_revision AND c.status='approved' AND c.board_hidden=0 AND c.public_blocked=0
-  ${zone?"AND c.zone IN (?, 'all')":''} AND c.id>? ORDER BY c.id LIMIT ?`).bind(...(zone?[zone]:[]),after,WORK_READ_BUDGET).all<CardRow>();
-  if(result.results.length&&!excluded)excluded=await excludedAuthorKeys(env.DB);
+  if(Date.now()>=expiresAt)throw new AggregateProofDeadline();
+  let result:D1Result<CardRow>;
+  try{
+   result=await env.DB.prepare(`SELECT c.* FROM managed_work_access p JOIN cards c
+   ON c.provider=p.provider AND c.source_role_id=p.source_role_id
+   WHERE p.access='public' AND p.restriction='none' AND p.sync_state='complete'
+   AND p.moderation_revision=p.confirmed_moderation_revision AND c.status='approved' AND c.board_hidden=0 AND c.public_blocked=0
+   ${zone?"AND c.zone IN (?, 'all')":''} AND c.id>? ORDER BY c.id LIMIT ?`).bind(...(zone?[zone]:[]),after,WORK_READ_BUDGET).all<CardRow>();
+   if(result.results.length&&!excluded)excluded=await excludedAuthorKeys(env.DB);
+  }catch(cause){throw new AggregateProofD1ScanError('Public aggregate candidate read failed',{cause});}
   const visible=await filterPublicRows(env,result.results,'aggregate',excluded);
   if(visible.rows.length!==result.results.length)throw new HttpError(503,'visibility_sync_pending');
   if(result.results.length<WORK_READ_BUDGET)return;

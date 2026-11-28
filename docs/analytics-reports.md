@@ -68,6 +68,12 @@ For public aggregate API routes, `blob14` records `aggregate_proof_hit`, `aggreg
 sum `_sample_interval` for the request total, `double1 > 5000` for slow responses, and
 `double4` in `[500, 599]` for server errors. The labels contain no card or viewer identifiers.
 
+`hearthroom_aggregate_proof_failures_total` reports producer failures after a lease is acquired.
+Its `operation` is `cold` or `refresh`. The `outcome` is a fixed cause for scan errors, Provider
+failures, the build deadline, or publication failure. A rejected publication can also record the
+revision or lease state observed by a subsequent primary read. These counts are per producer,
+and may cover several HTTP requests sharing the same proof.
+
 ## Counting rule
 
 Always `SUM(_sample_interval)`, never `COUNT(*)`. Analytics Engine samples under high

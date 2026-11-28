@@ -376,18 +376,25 @@ it('replaces a stalled background producer after its lease ends',async()=>{
  }
 });
 
-it('checks primary moderation again when a cold proof was published before a takedown',async()=>{
+it.each(['revision_before','revision_after','lease_replaced'] as const)('handles the cold proof write race %s',async race=>{
  const {work}=await managedFixture();
  providerFixture('public');
  let removed=false;
+ const takeDown=async()=>{
+  if(removed)return;
+  removed=true;
+  await env.DB.prepare("UPDATE managed_work_access SET access='private' WHERE work_id=?").bind(work).run();
+ };
  const wrapStatement=(statement:D1PreparedStatement):D1PreparedStatement=>new Proxy(statement,{get(target,key){
   if(key==='bind')return (...args:unknown[])=>wrapStatement(target.bind(...args));
   if(key==='run')return async()=>{
-   const result=await target.run();
-   if(!removed){
+   if(race==='revision_before')await takeDown();
+   if(race==='lease_replaced'&&!removed){
     removed=true;
-    await env.DB.prepare("UPDATE managed_work_access SET access='private' WHERE work_id=?").bind(work).run();
+    await env.DB.prepare("UPDATE public_aggregate_proof SET lease='other-producer'").run();
    }
+   const result=await target.run();
+   if(race==='revision_after')await takeDown();
    return result;
   };
   return Reflect.get(target,key);
@@ -403,6 +410,17 @@ it('checks primary moderation again when a cold proof was published before a tak
  }});
  const response=await request('https://sukisuki.pro/v1/tags/counts?zone=zh',undefined,{},wrapDb(env.DB));
  expect(removed).toBe(true);
+ if(race!=='revision_after'){
+  expect(response.status).toBe(503);
+  expect(await response.json()).toEqual({error:'visibility_provider_unavailable'});
+  const cause=race==='revision_before'?'publish_revision_changed':'publish_lease_lost';
+  const metrics=await opsMetrics(env.DB);
+  expect(metrics).toContain(`hearthroom_aggregate_proof_failures_total{operation="cold",outcome="${cause}"} 1`);
+  expect(metrics).not.toContain(work);
+  expect(metrics).not.toContain('other-producer');
+  if(race==='lease_replaced')expect(await env.DB.prepare('SELECT lease FROM public_aggregate_proof').first('lease')).toBe('other-producer');
+  return;
+ }
  expect(response.status).toBe(200);
  expect(await response.json()).toMatchObject({ratings:{none:0}});
  const proof=await env.DB.prepare('SELECT p.revision=m.revision AS current FROM public_aggregate_proof p CROSS JOIN moderation_clock m').first<number>('current');
@@ -461,6 +479,42 @@ it.each(['private','offline','missing','wrongWork'] as const)('rejects an aggreg
  const metrics=await opsMetrics(env.DB);
  expect(metrics).toContain('hearthroom_visibility_reads_total{surface="aggregate",outcome="allow"} 1');
  expect(metrics).toContain(`hearthroom_visibility_reads_total{surface="aggregate",outcome="${failure==='private'?'denied':'unavailable'}"} 1`);
+ const cause=failure==='private'?'authority_denied':failure==='offline'?'provider_transport':'provider_invalid_response';
+ expect(metrics).toContain(`hearthroom_aggregate_proof_failures_total{operation="cold",outcome="${cause}"} 1`);
+});
+
+it('separates a D1 candidate scan failure from Provider failure',async()=>{
+ await aggregateFixture(1);
+ const {network}=providerFixture('public');
+ const db=new Proxy(env.DB,{get(target,key){
+  if(key==='withSession')return undefined;
+  if(key==='prepare')return (sql:string)=>{
+   if(sql.includes('FROM managed_work_access p JOIN cards c'))throw new Error('Synthetic D1 read failure');
+   return target.prepare(sql);
+  };
+  const value=Reflect.get(target,key);
+  return typeof value==='function'?value.bind(target):value;
+ }});
+ const response=await request('/v1/tags/counts?zone=zh',undefined,{},db);
+ expect(response.status).toBe(503);
+ expect(network).not.toHaveBeenCalled();
+ expect(await opsMetrics(env.DB)).toContain('hearthroom_aggregate_proof_failures_total{operation="cold",outcome="d1_scan_error"} 1');
+});
+
+it('separates the build deadline from a Provider failure',async()=>{
+ await aggregateFixture(1);
+ const {network}=providerFixture('public');
+ const startedAt=Date.now();
+ const now=vi.spyOn(Date,'now').mockReturnValue(startedAt);
+ const authorize=network.getMockImplementation()!;
+ network.mockImplementationOnce(async(input,init)=>{
+  const result=await authorize(input,init);
+  now.mockReturnValue(startedAt+18_001);
+  return result;
+ });
+ const response=await request('/v1/tags/counts?zone=zh');
+ expect(response.status).toBe(503);
+ expect(await opsMetrics(env.DB)).toContain('hearthroom_aggregate_proof_failures_total{operation="cold",outcome="lease_deadline"} 1');
 });
 
 it('keeps zone and all-zone contributors isolated across an exact full batch',async()=>{

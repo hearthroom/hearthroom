@@ -1,8 +1,8 @@
 /// <reference lib="es2024.promise" />
 
-import { bumpOp } from './ops-metrics';
+import { bumpOp, type AggregateProofFailureCause } from './ops-metrics';
 import { HttpError, type Env } from './types';
-import { provePublicAggregates } from './work-read';
+import { AggregateProofD1ScanError, AggregateProofDeadline, provePublicAggregates, VisibilityProviderUnavailable } from './work-read';
 import { siteRootOf } from '../shared/site-hosts';
 
 const PROOF_MS = 30_000;
@@ -44,6 +44,31 @@ function failureCode(error: unknown): string {
   return 'visibility_provider_unavailable';
 }
 
+function classifyFailure(error: unknown, phase: 'scan' | 'publish'): AggregateProofFailureCause {
+  if (error instanceof VisibilityProviderUnavailable) return `provider_${error.reason}`;
+  if (error instanceof AggregateProofDeadline) return 'lease_deadline';
+  if (error instanceof AggregateProofD1ScanError) return 'd1_scan_error';
+  const code = failureCode(error);
+  if (code === 'visibility_sync_pending') return 'authority_denied';
+  if (code === 'visibility_read_budget_exceeded') return 'budget';
+  return phase === 'publish' ? 'd1_publish_error' : 'other_scan_error';
+}
+
+async function observePublishRejection(env: Env, scope: string, revision: number, lease: string, finished: number): Promise<AggregateProofFailureCause> {
+  try {
+    const db = env.freshAggregateDb?.() ?? env.DB;
+    // Read current state before clearing our lease. The observation never
+    // grants visibility or changes the rejection status.
+    return await db.prepare(`SELECT CASE WHEN m.revision<>? THEN 'publish_revision_changed'
+      WHEN p.lease IS NULL OR p.lease<>? THEN 'publish_lease_lost'
+      WHEN p.lease_until<=? THEN 'publish_lease_expired' ELSE 'publish_rejected' END AS reason
+      FROM moderation_clock m LEFT JOIN public_aggregate_proof p ON p.scope=? WHERE m.id=1`)
+      .bind(revision, lease, finished, scope).first<AggregateProofFailureCause>('reason') ?? 'publish_state_unavailable';
+  } catch {
+    return 'publish_state_unavailable';
+  }
+}
+
 async function buildProof(env: Env, ctx: Context, scope: string, zone: string | undefined, initial: SharedRow, background: boolean, deadline: number): Promise<ProofWindow | null> {
   const db = env.DB;
   const revision = initial.clock_revision;
@@ -68,20 +93,27 @@ async function buildProof(env: Env, ctx: Context, scope: string, zone: string | 
         RETURNING 1 AS won`).bind(scope, revision, lease, deadline, revision, now, Math.max(now, replaceAt), now).first();
       if (claimed) {
         const operation = background ? 'refresh' : 'cold';
+        let phase: 'scan' | 'publish' = 'scan';
+        let rejectedPublication: AggregateProofFailureCause | undefined;
         try {
           await provePublicAggregates(env, zone, deadline);
           const finished = Date.now();
-          if (finished >= deadline) throw unavailable();
+          if (finished >= deadline) throw new AggregateProofDeadline();
+          phase = 'publish';
           const saved = await db.prepare(`UPDATE public_aggregate_proof SET expires_at=?,lease='',lease_until=0
             WHERE scope=? AND revision=? AND lease=? AND lease_until>?
               AND EXISTS(SELECT 1 FROM moderation_clock WHERE id=1 AND revision=?)`)
             .bind(expiresAt, scope, revision, lease, finished, revision).run();
-          if (!saved.meta.changes) throw unavailable();
+          if (!saved.meta.changes) {
+            rejectedPublication = await observePublishRejection(env, scope, revision, lease, finished);
+            throw unavailable();
+          }
           ctx.waitUntil(bumpOp(db, 'aggregate_proof', operation, 'success'));
           return { revision, expiresAt };
         } catch (error) {
           const code = failureCode(error);
           const denied = code === 'visibility_sync_pending';
+          ctx.waitUntil(bumpOp(db, 'aggregate_proof_failure', operation, rejectedPublication ?? classifyFailure(error, phase)));
           await db.prepare(`UPDATE public_aggregate_proof SET lease='',lease_until=0,
             expires_at=CASE WHEN ? THEN 0 ELSE expires_at END,failure_code=?,failed_until=?
             WHERE scope=? AND revision=? AND lease=?`)

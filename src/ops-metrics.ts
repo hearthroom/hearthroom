@@ -89,6 +89,15 @@ const METRICS = {
     label: 'operation', operations: ['cold', 'refresh', 'response'],
     outcomes: ['success', 'denied', 'unavailable', 'recheck'],
   },
+  aggregate_proof_failure: {
+    name: 'hearthroom_aggregate_proof_failures_total',
+    help: 'Aggregate proof producer failures after acquiring a lease, classified by bounded cause.',
+    label: 'operation', operations: ['cold', 'refresh'],
+    outcomes: ['authority_denied', 'budget', 'lease_deadline', 'd1_scan_error', 'other_scan_error', 'd1_publish_error',
+      'publish_revision_changed', 'publish_lease_lost', 'publish_lease_expired', 'publish_rejected', 'publish_state_unavailable',
+      'provider_timeout', 'provider_transport', 'provider_http_5xx', 'provider_http_4xx', 'provider_http_429', 'provider_http_other',
+      'provider_invalid_response', 'provider_missing_key'],
+  },
   visibility_provider_failure: {
     name:'hearthroom_visibility_provider_failures_total',help:'Failed current public policy read attempts by bounded cause; no work identities.',
     label:'attempt',operations:['initial','retry'],outcomes:['timeout','transport','http_5xx','http_4xx','http_429','http_other','invalid_response','missing_key'],
@@ -208,6 +217,7 @@ const METRICS = {
   },
 } as const;
 export type OpsMetric = keyof typeof METRICS;
+export type AggregateProofFailureCause = (typeof METRICS)['aggregate_proof_failure']['outcomes'][number];
 
 /** outcome 由各指標自己的 outcomes 推出：insufficient 只在發錢的指標合法。 */
 export async function bumpOp<M extends OpsMetric>(db: D1Database, metric: M, operation: string, outcome: (typeof METRICS)[M]["outcomes"][number], by = 1): Promise<void> {
