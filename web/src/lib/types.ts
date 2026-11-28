@@ -1,6 +1,7 @@
 import type { Rating, Topic } from "../../../shared/content-rating";
 import type { TipLink } from "../../../shared/tip-links";
 import type { Honor } from "./honors";
+import type { CardQualitySignal } from "../../../shared/card-quality";
 export interface Localized { zh: string; en: string; ja: string; ko: string }
 
 /** 語區。榜單按這個分開列；all 是不分語言的卡，每區都出現。 */
@@ -56,6 +57,8 @@ export interface CommunityCard {
   trending: number;
   /** 熱度：2026-12-01 起是 v2（任務 2026-11-19-card-heat-v2）：作者以外玩家的實扣，加回合與人數加成；被處置的帳號會拿掉，所以可能下降。部署過渡期的舊伺服器沒有。 */
   heat?: number;
+  /** 磚上那一行：未滿合格人數門檻時只有篇幅（deepPlay 為 null）；私卡、連結版或伺服器還沒算好時不帶或為 null（任務 2026-11-28-card-quality-signals） */
+  qualitySignal?: CardQualitySignal | null;
   registeredAt: number;
   /** 目前上線那一版過審的時刻（卡片上的「幾天前更新」）；舊伺服器沒有 */
   updateKind?: 'minor'|'major';
