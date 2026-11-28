@@ -39,7 +39,7 @@ it('never serializes small cohorts and reads only the approved version’s round
     env.DB.prepare("INSERT INTO hosting_versions(version_id,work_id,member_id,operation_id,source_role_id,provider,card_id,created_at) VALUES('approved','work','author','approved','quality-source','harbor',?,1),('draft','work-draft','author','draft','quality-source','harbor',?,2)").bind(row.id, row.id),
     env.DB.prepare("UPDATE cards SET approved_version_id='approved' WHERE id=?").bind(row.id),
     env.DB.prepare("INSERT INTO card_quality_lengths(version_id,total_chars,setting_chars,worldbook_entries,worldbook_chars,opening_count,opening_chars,opening_page,display_rules,panel) VALUES('approved',14000,10000,2,3000,1,1000,1,2,0),('draft',99000,99000,0,0,0,0,0,0,0)"),
-    env.DB.prepare('INSERT INTO card_quality_play(card_id,players,reached,median_turns) VALUES(?,19,7,3)').bind(row.id),
+    env.DB.prepare('INSERT INTO card_quality_play(card_id,players,reached,median_turns,verified_at) VALUES(?,19,7,3,?)').bind(row.id, Date.now()),
   ]);
   const length = { total: 14000, setting: 10000, worldbook: { entries: 2, characters: 3000 },
     openings: { count: 1, characters: 1000 }, presentation: { openingPage: true, displayRules: 2, panel: false } };
@@ -52,6 +52,10 @@ it('never serializes small cohorts and reads only the approved version’s round
   expect(await (await list()).json()).toMatchObject({ items: [{ qualitySignal: { lengthCharacters: 14000, deepPlay } }] });
   expect(await (await card('/quality')).json()).toEqual({ length, deepPlay: { ...deepPlay, medianTurns: 3 }, rating: null, comments: 0 });
   await env.DB.prepare('UPDATE card_quality_play SET players=19 WHERE card_id=?').bind(row.id).run();
+  expect(await (await card('/quality')).json()).toMatchObject({ deepPlay: null });
+  await env.DB.prepare('UPDATE card_quality_play SET players=20,verified_at=? WHERE card_id=?')
+    .bind(Date.now() - 7 * 60 * 60 * 1000, row.id).run();
+  expect(await (await list()).json()).toMatchObject({ items: [{ qualitySignal: signal }] });
   expect(await (await card('/quality')).json()).toMatchObject({ deepPlay: null });
 });
 
