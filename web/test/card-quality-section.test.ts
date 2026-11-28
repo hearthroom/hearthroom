@@ -26,7 +26,7 @@ it("on phones starts folded into one line and opens from the title row", async (
   await mount(card("101", { lengthCharacters: 23000, deepPlay: { reached: 164, players: 200, turns: 5 } }));
   const toggle = root.querySelector<HTMLButtonElement>("button[aria-expanded]")!;
   expect(toggle.getAttribute("aria-expanded")).toBe("false");
-  expect(toggle.textContent).toContain("聊滿 5 回合 164/200・篇幅 2.3 萬字");
+  expect(toggle.textContent).toContain("續玩率 82%・篇幅 2.3 萬字");
   expect((root.querySelector("#card-quality-body") as HTMLElement).style.display).toBe("none");
   toggle.click(); await settle();
   expect(toggle.getAttribute("aria-expanded")).toBe("true");
@@ -41,7 +41,7 @@ it("uses the fresh numbers once loaded, even when the card fell back under the p
   await mount(card("102", { lengthCharacters: 23000, deepPlay: { reached: 20, players: 20, turns: 5 } }));
   const summary = root.querySelector("button[aria-expanded]")!.textContent!;
   expect(summary).toContain("篇幅 2.3 萬字");
-  expect(summary).not.toContain("20/20");
+  expect(summary).not.toContain("續玩率");
 });
 
 it("stays expanded on desktop without a toggle", async () => {

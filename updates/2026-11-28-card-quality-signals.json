@@ -3,11 +3,11 @@
   "draft": true,
   "try": "/",
   "title": {
-    "zh-Hant": "卡片列表會寫出每張卡的篇幅，玩的人多了改寫聊滿 5 回合的人數。",
-    "zh-Hans": "卡片列表会写出每张卡的篇幅，玩的人多了改写聊满 5 回合的人数。",
-    "en": "Card lists now show each card's length, and once enough people have played, how many reached 5 turns.",
-    "ja": "カード一覧に各カードの文字量が出て、遊んだ人が増えると5ターン以上続けた人数に変わります。",
-    "ko": "카드 목록에 카드마다 분량이 표시되고, 플레이한 사람이 늘면 5턴 이상 대화한 인원으로 바뀌어요."
+    "zh-Hant": "卡片列表會寫出每張卡的篇幅，玩的人夠多之後改寫續玩率。",
+    "zh-Hans": "卡片列表会写出每张卡的篇幅，玩的人够多之后改写续玩率。",
+    "en": "Card lists now show each card’s length, and once enough people have played, the share who kept playing.",
+    "ja": "カード一覧に各カードの文字量が出て、遊んだ人が十分に増えると継続率に変わります。",
+    "ko": "카드 목록에 카드마다 분량이 표시되고, 플레이한 사람이 충분히 늘면 지속률로 바뀌어요."
   },
   "body": {
     "zh-Hant": "點封面右下角的預覽鈕，不離開列表就能看篇幅拆項、評分與留言數。",
