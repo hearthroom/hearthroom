@@ -6404,6 +6404,7 @@
   "quality.chars.huge": "{n}만 자",
   "quality.tile.length": "분량",
   "quality.deep.label": "{n}턴 이상",
+  "quality.deep.shortLabel": "{n}턴 이상",
   "quality.deep.sentence": "{players}명 중 {reached}명이 {n}턴 이상 대화했어요",
   "quality.preview": "'{name}' 미리보기",
   "quality.close": "미리보기 닫기",

@@ -6404,6 +6404,7 @@
   "quality.chars.huge": "{n}万字",
   "quality.tile.length": "文字量",
   "quality.deep.label": "{n}ターン以上",
+  "quality.deep.shortLabel": "{n}ターン以上",
   "quality.deep.sentence": "{players}人のうち{reached}人が{n}ターン以上続けました",
   "quality.preview": "「{name}」をプレビュー",
   "quality.close": "プレビューを閉じる",
