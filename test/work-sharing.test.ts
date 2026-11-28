@@ -250,6 +250,7 @@ it('blocks a claimed review while the author cancellation owns its publication p
  const claim=await request(`${reviewPath}/claim`,'reader',{});
  expect(claim.status).toBe(200);
  const {generation}=await claim.json() as {generation:string};
+ expect(await (await request('/v1/review/me','reader')).json()).toMatchObject({reviews:1});
  const {targetAccess,...base}=await command(card.id);
  const intent={...base,action:'cancel_review'};
  behavior.unavailable=true;
@@ -272,6 +273,7 @@ it('blocks a claimed review while the author cancellation owns its publication p
  expect(waiting.status).toBe(409);
  expect(await waiting.json()).toMatchObject({error:'review_withdrawal_pending'});
  expect(await (await request('/v1/review/queue','reader')).json()).toMatchObject({items:[],counts:{new:0}});
+ expect(await (await request('/v1/review/me','reader')).json()).toMatchObject({reviews:0});
  expect(await groupSubmissionIds(env.DB,submission,'author')).toEqual([]);
  expect((await request(`${reviewPath}/drop`,'reader',{})).status).toBe(409);
 

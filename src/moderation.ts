@@ -15,6 +15,7 @@ import { resolveFandom } from './fandom';
 import { buildSearchName } from './upstream';
 import { boundedSearchPattern } from './search-text';
 import { FLIP_COLUMNS, flipState, type FlipColumns } from './review-flip';
+import { NOT_WITHDRAWING } from './review';
 
 export const moderationRoutes = new Hono<{ Bindings: Env }>();
 type Action = 'delist' | 'suspend' | 'restore_listing' | 'restore_public';
@@ -72,7 +73,7 @@ export async function reviewSummary(db:D1Database,member:{id:string},isAdmin=fal
  AND (k.status='pending' OR (k.status='disputed' AND ?))`).bind(member.id,Number(age),member.id,member.id,Number(role!=='reviewer')).first<{n:number}>();
  const cutoff=Date.now()-45*60*1000;
  const reviews=await db.prepare(`SELECT count(*) n FROM review_submissions s JOIN cards c ON c.id=s.card_id
- WHERE s.status='pending' AND (s.rating IS NOT 'R' OR ?) AND (s.claimed_by IS NULL OR s.claimed_by=? OR s.claimed_at<?)
+ WHERE s.status='pending' AND ${NOT_WITHDRAWING} AND (s.rating IS NOT 'R' OR ?) AND (s.claimed_by IS NULL OR s.claimed_by=? OR s.claimed_at<?)
  AND NOT EXISTS(SELECT 1 FROM review_drops d WHERE d.submission_id=s.id AND d.restored_at IS NULL)
  AND NOT EXISTS(SELECT 1 FROM review_stamps st WHERE st.submission_id=s.id AND st.member_id=?)
  AND NOT EXISTS(SELECT 1 FROM member_identities i WHERE i.member_id=? AND i.provider=c.provider AND i.external_id=CAST(c.author_num_id AS TEXT))

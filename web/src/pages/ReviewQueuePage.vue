@@ -120,6 +120,7 @@ async function claim(item: ReviewQueueItem) {
     await router.push(lp(`/review/${item.id}`));
   } catch (err) {
     if (err instanceof ApiError && (err.code === "review_withdrawal_pending" || err.code === "review_author_withdrawn")) {
+      void reviewerStore.refresh();
       await router.push(lp(`/review/${item.id}`));
       return;
     }
