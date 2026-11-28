@@ -5,6 +5,8 @@
  * 型別上就逼呼叫端判空，而不是等執行期炸），開關是任意字串（產生器把它縮成了字面值 "true"）。
  */
 export type Env = Omit<Cloudflare.Env, "EVENTS" | "VISIT_LIMIT" | "AUTH_ROUTE_LIMIT" | "AUTH_SILENT_ENABLED" | "AUTH_MEDIA_GENERATE_ENABLED" | "ANALYTICS_ENABLED" | "GA4_ENABLED" | "REVIEW_ENABLED" | "PUSH_VAPID_PUBLIC_KEY" | "PUSH_VAPID_SUBJECT" | "NOV_20_DAILY_RANK_EXTENSION_MINUTES" | "METRICS_FLUSH_MS" | "CONVERSATION_BADGE_REWARD_FREEZE"> & {
+  /** Request-local factory for an aggregate's authority read and its content queries. */
+  freshAggregateDb?: () => D1Database;
   /** 開始對話類五枚徽章的積分凍結模式："all"（全部歸零，預設 fail-closed）、ISO/ms 截止時間（截止前已得且未排除者仍可領），或 "off"。 */
   CONVERSATION_BADGE_REWARD_FREEZE?: string;
   /** Worker secret：逗號分隔的 member_id 排除名單，在截止時間制下即使早於截止時間也不發這五枚徽章積分。 */

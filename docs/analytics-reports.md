@@ -63,6 +63,11 @@ historical interval as zero.
 `blog_share` with `detail = 'share_abort'` is a dismissed share sheet, not a share. The
 queries below leave it out.
 
+For public aggregate API routes, `blob14` records `aggregate_proof_hit`, `aggregate_proof_miss`,
+`aggregate_proof_recheck`, or `aggregate_proof_unavailable`. Group by `blob3` and `blob14` and
+sum `_sample_interval` for the request total, `double1 > 5000` for slow responses, and
+`double4` in `[500, 599]` for server errors. The labels contain no card or viewer identifiers.
+
 ## Counting rule
 
 Always `SUM(_sample_interval)`, never `COUNT(*)`. Analytics Engine samples under high

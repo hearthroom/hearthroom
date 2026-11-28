@@ -83,6 +83,12 @@ const METRICS = {
     operations:['list','detail','social','library','metadata','aggregate','private_detail','private_metadata','owner_inventory'],
     outcomes:['allow','denied','unavailable'],
   },
+  aggregate_proof: {
+    name: 'hearthroom_aggregate_proof_total',
+    help: 'Shared aggregate proof builds and requests that crossed the hard expiry during rendering.',
+    label: 'operation', operations: ['cold', 'refresh', 'response'],
+    outcomes: ['success', 'denied', 'unavailable', 'recheck'],
+  },
   visibility_provider_failure: {
     name:'hearthroom_visibility_provider_failures_total',help:'Failed current public policy read attempts by bounded cause; no work identities.',
     label:'attempt',operations:['initial','retry'],outcomes:['timeout','transport','http_5xx','http_4xx','http_429','http_other','invalid_response','missing_key'],

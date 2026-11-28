@@ -12,6 +12,7 @@ import {workPolicyGateway} from '../src/work-policy';
 import {hostGateway} from '../src/hosting';
 import {HttpError} from '../src/types';
 import {authorLine} from '../src/head';
+import {boardCache} from '../src/board-cache';
 
 beforeEach(async () => { await resetDb(); vi.spyOn(scoreGateway, 'read').mockResolvedValue({ eligible: true, turns: 6, credits: '0', requiredTurns: 6, paidTurns: 3, requiredCredits: '500' }); });
 afterEach(()=>{vi.restoreAllMocks();restoreUpstream();});
@@ -188,7 +189,7 @@ it('reuses the zoned proof for tag counts only during its 30 second lifetime',as
  expect(cold.status).toBe(200);
  expect((await request(origin+'/v1/tags?zone=zh')).status).toBe(200);
  current.access='private';
- now.mockReturnValue(startedAt+29_000);
+ now.mockReturnValue(startedAt+14_999);
  const warm=await request(path);
  expect(warm.status).toBe(200);
  expect(await warm.json()).toEqual(await cold.json());
@@ -246,6 +247,9 @@ it('shares a proof across aggregate routes in one zone and rechecks authority at
   const response=await request(path);
   expect(response.status).toBe(503);expect(await response.json()).toEqual({error:'visibility_sync_pending'});
  }
+ expect(network).toHaveBeenCalledTimes(3); // Both requests observed the same short denial backoff.
+ now.mockReturnValue(startedAt+32_001);
+ expect((await request('/v1/tags?zone=zh')).status).toBe(503);
  expect(network).toHaveBeenCalledTimes(4);
 });
 
@@ -269,6 +273,67 @@ it('invalidates warm tag counts immediately when the local visibility revision c
  const response=await request(path);
  expect(response.status).toBe(200);
  expect(await response.json()).toMatchObject({counts:{story:0},ratings:{none:0}});
+});
+
+it('uses a current shared proof on a cold edge and refreshes it without delaying either tag response',async()=>{
+ await aggregateFixture(1);
+ const {network}=providerFixture('public');
+ const origin='https://tags-shared-proof.test';
+ const startedAt=Date.now();
+ const revision=(await env.DB.prepare('SELECT revision FROM moderation_clock WHERE id=1').first<number>('revision'))!;
+ const scope=JSON.stringify(['v3',origin,'zh']);
+ await env.DB.prepare('INSERT INTO public_aggregate_proof(scope,revision,expires_at) VALUES(?,?,?)')
+  .bind(scope,revision,startedAt+14_000).run();
+ const now=vi.spyOn(Date,'now').mockReturnValue(startedAt);
+ const release=Promise.withResolvers<void>();
+ const provider=network.getMockImplementation()!;
+ network.mockImplementation(async(input,init)=>{await release.promise;return provider(input,init);});
+ const contexts=[createExecutionContext(),createExecutionContext()];
+ const paths=['/v1/tags?zone=zh','/v1/tags/counts?zone=zh'];
+ try{
+  const responses=await Promise.all(paths.map((path,i)=>worker.fetch(new Request(origin+path),{...env,HOSTING_SERVICE_KEY:'fixture-issuer'},contexts[i]!)));
+  expect(responses.map(response=>response.status)).toEqual([200,200]);
+  for(const response of responses)expect(response.headers.get('Server-Timing')).toContain('aggregate-proof;desc="hit"');
+  expect(await responses[0]!.json()).toMatchObject({items:[{n:1}]});
+  expect(await responses[1]!.json()).toMatchObject({counts:{story:1}});
+ }finally{
+  release.resolve();
+  await Promise.all(contexts.map(waitOnExecutionContext));
+ }
+ now.mockReturnValue(startedAt+14_000);
+ expect((await request(origin+paths[1])).status).toBe(200);
+ expect(network).toHaveBeenCalledTimes(1);
+ expect(await opsMetrics(env.DB)).toContain('hearthroom_aggregate_proof_total{operation="refresh",outcome="success"} 1');
+},2_000);
+
+it.each(['/v1/tags','/v1/tags/counts'])('revalidates %s if content lookup crosses shared proof expiry',async route=>{
+ await aggregateFixture(1);
+ const {current,network}=providerFixture('public');
+ const origin='https://tags-proof-expiry.test';
+ const path=origin+route+'?zone=zh';
+ const startedAt=Date.now();
+ const now=vi.spyOn(Date,'now').mockReturnValue(startedAt);
+ expect((await request(path)).status).toBe(200);
+ now.mockReturnValue(startedAt+29_600);
+ const cache=await caches.open(boardCache.namespace);
+ const prototype=Object.getPrototypeOf(cache) as Cache;
+ const match=prototype.match;
+ vi.spyOn(prototype,'match').mockImplementation(function(this:Cache,key){
+  if(new URL(key instanceof Request?key.url:String(key)).pathname===route){
+   now.mockReturnValue(startedAt+30_001);
+  }
+  return match.call(this,key);
+ });
+ const renewed=await request(path);
+ expect(renewed.status).toBe(200);
+ expect(network).toHaveBeenCalledTimes(2);
+ const metrics=await opsMetrics(env.DB);
+ expect(metrics).toContain('hearthroom_aggregate_proof_total{operation="response",outcome="recheck"} 1');
+ current.access='private';
+ now.mockReturnValue(startedAt+60_002);
+ const denied=await request(path);
+ expect(denied.status).toBe(503);
+ expect(await denied.json()).toEqual({error:'visibility_sync_pending'});
 });
 
 // Real D1 contributors span multiple policy batches; the Provider mock remains
@@ -444,7 +509,9 @@ it('shares the full-catalog proof across author HTML and cold aggregate response
  const warm=await request(origin+'/authors/'+handle);
  expect(warm.status).toBe(200);
  expect(warm.headers.get('Cache-Control')).toBe('public, max-age=1, must-revalidate');
- now.mockReturnValue(startedAt+30_000);
+ // Background refresh learned a definitive denial. The next request
+ // fails closed even before the original absolute expiry.
+ now.mockReturnValue(startedAt+29_500);
  const expired=await request(origin+'/authors/'+handle);
  expect(expired.status).toBe(503);
  expect(await expired.json()).toEqual({error:'visibility_sync_pending'});
