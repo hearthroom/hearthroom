@@ -10,6 +10,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { RouterLink, useRoute } from "vue-router";
 import { useI18n } from "vue-i18n";
 import CardQualityData from "./CardQualityData.vue";
+import { ApiError } from "@/lib/api";
 import { cardPreview, closeCardPreview, loadCardQuality } from "@/lib/card-preview";
 import { cardStill, cardThumb } from "@/lib/card-thumb";
 import { displayName } from "@/lib/display-name";
@@ -46,8 +47,11 @@ async function load() {
   try {
     const got = await loadCardQuality(String(id));
     if (mine === ticket) detail.value = got;
-  } catch {
-    if (mine === ticket) failed.value = true;
+  } catch (err) {
+    if (mine !== ticket) return;
+    // 伺服器說這張卡沒有數據：數據區留空、照樣能進卡片，不給一個永遠重試不好的「載入不了」
+    if (err instanceof ApiError && err.status === 404) detail.value = { length: null, deepPlay: null, rating: null, comments: null };
+    else failed.value = true;
   } finally {
     if (mine === ticket) loading.value = false;
   }
@@ -86,6 +90,9 @@ function onKey(e: KeyboardEvent) {
 }
 let media: MediaQueryList | undefined;
 const onMedia = () => { phone.value = !!media?.matches; position(); };
+// 骨架換成數據後浮層會長高：跟著再對一次位置，「進入卡片」才不會掉出視窗
+const sizer = typeof ResizeObserver === "function" ? new ResizeObserver(() => position()) : undefined;
+watch(box, (el, before) => { if (before) sizer?.unobserve(before); if (el) sizer?.observe(el); });
 onMounted(() => {
   document.addEventListener("keydown", onKey);
   window.addEventListener("resize", position);
@@ -95,6 +102,7 @@ onBeforeUnmount(() => {
   document.removeEventListener("keydown", onKey);
   window.removeEventListener("resize", position);
   media?.removeEventListener?.("change", onMedia);
+  sizer?.disconnect();
 });
 
 watch(target, async (now, before) => {
