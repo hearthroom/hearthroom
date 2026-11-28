@@ -54,6 +54,20 @@ export function relativeTime(ms: number): string {
   return new Intl.DateTimeFormat(locale(), { dateStyle: "medium" }).format(ms);
 }
 
+/**
+ * relativeTime 的短寫法，給最窄的封面（約 135 寬）用：一年以上只寫年份（2025年、2025），
+ * 一年內用 Intl 的 narrow 寫法（英文「11mo ago」）。完整說法仍由 relativeTime 給提示與讀屏。
+ */
+export function relativeTimeShort(ms: number): string {
+  const diff = Date.now() - ms;
+  if (diff < HOUR) return i18n.global.t("time.justNow");
+  if (diff >= 365 * DAY) return new Intl.DateTimeFormat(locale(), { year: "numeric" }).format(ms);
+  const rtf = new Intl.RelativeTimeFormat(locale(), { numeric: "auto", style: "narrow" });
+  if (diff < DAY) return rtf.format(-Math.floor(diff / HOUR), "hour");
+  if (diff < 30 * DAY) return rtf.format(-Math.floor(diff / DAY), "day");
+  return rtf.format(-Math.floor(diff / (30 * DAY)), "month");
+}
+
 /** 沒有封面時，用角色名產生一個穩定的色相，讓佔位卡彼此有區別。 */
 export function hueFrom(seed: string): number {
   let h = 0;
