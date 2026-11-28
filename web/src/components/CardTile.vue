@@ -337,7 +337,10 @@ const adultLabel = computed(() => ratingName("R", String(locale.value)));
  * 品質信號版的底列：時間 → 精選 → 預覽鈕（靠右）。精選放在一格會換行的槽裡，前面墊一個零寬的項目：
  * 整個標放得下就留在第一行，放不下就掉到第二行被裁掉（不截成「精…」，PM 2026-11-28 裁定）。
  */
-.card__corner--quality .card__updated { order: 0; margin-left: 0; }
+/* 時間平常不縮；超過一年的日期（「2025年10月4日」）在 135 寬封面上會把預覽鈕擠出去，這時才讓日期字省略，完整說法留在提示與讀屏 */
+.card__corner--quality .card__updated { order: 0; margin-left: 0; flex: 0 1 auto; min-width: 0; }
+.card__corner--quality .card__updated time { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.card__corner--quality .card__updated svg { flex: none; }
 .card__corner--quality .card__feat-slot { order: 1; flex: 1 1 0; flex-wrap: wrap; align-items: center; height: 20px; overflow: hidden; }
 .card__corner--quality .card__feat-slot::before { content: ""; width: 0; height: 20px; }
 .card__corner--quality .card__featured { flex: none; overflow: visible; text-overflow: clip; }
