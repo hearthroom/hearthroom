@@ -1,3 +1,4 @@
+import { QUALITY_MIN_PLAYERS } from '../shared/card-quality';
 import { bumpOp } from './ops-metrics';
 import { apiBaseOf } from './providers';
 import type { Env } from './types';
@@ -5,9 +6,10 @@ import type { Env } from './types';
 const PAGE_SIZE = 100;
 const PAGES_PER_RUN = 8;
 const LEASE_MS = 120_000;
+const DAY_MS = 86_400_000;
 type Play = { players: number; reached: number; medianTurns: number | null };
 type Snapshot = Record<string, Play | null>;
-type Card = { id: number; role: string };
+type Card = { id: number; role: string; version: string | null };
 
 async function readPlay(env: Env, roles: string[]): Promise<Snapshot> {
   const response = await fetch(`${apiBaseOf(env, 'harbor')}/open/v1/hosting/card-quality/play`, {
@@ -51,13 +53,15 @@ export async function syncCardQualityPlay(
     }
     let cursor = acquired.cursor;
     for (let i = 0; i < PAGES_PER_RUN; i++) {
-      const { results: cards } = await env.DB.prepare(`SELECT id, COALESCE(approved_hosted_role_id,source_role_id) AS role FROM cards NOT INDEXED
+      const { results: cards } = await env.DB.prepare(`SELECT id, COALESCE(approved_hosted_role_id,source_role_id) AS role,
+        approved_version_id AS version FROM cards NOT INDEXED
         WHERE id>? AND provider='harbor' AND status='approved' ORDER BY id LIMIT ?`).bind(cursor, PAGE_SIZE).all<Card>();
       const roles = [...new Set(cards.map(card => card.role))];
       cursor = cards.length < PAGE_SIZE ? 0 : cards[cards.length - 1].id;
       const checkpoint = (checkAt: number) => env.DB.prepare('UPDATE card_quality_play_sync SET cursor=? WHERE singleton=1 AND lease=? AND lease_until>?')
         .bind(cursor, lease, checkAt);
       let snapshot: Snapshot;
+      const readAt = now();
       try {
         snapshot = roles.length ? await read(roles) : {};
         if (roles.some(role => !Object.hasOwn(snapshot, role) || !validPlay(snapshot[role]))) {
@@ -72,7 +76,7 @@ export async function syncCardQualityPlay(
       const payload = JSON.stringify(cards.map(card => ({ ...card, play: snapshot[card.role] })));
       const fence = 'EXISTS(SELECT 1 FROM card_quality_play_sync WHERE singleton=1 AND lease=? AND lease_until>?)';
       const checkAt = now();
-      const [, , saved] = await env.DB.batch([
+      const [, , , saved] = await env.DB.batch([
         env.DB.prepare(`INSERT INTO card_quality_play(card_id,players,reached,median_turns,verified_at)
           SELECT c.id,json_extract(j.value,'$.play.players'),json_extract(j.value,'$.play.reached'),COALESCE(json_extract(j.value,'$.play.medianTurns'),0),?
           FROM json_each(?) j CROSS JOIN cards c ON c.id=json_extract(j.value,'$.id')
@@ -85,6 +89,18 @@ export async function syncCardQualityPlay(
           SELECT c.id FROM json_each(?) j CROSS JOIN cards c ON c.id=json_extract(j.value,'$.id')
           WHERE json_extract(j.value,'$.play') IS NULL AND COALESCE(c.approved_hosted_role_id,c.source_role_id)=json_extract(j.value,'$.role')
         ) AND ${fence}`).bind(payload, lease, checkAt),
+        env.DB.prepare(`INSERT INTO review_publication_day7(version_id,observed_at,rate_percent)
+          SELECT v.version_id,qp.verified_at,CASE WHEN qp.players>=${QUALITY_MIN_PLAYERS} THEN qp.reached*100/qp.players END
+          FROM json_each(?) j
+          JOIN cards c ON c.id=json_extract(j.value,'$.id') AND c.approved_version_id=json_extract(j.value,'$.version')
+          JOIN hosting_versions v ON v.version_id=c.approved_version_id
+          JOIN review_events e ON e.event_key='first:'||v.submission_id AND e.action='first_decision' AND e.to_state='approved'
+          JOIN card_quality_play qp ON qp.card_id=c.id AND qp.verified_at=?
+          WHERE c.status='approved' AND c.board_hidden=0 AND c.public_blocked=0 AND v.state='approved'
+            AND COALESCE(c.approved_hosted_role_id,c.source_role_id)=json_extract(j.value,'$.role')
+            AND json_extract(j.value,'$.play') IS NOT NULL
+            AND v.published_at<=? AND v.published_at>? AND ${fence}
+          ON CONFLICT(version_id) DO NOTHING`).bind(payload, checkAt, readAt-7*DAY_MS, checkAt-8*DAY_MS, lease, checkAt),
         checkpoint(checkAt),
       ]);
       if (!saved.meta.changes) throw new Error('quality sync lease expired');
