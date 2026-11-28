@@ -26,7 +26,8 @@ it("on phones starts folded into one line and opens from the title row", async (
   await mount(card("101", { lengthCharacters: 23000, deepPlay: { rate: 82 } }));
   const toggle = root.querySelector<HTMLButtonElement>("button[aria-expanded]")!;
   expect(toggle.getAttribute("aria-expanded")).toBe("false");
-  expect(toggle.textContent).toContain("續玩率 82%・篇幅 2.3 萬字");
+  expect(toggle.textContent).toContain("續玩率 82%");
+  expect(toggle.textContent).not.toContain("篇幅");
   expect((root.querySelector("#card-quality-body") as HTMLElement).style.display).toBe("none");
   toggle.click(); await settle();
   expect(toggle.getAttribute("aria-expanded")).toBe("true");
@@ -37,11 +38,11 @@ it("on phones starts folded into one line and opens from the title row", async (
 
 it("uses the fresh numbers once loaded, even when the card fell back under the player threshold", async () => {
   phone(true);
-  f.quality.mockResolvedValue({ length: { total: 23000, setting: null, worldbook: { entries: 0, characters: 0 }, openings: { count: 0, characters: 0 }, presentation: { openingPage: false, displayRules: 0, panel: false } }, deepPlay: null, rating: null, comments: null });
+  f.quality.mockResolvedValue({ length: { total: 23000, setting: 3000, worldbook: { entries: 0, characters: 0 }, openings: { count: 0, characters: 0 }, presentation: { openingPage: false, displayRules: 0, panel: false } }, deepPlay: null, rating: null, comments: null });
   await mount(card("102", { lengthCharacters: 23000, deepPlay: { rate: 100 } }));
   const summary = root.querySelector("button[aria-expanded]")!.textContent!;
-  expect(summary).toContain("篇幅 2.3 萬字");
   expect(summary).not.toContain("續玩率");
+  expect(summary).not.toContain("篇幅");
 });
 
 it("stays expanded on desktop without a toggle", async () => {
@@ -51,6 +52,13 @@ it("stays expanded on desktop without a toggle", async () => {
   expect(root.querySelector("button[aria-expanded]")).toBeNull();
   expect((root.querySelector("#card-quality-body") as HTMLElement).style.display).toBe("");
   expect(root.textContent).toContain("3,000 字");
+});
+
+it("hides itself when the only number is the card length total", async () => {
+  phone(false);
+  f.quality.mockResolvedValue({ length: { total: 800, setting: null, worldbook: { entries: 0, characters: 0 }, openings: { count: 1, characters: 800 }, presentation: { openingPage: false, displayRules: 0, panel: false } }, deepPlay: null, rating: null, comments: null });
+  await mount(card("105", { lengthCharacters: 800, deepPlay: null }));
+  expect(root.querySelector("section")).toBeNull();
 });
 
 it("hides itself when the server has no numbers for the card", async () => {

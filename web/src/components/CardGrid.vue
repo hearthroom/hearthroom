@@ -3,7 +3,6 @@ import CardTile from "./CardTile.vue";
 import MascotSay from "./MascotSay.vue";
 import type { CommunityCard } from "@/lib/types";
 import { computed } from "vue";
-import { useCardQualityCapability } from "@/lib/card-quality-capability";
 
 const props = defineProps<{
   cards: CommunityCard[];
@@ -30,15 +29,13 @@ const entries = computed(() => props.cards.map((card, i) => ({
 
 /** 首屏一排的張數上限：這幾張立刻載，其餘懶載入 */
 const EAGER = 6;
-/** 品質信號上線後每張磚多一行（約 25px），骨架跟著變高，資料來了不跳版 */
-const quality = useCardQualityCapability();
 </script>
 
 <template>
   <!-- 骨架屏而不是遮罩 spinner：版面不跳動，也看得出接下來會出現什麼 -->
   <div v-if="loading && !starter" class="grid" aria-hidden="true">
     <slot name="lead" />
-    <div v-for="i in 12" :key="i" class="ghost ghost--card" :class="{ 'ghost--quality': quality }" />
+    <div v-for="i in 12" :key="i" class="ghost ghost--card" />
   </div>
 
   <div v-else-if="!cards.length && !starter" class="empty panel">
@@ -83,7 +80,6 @@ const quality = useCardQualityCapability();
 @media (min-width: 820px) { .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (min-width: 1080px) { .grid { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
 .ghost--card { aspect-ratio: 3 / 5.3; }
-.ghost--quality { aspect-ratio: 3 / 5.75; }
 
 .empty { padding: var(--s-8) var(--s-5); text-align: center; }
 .empty__title { font-size: 16px; font-weight: 600; margin-bottom: var(--s-2); }

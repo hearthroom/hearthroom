@@ -19,7 +19,6 @@ import { coverHonors, HONOR_COLORS } from "@/lib/honors";
 import { ratingName } from "@/lib/rating";
 import { useCardQualityCapability } from "@/lib/card-quality-capability";
 import { cardPreview, openCardPreview } from "@/lib/card-preview";
-import { qualityCharacters, qualityRate } from "@/lib/card-quality-format";
 
 const props = defineProps<{
   card: CommunityCard;
@@ -122,17 +121,10 @@ watch(marks, (el, before) => { if (before) marksObserver?.unobserve(before); if 
 watch([honors, locale, () => props.rank, () => props.card.rating], async () => { await nextTick(); fitMarks(); });
 
 /*
- * 卡片品質信號（任務 2026-11-28-card-quality-signals）：伺服器打開旗標後，每張磚在標籤與作者之間多一行，
- * 未滿合格玩家門檻寫篇幅，滿了換成「續玩率 82%」（整數百分比、不放 X/Y，owner 2026-11-28）；封面右下角多一顆預覽鈕。旗標沒開時整張磚照舊。
- * 這張卡還沒有數字（快照沒算到、私卡或連結版）時留一行同高的空白，同一排的磚才一樣高。
+ * 卡片品質信號（任務 2026-11-28-card-quality-signals）：伺服器打開旗標後，封面右下角多一顆預覽鈕，時間改短寫。
+ * 磚上不列篇幅或續玩率（owner 2026-11-29 撤掉那一行），數據只在預覽與卡片頁。旗標沒開時整張磚照舊。
  */
 const quality = useCardQualityCapability();
-const qualityLine = computed(() => {
-  const signal = props.card.qualitySignal;
-  if (signal?.deepPlay) return { label: t("quality.retention.label"), value: qualityRate(signal.deepPlay.rate) };
-  if (typeof signal?.lengthCharacters === "number") return { label: t("quality.tile.length"), value: qualityCharacters(signal.lengthCharacters) };
-  return null;
-});
 /** 沒有任何數字的卡（快照還沒算到）不放預覽鈕：打開也是空的 */
 const canPreview = computed(() => quality.value && !props.selectOnly && !!props.card.qualitySignal);
 const previewOpen = computed(() => cardPreview.value?.card.id === props.card.id);
@@ -228,13 +220,6 @@ const adultLabel = computed(() => ratingName("R", String(locale.value)));
         </li>
         <li v-if="moreTags" class="tag tag--more">+{{ moreTags }}</li>
       </ul>
-
-      <p v-if="quality" class="card__quality" :aria-hidden="qualityLine ? undefined : 'true'">
-        <template v-if="qualityLine">
-          <span class="sr-only">{{ qualityLine.label }} {{ qualityLine.value }}</span>
-          <b class="card__quality-value" aria-hidden="true">{{ qualityLine.value }}</b><span class="card__quality-label" aria-hidden="true">{{ qualityLine.label }}</span>
-        </template>
-      </p>
 
       <div class="card__meta">
         <span v-if="showZone" class="card__by">{{ zoneLabel(card.zone) }}</span>
@@ -412,18 +397,6 @@ const adultLabel = computed(() => ratingName("R", String(locale.value)));
 .card__hook--note b { margin-right: 4px; font-size: 11px; font-weight: 600; color: var(--text-3); }
 .card__hook--note:lang(ko) { word-break: keep-all; }
 
-/*
- * 品質信號那一行：說明與數字都不截斷；每張磚都有這一行（沒數字時是同高空白）。
- * 數字排在 DOM 前面、row-reverse 畫回「說明 數字」：說明放不下完整的字就整個換到被裁掉的第二行，
- * 只留數字（135 寬英文「15k chars」，不出現「Card l…」，PM 2026-11-28）；完整說法在讀屏文字裡。
- */
-.card__quality {
-  display: flex; flex-direction: row-reverse; flex-wrap: wrap; justify-content: flex-end; align-items: center; column-gap: 6px;
-  height: 20px; margin: 2px 0 0; overflow: hidden;
-  font-size: 12px; line-height: 20px; color: var(--text-2); white-space: nowrap;
-}
-.card__quality-label { flex: none; }
-.card__quality-value { flex: none; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
 .card__tags { display: flex; gap: 4px; margin: 1px 0 0; padding: 0; list-style: none; overflow: hidden; }
 /* 包著連結的 li 若是一般的 list-item，會多一條文字基線把標籤往下推 2px，跟直接當 li 的「+N」對不齊 */
 .card__tags > li { display: flex; min-width: 0; }

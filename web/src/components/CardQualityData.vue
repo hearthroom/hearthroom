@@ -1,7 +1,9 @@
 <script setup lang="ts">
 /*
  * 卡片數據的同一組區塊：預覽抽屜與卡片頁照同一個順序列（ui.md「同一組數據」）。
- * 玩家數據 → 篇幅 → 呈現方式；沒有內容的區塊整塊不出現，不寫「無」。
+ * 玩家數據 → 內容 → 呈現方式；沒有內容的區塊整塊不出現，不寫「無」。
+ * 內容只列設定字數、世界書與顯示規則條數，不列開場、也不列篇幅總數（owner 2026-11-29：開場網頁或用顯示規則替換的開場字數都很少，
+ * 寫出來反而誤導；呈現方式已經說明開場用哪一種）。
  * 數字都是伺服器取整後的計數，這裡只換成各語言的寫法（lib/card-quality-format）。
  */
 import { computed, ref, watch } from "vue";
@@ -32,14 +34,14 @@ const stats = computed(() => {
   return out;
 });
 const length = computed(() => props.detail?.length ?? null);
-const lengthRows = computed(() => {
+const contentRows = computed(() => {
   const l = length.value;
   if (!l) return [];
   const sep = t("quality.sep");
   const rows: { key: string; label: string; value: string }[] = [];
   if (l.setting !== null) rows.push({ key: "setting", label: t("quality.row.setting"), value: qualityCharacters(l.setting) });
   if (l.worldbook.entries > 0) rows.push({ key: "worldbook", label: t("quality.row.worldbook"), value: t("quality.entries", { n: number(l.worldbook.entries) }, l.worldbook.entries) + sep + qualityCharacters(l.worldbook.characters) });
-  if (l.openings.count > 0) rows.push({ key: "openings", label: t("quality.row.openings"), value: t("quality.openingsCount", { n: number(l.openings.count) }, l.openings.count) + sep + qualityCharacters(l.openings.characters) });
+  if (l.presentation.displayRules > 0) rows.push({ key: "rules", label: t("quality.row.rules"), value: t("quality.rulesCount", { n: number(l.presentation.displayRules) }, l.presentation.displayRules) });
   return rows;
 });
 const presentation = computed(() => {
@@ -47,7 +49,7 @@ const presentation = computed(() => {
   if (!p) return [];
   const out: string[] = [];
   if (p.openingPage) out.push(t("quality.pres.openingPage"));
-  if (p.displayRules > 0) out.push(t("quality.pres.rules", { n: number(p.displayRules) }, p.displayRules));
+  if (p.displayRules > 0) out.push(t("quality.pres.rules"));
   if (p.panel) out.push(t("quality.pres.panel"));
   return out;
 });
@@ -89,16 +91,14 @@ const hasPlayers = computed(() => Boolean(deep.value) || stats.value.length > 0)
         </dl>
       </section>
 
-      <section v-if="length" class="cq__sec">
-        <h3 class="cq__h">{{ $t("quality.section.length") }}</h3>
-        <p class="cq__total">{{ qualityCharacters(length.total) }}</p>
-        <dl v-if="lengthRows.length" class="cq__rows">
-          <div v-for="r in lengthRows" :key="r.key" class="cq__row">
+      <section v-if="contentRows.length" class="cq__sec">
+        <h3 class="cq__h">{{ $t("quality.section.content") }}</h3>
+        <dl class="cq__rows">
+          <div v-for="r in contentRows" :key="r.key" class="cq__row">
             <dt>{{ r.label }}</dt>
             <dd>{{ r.value }}</dd>
           </div>
         </dl>
-        <p class="cq__note">{{ $t("quality.lengthNote") }}</p>
       </section>
 
       <section v-if="presentation.length" class="cq__sec">
@@ -142,14 +142,12 @@ const hasPlayers = computed(() => Boolean(deep.value) || stats.value.length > 0)
 .cq__stat dd { order: -1; margin: 0; font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cq__stat dt { font-size: 12px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-.cq__total { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
-.cq__rows { display: grid; margin: var(--s-2) 0 0; }
+.cq__rows { display: grid; margin: 0; }
 .cq__row { display: flex; justify-content: space-between; gap: var(--s-3); padding: var(--s-2) 0; box-shadow: 0 -1px 0 var(--line); font-size: 13px; }
 .cq__row dt { min-width: 0; color: var(--text-2); }
 .cq__row dd { flex: none; margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
-.cq__note { margin: 6px 0 0; font-size: 12px; line-height: 1.6; color: var(--text-3); }
-.cq__note:lang(ko), .cq__help-body:lang(ko) { word-break: keep-all; }
-.cq__note:lang(ja), .cq__help-body:lang(ja) { word-break: auto-phrase; }
+.cq__help-body:lang(ko) { word-break: keep-all; }
+.cq__help-body:lang(ja) { word-break: auto-phrase; }
 
 .cq__chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
 

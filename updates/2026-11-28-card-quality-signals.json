@@ -3,17 +3,17 @@
   "draft": true,
   "try": "/",
   "title": {
-    "zh-Hant": "卡片列表會寫出每張卡的篇幅，玩的人夠多之後改寫續玩率。",
-    "zh-Hans": "卡片列表会写出每张卡的篇幅，玩的人够多之后改写续玩率。",
-    "en": "Card lists now show each card’s length, and once enough people have played, the share who kept playing.",
-    "ja": "カード一覧に各カードの文字量が出て、遊んだ人が十分に増えると継続率に変わります。",
-    "ko": "카드 목록에 카드마다 분량이 표시되고, 플레이한 사람이 충분히 늘면 지속률로 바뀌어요."
+    "zh-Hant": "卡片封面右下角多了預覽鈕，不離開列表就能看卡片數據。",
+    "zh-Hans": "卡片封面右下角多了预览钮，不离开列表就能看卡片数据。",
+    "en": "A preview button on each card cover now shows the card’s data without leaving the list.",
+    "ja": "カードのカバー右下にプレビューボタンが付き、一覧のままカードのデータを確認できます。",
+    "ko": "카드 커버 오른쪽 아래에 미리보기 버튼이 생겨 목록을 벗어나지 않고 카드 데이터를 볼 수 있어요."
   },
   "body": {
-    "zh-Hant": "點封面右下角的預覽鈕，不離開列表就能看篇幅拆項、評分與留言數。",
-    "zh-Hans": "点封面右下角的预览钮，不离开列表就能看篇幅拆项、评分与留言数。",
-    "en": "The preview button on the cover shows the length breakdown, rating and comment count without leaving the list.",
-    "ja": "カバー右下のプレビューボタンで、一覧のまま文字量の内訳・評価・コメント数を確認できます。",
-    "ko": "커버 오른쪽 아래의 미리보기 버튼으로 목록을 벗어나지 않고 분량 구성, 평점, 댓글 수를 볼 수 있어요."
+    "zh-Hant": "預覽裡有設定字數、世界書、顯示規則與評分、留言數，玩的人夠多之後也會列出續玩率。",
+    "zh-Hans": "预览里有设定字数、世界书、显示规则与评分、留言数，玩的人够多之后也会列出续玩率。",
+    "en": "The preview lists setting length, lorebook, display rules, rating and comments, and once enough people have played, the share who kept playing.",
+    "ja": "プレビューには設定の文字数・世界設定・表示ルール・評価・コメント数が並び、遊んだ人が十分に増えると継続率も表示されます。",
+    "ko": "미리보기에는 설정 글자 수, 세계관, 표시 규칙, 평점, 댓글 수가 나오고, 플레이한 사람이 충분히 늘면 지속률도 표시돼요."
   }
 }

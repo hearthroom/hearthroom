@@ -38,17 +38,16 @@ async function mount(cards: CommunityCard[]) {
   app = createApp({ render: () => [h(CardGrid, { cards }), h(CardPreview)] }).use(router).use(i18n);
   app.mount(root); await settle();
 }
-// 讀屏念的整句（畫面上是同一行的說明與數字）
-const lines = () => [...root.querySelectorAll(".card__quality")].map((p) => p.querySelector(".sr-only")?.textContent?.trim() ?? "");
-
-it("adds one data line to every tile: length before the threshold, retention rate after, blank without numbers", async () => {
+it("shows no data line on tiles; the preview button stays on cards that have numbers", async () => {
   await mount([
     card(1, { qualitySignal: { lengthCharacters: 14000, deepPlay: null } }),
     card(2, { qualitySignal: { lengthCharacters: 23000, deepPlay: { rate: 82 } } }),
     card(3, { qualitySignal: null }),
   ]);
-  expect(lines()).toEqual(["篇幅 1.4 萬字", "續玩率 82%", ""]);
-  expect(root.querySelectorAll(".card__quality")).toHaveLength(3);
+  // 磚上不寫篇幅或續玩率（owner 2026-11-29）
+  expect(root.querySelector(".card__quality")).toBeNull();
+  const text = root.textContent ?? "";
+  for (const s of ["篇幅", "續玩率", "82%", "萬字"]) expect(text).not.toContain(s);
   // 沒有數字的那張不放預覽鈕
   expect(root.querySelectorAll(".card__preview")).toHaveLength(2);
 });
@@ -74,8 +73,13 @@ it("opens the preview from the cover button, shows the data, and returns focus o
   expect(f.quality).toHaveBeenCalledWith("7");
   expect(root.querySelector(".card")!.classList.contains("card--previewing")).toBe(true);
   const text = dialog.textContent ?? "";
-  for (const s of ["續玩率", "82%", "4.6", "132", "14 回合", "2.3 萬字", "3,000 字", "18 條・1.9 萬字", "3 個・1,000 字", "開場網頁", "顯示規則 2 條", "進入卡片"]) expect(text).toContain(s);
-  expect(text).not.toContain("面板");
+  for (const s of ["續玩率", "82%", "4.6", "132", "14 回合", "內容", "3,000 字", "18 條・1.9 萬字", "開場網頁", "進入卡片"]) expect(text).toContain(s);
+  // 內容只列設定、世界書、顯示規則：不列開場、不列篇幅總數與說明（owner 2026-11-29）
+  for (const s of ["3 個", "1,000 字", "2.3 萬字", "篇幅", "面板"]) expect(text).not.toContain(s);
+  const rows = [...dialog.querySelectorAll(".cq__row")].map((r) => [r.querySelector("dt")!.textContent, r.querySelector("dd")!.textContent]);
+  expect(rows).toEqual([["設定字數", "3,000 字"], ["世界書", "18 條・1.9 萬字"], ["顯示規則", "2 條"]]);
+  // 呈現方式只寫用了哪幾種，條數在上面
+  expect([...dialog.querySelectorAll(".cq__chips li")].map((li) => li.textContent)).toEqual(["開場網頁", "顯示規則"]);
   expect(text).not.toContain("164/200");
   // 問號鈕：預設收起，點開才有怎麼算、分子分母與合格玩家資格
   const help = dialog.querySelector<HTMLButtonElement>('button[aria-label="續玩率怎麼算"]')!;
@@ -108,7 +112,7 @@ it("shows a retry line when the data does not load, and keeps the way into the c
   expect(dialog.textContent).not.toContain("數據載入不了");
   // 未滿門檻、沒有評分與留言：整塊玩家數據不出現
   expect(dialog.textContent).not.toContain("玩家數據");
-  expect(dialog.textContent).toContain("2.3 萬字");
+  expect(dialog.textContent).toContain("3,000 字");
 });
 
 it("treats a card the server has no numbers for as empty, not as a load failure", async () => {

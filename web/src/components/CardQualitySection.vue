@@ -10,7 +10,7 @@ import CardQualityData from "./CardQualityData.vue";
 import { ApiError } from "@/lib/api";
 import { loadCardQuality } from "@/lib/card-preview";
 import { useCardQualityCapability } from "@/lib/card-quality-capability";
-import { qualityCharacters, qualityRate } from "@/lib/card-quality-format";
+import { qualityRate } from "@/lib/card-quality-format";
 import type { CommunityCard } from "@/lib/types";
 import type { CardQualityDetail } from "../../../shared/card-quality";
 
@@ -41,21 +41,23 @@ async function load() {
 }
 watch([enabled, () => props.card.id], ([on]) => { if (on) void load(); }, { immediate: true });
 
+/* 內容區只列設定、世界書、顯示規則與呈現方式（不列篇幅總數）：這幾項都沒有時，length 有值也等於沒有可看的 */
+function hasContent(l: CardQualityDetail["length"]) {
+  if (!l) return false;
+  const p = l.presentation;
+  return l.setting !== null || l.worldbook.entries > 0 || p.displayRules > 0 || p.openingPage || p.panel;
+}
 const empty = computed(() => {
   const d = detail.value;
-  return !!d && !d.length && !d.deepPlay && !d.rating && !d.comments;
+  return !!d && !hasContent(d.length) && !d.deepPlay && !d.rating && !d.comments;
 });
 const shown = computed(() => enabled.value && !absent.value && !empty.value);
 
-/* 收合時的一行摘要：「續玩率 82%・篇幅 2.3 萬字」，新卡只有篇幅；數據還沒到就先用磚上那份 */
+/* 收合時的一行摘要：「續玩率 82%」；未滿合格玩家門檻就不寫摘要。篇幅總數不再出現（owner 2026-11-29） */
 const summary = computed(() => {
-  // 數據到了就只看數據（合格人數跌回門檻下時 deepPlay 是 null，不能拿磚上那份舊的補回來）
+  // 數據到了就只看數據（合格人數跌回門檻下時 deepPlay 是 null，不能拿列表那份舊的補回來）
   const deep = detail.value ? detail.value.deepPlay : props.card.qualitySignal?.deepPlay ?? null;
-  const total = detail.value ? detail.value.length?.total ?? null : props.card.qualitySignal?.lengthCharacters ?? null;
-  const parts: string[] = [];
-  if (deep) parts.push(`${t("quality.retention.label")} ${qualityRate(deep.rate)}`);
-  if (typeof total === "number") parts.push(`${t("quality.tile.length")} ${qualityCharacters(total)}`);
-  return parts.join(t("quality.summarySep"));
+  return deep ? `${t("quality.retention.label")} ${qualityRate(deep.rate)}` : "";
 });
 
 const PHONE = "(max-width: 820px)";
