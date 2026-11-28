@@ -23,7 +23,8 @@ vi.mock("../src/lib/connections", () => ({ accountToken: mocks.token, connectAcc
 vi.mock("../src/lib/resource-client", () => ({
   resourceClient: () => ({ list: mocks.list, folders: mocks.folders, folder: vi.fn(), upload: vi.fn(), remove: vi.fn() }),
 }));
-vi.mock("../src/lib/media-generation", () => ({
+vi.mock("../src/lib/media-generation", async (original) => ({
+  ...await original<typeof import("../src/lib/media-generation")>(),
   generationClient: () => ({ models: mocks.models, create: mocks.create, wait: mocks.wait, save: mocks.save }),
 }));
 

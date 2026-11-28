@@ -24657,6 +24657,12 @@
             "format": "int64",
             "description": "Credits the caller can spend now: permanent plus time-limited, less what running turns hold."
           },
+          "imageCreditsAvailable": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Credits available for signed-in image generation, including eligible month-pass purchase credits. Excludes credits already spent, held or expired."
+          },
           "permanent": {
             "type": "integer",
             "format": "int64",

@@ -2,10 +2,16 @@ import { ApiError, describeApiError } from "./api";
 import { apiBaseOf, type ProviderId } from "./provider";
 
 /**
- * 以登入身分生成圖片（Harbor /open/v1/generations），只扣購買點數，要 media.generate 授權；
+ * 以登入身分生成圖片（Harbor /open/v1/generations），依錢包的生圖准入扣點，要 media.generate 授權；
  * 結果先留在 Harbor 7 天（快取區），作者挑了才存進資源庫，存檔另外要 role.write。錯誤是 OpenAI 信封 {error:{type,code,message}}，
  * 丟出的 ApiError.code 取 error.code，沒有就取 error.type，畫面按 status 與 code 說話。
  */
+export class ImageCreditsError extends ApiError {
+  constructor(message: string, readonly imageCreditsAvailable: number) {
+    super(402, message, "insufficient_quota");
+  }
+}
+
 export interface GenerationModel {
   id: string;
   name: string;
@@ -97,7 +103,13 @@ export function generationClient(provider: ProviderId, credentials: (rejectedTok
     const body = await r.json().catch(() => ({}));
     if (!r.ok) {
       const code = String(body.error?.code || body.error?.type || "");
-      throw new ApiError(r.status, describeApiError(r.status, ""), code);
+      const message = describeApiError(r.status, "");
+      const amount: unknown = body.error?.imageCreditsAvailable;
+      if (path === "/images" && r.status === 402 && code === "insufficient_quota"
+        && typeof amount === "number" && Number.isSafeInteger(amount) && amount >= 0) {
+        throw new ImageCreditsError(message, amount);
+      }
+      throw new ApiError(r.status, message, code);
     }
     return { status: r.status, body };
   }

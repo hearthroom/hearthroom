@@ -41,10 +41,10 @@ const summary = Array.from({ length: 84 }, (_, i) => ({ date: iso(83 - i), spent
 const referral = (over: Record<string, unknown> = {}) => ({ enabled: true, code: 'HH7Q2K', referred: false, welcomeCredits: 0, canRedeem: false, invited: 0, purchased: 0, earned: 0,
   terms: { welcomeCredits: 50, welcomeDays: 7, firstPercent: 10, firstCap: 1000, inviteePercent: 0, rebatePercent: 0, rebateDays: 0, bindDays: 7 }, ...over });
 
-async function mountWallet(customRecords?: any[]) {
+async function mountWallet(customRecords?: any[], imageCreditsAvailable?: number) {
   setProvider('harbor');
   mocks.token.mockImplementation(async () => 'token');
-  mocks.wallet.mockResolvedValue({ score: 6479, tempScore: 0, plans: [] });
+  mocks.wallet.mockResolvedValue({ score: 6479, tempScore: 0, plans: [], imageCreditsAvailable });
   const now = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12).toISOString();
   mocks.records.mockResolvedValue({ records: customRecords ?? [
     { id: 1, record: 'chat', score: 12, recordType: 'sub', createTime: now },
@@ -57,6 +57,18 @@ async function mountWallet(customRecords?: any[]) {
   for (let i = 0; i < 60; i++) await Promise.resolve(); await nextTick();
   return root;
 }
+
+it.each([0, 12])('shows %i available image credits directly under the total', async (amount) => {
+  const page = await mountWallet(undefined, amount);
+  const balance = page.querySelector('.balance__num')!;
+  expect(balance.textContent).toContain('6,479');
+  expect(balance.nextElementSibling?.textContent?.trim()).toBe(t('wallet.imageCredits', { n: String(amount) }));
+});
+
+it('omits image credits when the wallet response does not have the field', async () => {
+  const page = await mountWallet();
+  expect(page.querySelector('.balance__image')).toBeNull();
+});
 
 it('流水顯示看得懂的項目名，每一天附上支出與收入小計', async () => {
   mocks.summary.mockResolvedValue(summary); mocks.referral.mockResolvedValue(referral());

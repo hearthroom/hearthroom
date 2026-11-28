@@ -65,6 +65,13 @@ describe("generation models", () => {
 describe("generating and saving", () => {
   const input = { model: "gpt-image-2-dawn", prompt: "a lighthouse", size: "1024x1024", n: 2 };
 
+  it.each([0, 12])("keeps the signed-in image balance of %i from a 402", async (amount) => {
+    stub(() => json({ error: { code: "insufficient_quota", imageCreditsAvailable: amount } }, 402));
+    await expect(client().create(input, "key-402")).rejects.toMatchObject({
+      status: 402, code: "insufficient_quota", imageCreditsAvailable: amount,
+    });
+  });
+
   it("sends the order key and returns a finished task when Harbor answers within its wait", async () => {
     const fetcher = stub(() => json({ created: 1, data: [{ url: "https://assets.test/a.png" }, { url: "https://assets.test/b.png" }], harbor: { id: "t1", status: "completed" } }));
     const task = await client().create(input, "key-1");

@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "draft": true,
+  "try": "/wallet",
+  "title": {
+    "zh-Hant": "積分頁現在會顯示可生圖點數。",
+    "zh-Hans": "积分页现在能看到可用于生图的点数。",
+    "en": "The wallet now shows how many credits you can use for image generation.",
+    "ja": "ポイント画面で画像生成に使える残高を確認できます。",
+    "ko": "포인트 화면에서 이미지 생성에 쓸 수 있는 포인트를 확인할 수 있어요."
+  },
+  "body": {
+    "zh-Hant": "生圖點數不足時，提示也會顯示目前可用的點數。",
+    "zh-Hans": "生成图片的点数不足时，提示里也会显示当前可用点数。",
+    "en": "If you run short while generating an image, the notice also shows your available credits.",
+    "ja": "画像生成に使えるポイントが足りないときは、メッセージにも残高が表示されます。",
+    "ko": "이미지 생성에 쓸 포인트가 부족하면 안내 메시지에도 잔액이 표시돼요."
+  }
+}

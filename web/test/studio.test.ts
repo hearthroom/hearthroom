@@ -5,6 +5,7 @@ import { createRouter, createMemoryHistory } from "vue-router";
 import { i18n, loadLocale } from "../src/lib/i18n";
 import { useSession } from "../src/lib/session";
 import { setProvider } from "../src/lib/provider";
+import { ImageCreditsError } from "../src/lib/media-generation";
 import { ApiError } from "../src/lib/api";
 import { rememberRecipe, splitCount, usesFor } from "../src/lib/studio";
 import { confirmState, settleConfirm } from "../src/lib/confirm";
@@ -26,7 +27,8 @@ const mocks = vi.hoisted(() => ({
   remove: vi.fn(),
 }));
 vi.mock("../src/lib/connections", () => ({ accountToken: mocks.token, connectAccount: mocks.connect }));
-vi.mock("../src/lib/media-generation", () => ({
+vi.mock("../src/lib/media-generation", async (original) => ({
+  ...await original<typeof import("../src/lib/media-generation")>(),
   generationClient: () => ({ models: mocks.models, list: mocks.list, create: mocks.create, wait: mocks.wait, save: mocks.save, plan: mocks.plan, canPlan: mocks.canPlan, remove: mocks.remove }),
 }));
 vi.mock("../src/lib/api", async (actual) => ({ ...(await actual<object>()), fetchLibraryFolders: mocks.folders, uploadImage: mocks.upload }));
@@ -213,12 +215,13 @@ it("starts with the library image the resources page handed over as the referenc
 
 it("explains a credit shortfall with a way to top up, and keeps the order key only for a dropped connection", async () => {
   mocks.list.mockResolvedValue({ tasks: [], next: null });
-  mocks.create.mockRejectedValueOnce(new ApiError(402, "no credits")).mockRejectedValueOnce(new TypeError("network")).mockResolvedValueOnce(done("t3"));
+  mocks.create.mockRejectedValueOnce(new ImageCreditsError("no credits", 0)).mockRejectedValueOnce(new TypeError("network")).mockResolvedValueOnce(done("t3"));
   await mount();
   await type("a lighthouse");
   await generate();
   expect(root.querySelector(".run__error")?.textContent).toContain("only the ones you receive at purchase can pay for images");
   expect(root.querySelector(".run__error a")?.textContent).toContain("Top up");
+  expect(root.querySelector(".run__error")?.textContent).toContain("You have 0 credits available for image generation.");
   await generate();
   const dropped = [...root.querySelectorAll(".run")].at(-1)!;
   expect(dropped.textContent).toContain("connection dropped");

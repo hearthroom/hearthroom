@@ -7,7 +7,8 @@
  */
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { ApiError } from "@/lib/api";
-import type { GenerationClient, GenerationModel, GenerationTask, SaveTarget } from "@/lib/media-generation";
+import { ImageCreditsError, type GenerationClient, type GenerationModel, type GenerationTask, type SaveTarget } from "@/lib/media-generation";
+import { whole } from "@/lib/format";
 import { wrapTab } from "@/lib/focus-trap";
 import { fitSize } from "@/lib/studio";
 import { track } from "@/lib/track";
@@ -50,6 +51,7 @@ const cost = computed(() => (model.value ? model.value.credits * count.value : 0
 type Failure = "reauth" | "credits" | "policy" | "storage" | "save" | "interrupted" | "failed" | "gone" | "stale";
 const phase = ref<"idle" | "running" | "saving">("idle");
 const failure = ref<Failure | null>(null);
+const imageCreditsAvailable = ref<number>();
 const running = computed(() => phase.value !== "idle");
 watch(running, (v) => emit("running", v));
 // 一次生成的身分：key 送出前就定好；task 拿到任務才有。
@@ -74,6 +76,7 @@ async function submit() {
   if (running.value || props.access !== "ready") return;
   if (!pending.value && (!model.value || !prompt.value.trim() || !size.value)) return;
   failure.value = null;
+  imageCreditsAvailable.value = undefined;
   phase.value = "running";
   if (!pending.value) key ||= crypto.randomUUID();
   try {
@@ -100,6 +103,7 @@ async function submit() {
     choices.value = task.urls;
   } catch (e) {
     failure.value = failureOf(e);
+    if (e instanceof ImageCreditsError) imageCreditsAvailable.value = e.imageCreditsAvailable;
     if (failure.value !== "interrupted") {
       task = null;
       pending.value = false;
@@ -274,7 +278,12 @@ const action = computed(() => (failure.value === "interrupted" ? "resource.gen.r
             <span class="gen__spinner" aria-hidden="true" />{{ $t("resource.gen.running") }}
           </p>
           <div v-if="failure" class="notice notice--error gen__error" role="alert">
-            <p>{{ $t("resource.gen.error." + failure) }}</p>
+            <p>
+              {{ $t("resource.gen.error." + failure) }}
+              <template v-if="failure === 'credits' && imageCreditsAvailable !== undefined">
+                {{ $t("resource.gen.error.imageCreditsAvailable", { n: whole(imageCreditsAvailable) }, imageCreditsAvailable) }}
+              </template>
+            </p>
             <a v-if="failure === 'credits'" class="btn btn--sm" :href="topUpUrl()" target="_blank" rel="noopener" @click="track('topup_click')">
               {{ $t("wallet.topUp") }} ↗
             </a>

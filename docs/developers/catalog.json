@@ -2177,6 +2177,7 @@
   "d7e1ac9e36a61": "Credits balance and activity",
   "d0876699a6e92": "Returns the caller's credits (spendable, permanent, time-limited and held by running turns), upcoming expiries, and the balance activity in this app, newest first. Top-up is not available through the Open API; send the user to the main site.",
   "dbf73c5779dd4": "Entries per page, 1 to 50.",
+  "walletImageCreditsAvailable": "Credits available for signed-in image generation, including eligible month-pass purchase credits. Excludes credits already spent, held or expired.",
   "d1adec6712516": "Credits the caller can spend now: permanent plus time-limited, less what running turns hold.",
   "ded2244bb1d8c": "Credits that never expire.",
   "d4d827aca7ebb": "Time-limited credits in total.",

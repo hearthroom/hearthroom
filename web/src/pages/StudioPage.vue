@@ -16,9 +16,10 @@ import StudioComposer from "@/components/studio/StudioComposer.vue";
 import StudioSaveDialog from "@/components/studio/StudioSaveDialog.vue";
 import StudioAgentPlan, { type AgentShot } from "@/components/studio/StudioAgentPlan.vue";
 import { ApiError, fetchLibraryFolders, uploadImage, type LibraryFolder } from "@/lib/api";
+import { whole } from "@/lib/format";
 import { confirmDialog } from "@/lib/confirm";
 import { connectAccount } from "@/lib/connections";
-import type { GenerationModel, GenerationTask } from "@/lib/media-generation";
+import { ImageCreditsError, type GenerationModel, type GenerationTask } from "@/lib/media-generation";
 import { useSession } from "@/lib/session";
 import { defaultName, extensionOf, fitSize, recipeOf, rememberRecipe, splitCount, type Recipe } from "@/lib/studio";
 import { track } from "@/lib/track";
@@ -40,6 +41,7 @@ interface Entry {
   recipe?: Recipe;
   input?: { model: string; prompt: string; size: string; n: number; images: string[] };
   failure?: Failure;
+  imageCreditsAvailable?: number;
 }
 type Tab = "unsaved" | "saved";
 const tab = ref<Tab>("unsaved");
@@ -187,6 +189,7 @@ async function submitOne(input: Entry["input"] & {}, recipe: Recipe) {
 }
 async function create(entry: Entry) {
   entry.failure = undefined;
+  entry.imageCreditsAvailable = undefined;
   try {
     const c = await generator();
     const task = await c.create(entry.input!, entry.key);
@@ -197,6 +200,7 @@ async function create(entry: Entry) {
   } catch (e) {
     // 伺服器明確拒絕：這把 key 用完了，重試要換新的；連線斷掉才留著同一把重送（同一個任務、只扣一次）。
     entry.failure = failureOf(e, false);
+    if (e instanceof ImageCreditsError) entry.imageCreditsAvailable = e.imageCreditsAvailable;
     if (e instanceof ApiError) entry.key = crypto.randomUUID();
   }
 }
@@ -493,7 +497,12 @@ const nameFor = (entry: Entry, index: number) => defaultName(entry.recipe?.promp
           </p>
 
           <div v-if="tab === 'unsaved' && entry.failure" class="notice notice--error run__error" role="alert">
-            <p>{{ $t("resource.gen.error." + entry.failure) }}</p>
+            <p>
+              {{ $t("resource.gen.error." + entry.failure) }}
+              <template v-if="entry.failure === 'credits' && entry.imageCreditsAvailable !== undefined">
+                {{ $t("resource.gen.error.imageCreditsAvailable", { n: whole(entry.imageCreditsAvailable) }, entry.imageCreditsAvailable) }}
+              </template>
+            </p>
             <div class="run__actions">
               <a v-if="entry.failure === 'credits'" class="btn btn--sm" :href="topUpUrl()" target="_blank" rel="noopener" @click="track('topup_click')">{{ $t("wallet.topUp") }} ↗</a>
               <button v-else-if="entry.failure === 'reauth'" type="button" class="btn btn--sm" @click="reauthorize">{{ $t("resource.gen.reauthAction") }}</button>

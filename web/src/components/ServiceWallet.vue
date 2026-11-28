@@ -237,6 +237,7 @@ watch(() => [props.provider, props.externalId, locale.value], () => load(true), 
           <span v-if="wallet">{{ whole(wallet.score + wallet.tempScore) }}</span>
           <span v-else class="subtle">{{ $t("linked.balanceUnknown") }}</span>
         </p>
+        <p v-if="wallet?.imageCreditsAvailable !== undefined" class="subtle balance__image">{{ $t("wallet.imageCredits", { n: whole(wallet.imageCreditsAvailable) }) }}</p>
         <p v-if="wallet?.tempScore" class="subtle">{{ $t("wallet.temp", { n: whole(wallet.tempScore) }) }}</p>
         <p v-if="wallet?.tempScore && expiries.length" class="subtle">{{ $t("wallet.tempEarliest", { datetime: monthDayTime(expiries[0].expiresAt) }) }}</p>
         <!-- 限時積分明細：每一筆的金額、來源、到期時間（owner 2026-10-19，跟 Console 一致）；預設收起 -->
@@ -376,6 +377,7 @@ watch(() => [props.provider, props.externalId, locale.value], () => load(true), 
 .balance { display: flex; flex-direction: column; gap: 6px; padding: var(--s-5); }
 .balance__num { display: inline-flex; align-items: center; gap: 8px; margin: 2px 0; font-size: 36px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.1; }
 .balance__num svg { width: 22px; height: 22px; fill: var(--gold); filter: drop-shadow(0 1px 2px rgba(242, 176, 30, 0.4)); }
+.balance__image { font-variant-numeric: tabular-nums; }
 .balance__cta { margin-top: auto; }
 .balance .eyebrow, .balance p { margin: 0; }
 
