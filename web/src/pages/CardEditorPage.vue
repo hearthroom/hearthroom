@@ -117,6 +117,9 @@ import {
 } from "@/lib/role-draft";
 import { imageToPng } from "@/lib/export-image";
 import { useWorldbookCounts } from "@/lib/worldbook-counts";
+import { draftQualityLength } from "@/lib/draft-quality-length";
+import { useCardQualityCapability } from "@/lib/card-quality-capability";
+import { qualityCharacters } from "@/lib/card-quality-format";
 import { formatReviewLength } from "@/lib/review-length";
 import { combineReviewLength, personaReviewCount } from "@/lib/draft-review-length";
 import { useOwnReviewLengthExemption } from '@/lib/own-review-length-exemption';
@@ -638,6 +641,28 @@ const reviewCount = computed(() => {
   const length = combineReviewLength(reviewPersona.value, reviewConstant.value);
   return length && { eligible: length.eligible, n: formatReviewLength(length, String(locale.value)) };
 });
+
+/*
+ * 列表上的篇幅：這一版過審上榜後，磚上「篇幅」會寫的數字（同一份算法與取整，lib/draft-quality-length）。
+ * 打字時不每個按鍵重算整本世界書：停手 400ms 再算。世界書還沒載好或載不到時不顯示（會是假的少）。
+ */
+const qualityOn = useCardQualityCapability();
+const listedLength = ref<string | null>(null);
+let listedTimer: ReturnType<typeof setTimeout> | undefined;
+watch(
+  () => [qualityOn.value, wb.loading, wb.loadFailed, draft.value.roleDetailDesc, draft.value.jailbreak, draft.value.roleOutputContract, draft.value.talkExample, draft.value.roleWelcome, draft.value.alternates, draft.value.prologue, draft.value.world, wb.reviewEntries()] as const,
+  () => {
+    clearTimeout(listedTimer);
+    if (!qualityOn.value || wb.loading || wb.loadFailed) { listedLength.value = null; return; }
+    listedTimer = setTimeout(() => {
+      const total = draftQualityLength(draft.value, wb.reviewEntries());
+      listedLength.value = total === null ? null : qualityCharacters(total);
+    }, 400);
+  },
+  { deep: true, immediate: true },
+);
+onBeforeUnmount(() => clearTimeout(listedTimer));
+watch(locale, () => { if (listedLength.value !== null) { const total = draftQualityLength(draft.value, wb.reviewEntries()); listedLength.value = total === null ? null : qualityCharacters(total); } });
 
 /** 各分區缺哪幾個必填。導覽上的紅點與發布前的清單都看這個。 */
 const REQUIRED_OF = computed<Partial<Record<Section, readonly string[]>>>(() => ({
@@ -2353,6 +2378,10 @@ async function exportCard(format: "png" | "json") {
               {{ reviewCount.eligible ? $t("reviewLength.eligible") : $t("reviewLength.remaining", reviewCount.n) }}
             </span>
           </template>
+          <template v-if="listedLength && reviewCount">
+            <span class="topbar__sep" aria-hidden="true">·</span>
+            <span class="topbar__listed" :title="$t('quality.lengthNote')">{{ $t("quality.editor.label") }} {{ listedLength }}</span>
+          </template>
         </div>
       </div>
       </Teleport>
@@ -2384,6 +2413,10 @@ async function exportCard(format: "png" | "json") {
                 <span v-if="reviewCount.eligible" class="review-count__check" aria-hidden="true">✓</span>
                 {{ reviewCount.eligible ? $t("reviewLength.eligible") : $t("reviewLength.remaining", reviewCount.n) }}
               </span>
+            </template>
+            <template v-if="listedLength && reviewCount">
+              <span class="topbar__sep" aria-hidden="true">·</span>
+              <span class="topbar__listed" :title="$t('quality.lengthNote')">{{ $t("quality.editor.label") }} {{ listedLength }}</span>
             </template>
           </div>
         </template>

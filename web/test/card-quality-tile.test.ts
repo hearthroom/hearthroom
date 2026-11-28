@@ -1,0 +1,98 @@
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { createApp, h, nextTick, ref, type App } from "vue";
+import { createMemoryHistory, createRouter } from "vue-router";
+import { i18n } from "../src/lib/i18n";
+import type { CommunityCard } from "../src/lib/types";
+import type { CardQualityDetail } from "../../shared/card-quality";
+
+const f = vi.hoisted(() => ({ enabled: null as unknown as { value: boolean }, quality: vi.fn() }));
+vi.mock("../src/lib/card-quality-capability", async () => {
+  const { ref } = await import("vue");
+  f.enabled = ref(true);
+  return { useCardQualityCapability: () => f.enabled };
+});
+vi.mock("../src/lib/api", () => ({ fetchCardQuality: f.quality }));
+import CardGrid from "../src/components/CardGrid.vue";
+import CardPreview from "../src/components/CardPreview.vue";
+import { closeCardPreview } from "../src/lib/card-preview";
+
+const card = (num: number, extra: Partial<CommunityCard> = {}) => ({
+  id: String(num), num, name: `合成卡 ${num}`, summary: "合成簡介", tags: ["合成"], zone: "zh", avatarUrl: null,
+  author: { handle: null, name: "合成作者", avatar: "" }, talkNum: 0, trending: 0, updatedAt: Date.now() - 3_600_000 * 5, ...extra,
+} as CommunityCard);
+const detail: CardQualityDetail = {
+  length: { total: 23000, setting: 3000, worldbook: { entries: 18, characters: 19000 }, openings: { count: 3, characters: 1000 }, presentation: { openingPage: true, displayRules: 2, panel: false } },
+  deepPlay: { reached: 164, players: 200, turns: 5, medianTurns: 14 },
+  rating: { average: 4.62, count: 30 },
+  comments: 132,
+};
+
+let app: App, root: HTMLElement;
+const settle = async () => { await nextTick(); await new Promise((r) => setTimeout(r, 0)); await nextTick(); };
+beforeEach(() => { f.enabled.value = true; f.quality.mockReset(); });
+afterEach(() => { closeCardPreview(); app?.unmount(); root?.remove(); });
+async function mount(cards: CommunityCard[]) {
+  root = document.createElement("div"); document.body.append(root);
+  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/:p(.*)*", component: { template: "<div />" } }] });
+  await router.push("/");
+  app = createApp({ render: () => [h(CardGrid, { cards }), h(CardPreview)] }).use(router).use(i18n);
+  app.mount(root); await settle();
+}
+// 讀屏念的整句（畫面上是同一行的說明與數字）
+const lines = () => [...root.querySelectorAll(".card__quality")].map((p) => p.querySelector(".sr-only")?.textContent?.trim() ?? "");
+
+it("adds one data line to every tile: length before the threshold, deep play after, blank without numbers", async () => {
+  await mount([
+    card(1, { qualitySignal: { lengthCharacters: 14000, deepPlay: null } }),
+    card(2, { qualitySignal: { lengthCharacters: 23000, deepPlay: { reached: 164, players: 200, turns: 5 } } }),
+    card(3, { qualitySignal: null }),
+  ]);
+  expect(lines()).toEqual(["篇幅 1.4 萬字", "聊滿 5 回合 164/200", ""]);
+  expect(root.querySelectorAll(".card__quality")).toHaveLength(3);
+  expect(root.querySelectorAll(".card__preview")).toHaveLength(3);
+});
+
+it("keeps the old tile when the server has not turned the feature on", async () => {
+  f.enabled.value = false;
+  await mount([card(1, { qualitySignal: { lengthCharacters: 14000, deepPlay: null } })]);
+  expect(root.querySelector(".card__quality")).toBeNull();
+  expect(root.querySelector(".card__preview")).toBeNull();
+  expect(root.querySelector(".card__corner--quality")).toBeNull();
+});
+
+it("opens the preview from the cover button, shows the data, and returns focus on Escape", async () => {
+  f.quality.mockResolvedValue(detail);
+  await mount([card(7, { featured: true, qualitySignal: { lengthCharacters: 23000, deepPlay: { reached: 164, players: 200, turns: 5 } } })]);
+  const button = root.querySelector<HTMLButtonElement>(".card__preview")!;
+  expect(button.getAttribute("aria-label")).toBe("預覽「合成卡 7」");
+  // 底列：精選槽、時間、預覽鈕都在同一列（畫面順序由 CSS order 排成時間、精選、預覽鈕）
+  expect([...root.querySelector(".card__corner")!.children].map((e) => e.className.split(" ")[0])).toEqual(["card__feat-slot", "card__updated", "card__preview"]);
+  button.focus(); button.click(); await settle();
+  const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
+  expect(dialog).not.toBeNull();
+  expect(f.quality).toHaveBeenCalledWith("7");
+  expect(root.querySelector(".card")!.classList.contains("card--previewing")).toBe(true);
+  const text = dialog.textContent ?? "";
+  for (const s of ["164/200", "82%", "聊滿 5 回合", "200 位玩家中，164 位聊滿 5 回合", "4.6", "132", "14 回合", "2.3 萬字", "3,000 字", "18 條・1.9 萬字", "3 個・1,000 字", "開場網頁", "顯示規則 2 條", "進入卡片"]) expect(text).toContain(s);
+  expect(text).not.toContain("面板");
+  expect(dialog.querySelector('a[href="/cards/7"]')).not.toBeNull();
+  expect(document.activeElement?.getAttribute("aria-label")).toBe("關閉預覽");
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  await settle();
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(document.activeElement).toBe(button);
+});
+
+it("shows a retry line when the data does not load, and keeps the way into the card", async () => {
+  f.quality.mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce({ ...detail, deepPlay: null, rating: null, comments: 0 });
+  await mount([card(8, { qualitySignal: { lengthCharacters: 23000, deepPlay: null } })]);
+  root.querySelector<HTMLButtonElement>(".card__preview")!.click(); await settle();
+  const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
+  expect(dialog.textContent).toContain("數據載入不了");
+  expect(dialog.querySelector('a[href="/cards/8"]')).not.toBeNull();
+  [...dialog.querySelectorAll("button")].find((b) => b.textContent?.includes("重試"))!.click(); await settle();
+  expect(dialog.textContent).not.toContain("數據載入不了");
+  // 未滿門檻、沒有評分與留言：整塊玩家數據不出現
+  expect(dialog.textContent).not.toContain("玩家數據");
+  expect(dialog.textContent).toContain("2.3 萬字");
+});
