@@ -1,5 +1,10 @@
 import { QUALITY_MIN_PLAYERS, QUALITY_TURNS, type CardQualityDetail, type CardQualityLength, type CardQualitySignal } from '../shared/card-quality';
 
+// The scheduled sync rechecks cohorts. Stop serving a last-good value after
+// six hours if its page cannot be verified, so an old cohort cannot persist.
+const MAX_PLAY_SNAPSHOT_AGE_MS = 6 * 60 * 60 * 1000;
+export const FRESH_PLAY_SNAPSHOT = `qp.verified_at > unixepoch('now') * 1000 - ${MAX_PLAY_SNAPSHOT_AGE_MS}`;
+
 export interface QualitySignalRow {
   quality_chars?: number | null;
   quality_players?: number | null;
@@ -34,10 +39,10 @@ type LengthRow = {
 export async function readCardQuality(
   db: D1Database, cardId: string, approvedVersion: string | null,
 ): Promise<Pick<CardQualityDetail, 'length' | 'deepPlay'>> {
-  const row = await db.prepare(`SELECT q.*, p.players, p.reached, p.median_turns
+  const row = await db.prepare(`SELECT q.*, qp.players, qp.reached, qp.median_turns
     FROM cards c
     LEFT JOIN card_quality_lengths q ON q.version_id=c.approved_version_id
-    LEFT JOIN card_quality_play p ON p.card_id=c.id
+    LEFT JOIN card_quality_play qp ON qp.card_id=c.id AND ${FRESH_PLAY_SNAPSHOT}
     WHERE c.id=? AND c.status='approved' AND c.public_blocked=0 AND c.approved_version_id IS ?`)
     .bind(cardId, approvedVersion).first<LengthRow>();
   if (!row) return { length: null, deepPlay: null };
