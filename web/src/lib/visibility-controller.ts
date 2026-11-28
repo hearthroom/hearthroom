@@ -15,22 +15,31 @@ export function createVisibilityController(options:{id:string;provider:ProviderI
  function clear(){command=null;try{localStorage.removeItem(key);}catch{}}
  function remember(next:VisibilityCommand){command=next;try{localStorage.setItem(key,JSON.stringify(next));}catch{}}
  async function latest(t:string){const result=await fetchWorkVisibility(options.id,t,options.provider);if(!result.workVisibility)throw new Error('missing projection');value.value=result.workVisibility;return result.pendingCancellation;}
- async function check():Promise<void>{
+ async function check(followCurrent=true):Promise<void>{
   if(!command)return load();
   phase.value='checking';message.value='';
   try {
-   const t=await token();let result:VisibilityResult;
+   const t=await token();let result:VisibilityResult|undefined;let notAdmitted=false;
    try {result=await fetchVisibilityOperation(options.id,command.operationId,t,options.provider);}
    catch(e){
     if(e instanceof VisibilityError&&e.result.operation?.state==='conflict')result=e.result;
-    else {await latest(t);phase.value=e instanceof VisibilityError&&e.status===404&&e.code==='visibility_operation_not_found'&&canResume()?'retryable':'unknown';return;}
+    else if(e instanceof VisibilityError&&e.status===404&&e.code==='visibility_operation_not_found')notAdmitted=true;
+    else {await latest(t);phase.value='unknown';return;}
    }
-   if(result.operation?.operationId!==command.operationId)throw new Error('invalid receipt');
+   const operation=result?.operation;
+   if(!notAdmitted&&operation?.operationId!==command.operationId)throw new Error('invalid receipt');
    // A receipt can describe an older command. Always read current policy before rendering completion.
-   await latest(t);
-   if((result.operation?.state==='complete'||result.operation?.state==='conflict')&&value.value?.syncState==='complete'){
-    message.value=result.operation.state==='conflict'?(isPublicationRefusal(result.error)?result.error!:'conflict'):'';clear();phase.value='ready';
-   }else phase.value=result.operation.state==='pending'&&result.operation.retryable===true&&command.action==='cancel_review'?'retryable':'pending';
+   const current=await latest(t);
+   const settled=operation?.state==='complete'||operation?.state==='conflict';
+   if((settled||notAdmitted)&&current&&current.operationId!==command.operationId){
+    remember(current);
+    if(followCurrent)return check(false);
+    phase.value='pending';return;
+   }
+   if(notAdmitted){phase.value=canResume()?'retryable':'unknown';return;}
+   if(settled&&value.value?.syncState==='complete'){
+    message.value=operation?.state==='conflict'?(isPublicationRefusal(result?.error)?result!.error!:'conflict'):'';clear();phase.value='ready';
+   }else phase.value=operation?.state==='pending'&&operation.retryable===true&&command.action==='cancel_review'?'retryable':'pending';
   }catch{phase.value='unknown';}
  }
  async function load():Promise<void>{
@@ -46,7 +55,12 @@ export function createVisibilityController(options:{id:string;provider:ProviderI
   const action=c.action==='cancel_review'?'cancel_review':c.targetAccess==='public'?'restore_public':c.targetAccess==='private'?'set_private':'set_unlisted';
   return v.actions.includes(action);
  }
- async function resume(){if(phase.value!=='retryable'||!command)return;await check();if(phase.value==='retryable'&&command)await transmit(command);}
+ async function resume(){
+  const requested=command;
+  if(phase.value!=='retryable'||!requested)return;
+  await check();
+  if(phase.value==='retryable'&&command?.operationId===requested.operationId)await transmit(requested);
+ }
  async function send(next:VisibilityCommand){
   if(command||phase.value!=='ready'||!value.value||value.value.syncState!=='complete')return;
   remember(next);await transmit(next);

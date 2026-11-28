@@ -50,6 +50,37 @@ it('lets the author resend only the saved cancellation after Provider reports no
  expect(mocks.change.mock.calls[1][3]).toEqual(original);
  expect(reopened.phase.value).toBe('ready');
 });
+it('replaces a settled browser key with the current pending cancellation',async()=>{
+ const old={operationId:'previous',action:'cancel_review',expectedPolicyRevision:'1',expectedApprovalRevision:'0'};
+ const current={...old,operationId:'current',expectedPolicyRevision:'2'};
+ localStorage.setItem('hr.visibility.v1:harbor:22:source',JSON.stringify(old));
+ mocks.operation
+  .mockResolvedValueOnce({operation:{operationId:old.operationId,state:'complete'}})
+  .mockResolvedValue({operation:{operationId:current.operationId,state:'pending',retryable:true}});
+ mocks.read.mockResolvedValue({workVisibility:policy({syncState:'changing'}),pendingCancellation:current});
+ const reopened=setup();await reopened.load();
+ expect(reopened.phase.value).toBe('retryable');
+ expect(mocks.operation.mock.calls.map(call=>call[1])).toEqual([old.operationId,current.operationId]);
+ expect(mocks.change).not.toHaveBeenCalled();
+});
+it('requires another click if the current cancellation changes while checking a retry',async()=>{
+ const old={operationId:'previous',action:'cancel_review',expectedPolicyRevision:'1',expectedApprovalRevision:'0'};
+ const current={...old,operationId:'current',expectedPolicyRevision:'2'};
+ localStorage.setItem('hr.visibility.v1:harbor:22:source',JSON.stringify(old));
+ mocks.operation.mockResolvedValueOnce({operation:{operationId:old.operationId,state:'pending',retryable:true}});
+ mocks.read.mockResolvedValue({workVisibility:policy({syncState:'changing'})});
+ const reopened=setup();await reopened.load();
+ expect(reopened.phase.value).toBe('retryable');
+ mocks.operation
+  .mockRejectedValueOnce(new VisibilityError(404,{error:'visibility_operation_not_found'}))
+  .mockResolvedValue({operation:{operationId:current.operationId,state:'pending',retryable:true}});
+ mocks.read.mockResolvedValue({workVisibility:policy({syncState:'changing'}),pendingCancellation:current});
+ await reopened.resume();
+ expect(reopened.phase.value).toBe('retryable');
+ expect(mocks.change).not.toHaveBeenCalled();
+ await reopened.resume();
+ expect(mocks.change.mock.calls[0][3]).toEqual(current);
+});
 it('lost response and failed readback remain unknown and cannot issue another mutation',async()=>{
  mocks.change.mockRejectedValue(new Error('network'));mocks.operation.mockRejectedValue(new Error('network'));
  const c=setup();await c.load();await c.apply('unlisted');await c.apply('private');
