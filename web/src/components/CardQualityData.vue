@@ -9,7 +9,6 @@ import { useI18n } from "vue-i18n";
 import type { CardQualityDetail } from "../../../shared/card-quality";
 import { qualityCharacters, qualityRate } from "@/lib/card-quality-format";
 import { QUALITY_TURNS } from "../../../shared/card-quality";
-import WorkshopIcon from "./workshop/WorkshopIcon.vue";
 
 const props = defineProps<{ detail: CardQualityDetail | null; loading?: boolean; failed?: boolean }>();
 const emit = defineEmits<{ retry: [] }>();
@@ -74,7 +73,7 @@ const hasPlayers = computed(() => Boolean(deep.value) || stats.value.length > 0)
             <span class="cq__deep-label">{{ $t("quality.retention.label") }}</span>
             <span class="cq__deep-num">{{ qualityRate(deep.rate) }}</span>
             <button type="button" class="cq__help" :aria-label="$t('quality.retention.help')" :aria-expanded="helpOpen" :aria-controls="helpId" @click="helpOpen = !helpOpen">
-              <WorkshopIcon name="info" />
+              <span class="cq__help-mark" aria-hidden="true">?</span>
             </button>
           </div>
           <div v-show="helpOpen" :id="helpId" class="cq__help-body">
@@ -128,7 +127,11 @@ const hasPlayers = computed(() => Boolean(deep.value) || stats.value.length > 0)
   background: none; color: var(--text-3); cursor: pointer;
 }
 .cq__help:hover, .cq__help[aria-expanded="true"] { color: var(--accent-text); }
-.cq__help svg { width: 16px; height: 16px; }
+.cq__help-mark {
+  display: grid; place-items: center;
+  width: 16px; height: 16px; border: 1.5px solid currentColor; border-radius: var(--r-pill);
+  font-size: 11px; line-height: 1; font-weight: 600;
+}
 .cq__help-body { display: grid; gap: 4px; margin-top: var(--s-1); font-size: 13px; line-height: 1.6; color: var(--text-2); }
 .cq__help-body p { margin: 0; }
 .cq__help-rules { font-size: 12px; color: var(--text-3); }
