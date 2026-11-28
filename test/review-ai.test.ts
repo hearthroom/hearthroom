@@ -596,6 +596,18 @@ describe('判準 v4 的讀卡輸入', () => {
     expect(input.stats.openingRuleHits).toBe(3);
   });
 
+  it('需要播放器的繁簡變體或隨機選擇時，開場只標示部分覆蓋', () => {
+    const input = aiCardInput({
+      greetings: { welcome: '【状况】', alternates: ['[entry]'] },
+      authorAsset: { rules: [
+        { find: '【狀況】', replace: '<aside>狀態欄</aside>' },
+        { find: '[entry]', replace: '<p>{{random::上樓::下樓}}</p>' },
+      ] },
+    }, { tags: [], fandom: '' }, { applyRules: true });
+    expect(input.card.openings.presentation.welcome?.coverage).toBe('partial');
+    expect(input.card.openings.presentation.alternates[0]?.coverage).toBe('partial');
+  });
+
   it('世界書目錄（常駐／召回、是否在卡裡提到）、顯示規則摘要、開場選項；開場被規則替換時給套用後的純文字', () => {
     const input = aiCardInput({
       document: { roleDetailDesc: '她是車站站務員，常去月台。' },

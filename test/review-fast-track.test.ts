@@ -92,7 +92,30 @@ describe('自動核准', () => {
     } finally { Reflect.deleteProperty(env, 'REVIEW_AI_AUTO_APPROVE_CRITERIA'); }
   });
 
-  it('託管新卡在 Provider 確認公開時才計入發布', async () => {
+  it.each(['first rejection', 'revoked update'])('已有人類否決的版本改稿重送仍需人審（%s）', async (history) => {
+    if (history === 'first rejection') {
+      await humanDecide(await submit(), 'reject');
+    } else {
+      const { update } = await liveCardWithUpdate();
+      await suggest(update);
+      expect(await statusOf(update)).toBe('approved');
+      const correction = await post(`/v1/review/${update}/correction`, 'mgr', {
+        operationId: crypto.randomUUID(), note: '這次更新的開場還需要調整。',
+      });
+      expect(correction.status).toBe(200);
+    }
+    rolesOnMainSite({ roleId: 'role-1', authorNumId: 10001, name: 'Revision after human decision' });
+    const resubmission = await submit();
+    Object.assign(env, { REVIEW_AI_AUTO_APPROVE_CRITERIA: 'v1' });
+    try {
+      expect((await suggest(resubmission)).status).toBe(200);
+      expect(await statusOf(resubmission)).toBe('pending');
+      expect(await env.DB.prepare('SELECT 1 FROM review_stamps WHERE submission_id=?').bind(resubmission).first()).toBeNull();
+      expect(await env.DB.prepare('SELECT verdict FROM review_ai_suggestions WHERE submission_id=?').bind(resubmission).first()).toEqual({ verdict: 'pass' });
+    } finally { Reflect.deleteProperty(env, 'REVIEW_AI_AUTO_APPROVE_CRITERIA'); }
+  });
+
+  it.each(['prepared', 'missing'])('託管新卡需要許可並在 Provider 確認公開後才計入發布（%s）', async (permitState) => {
     const first = await submit();
     expect((await post('/v1/cards/role-1/edit', 'author')).status).toBe(200);
     const work = (await env.DB.prepare("SELECT id, member_id FROM works WHERE source_role_id='role-1'").first<{id: string; member_id: string}>())!;
@@ -108,9 +131,19 @@ describe('自動核准', () => {
       await enrollWorkAccess(env, { memberId: work.member_id, roleId: 'role-1', operationId: crypto.randomUUID(), access: 'private', token: 'author' });
       const id = await submit();
       expect(await statusOf(first)).toBe('superseded');
+      if (permitState === 'missing') {
+        await env.DB.prepare('DELETE FROM work_publication_permits WHERE version_id=(SELECT version_id FROM hosting_versions WHERE submission_id=?)').bind(id).run();
+      }
       expect((await suggest(id)).status).toBe(200);
       expect(await statusOf(id)).toBe('pending');
-      expect(await env.DB.prepare('SELECT 1 FROM work_review_decisions WHERE submission_id=?').bind(id).first()).not.toBeNull();
+      const decision = await env.DB.prepare('SELECT 1 FROM work_review_decisions WHERE submission_id=?').bind(id).first();
+      if (permitState === 'missing') {
+        expect(decision).toBeNull();
+        expect(commit).not.toHaveBeenCalled();
+        expect(await opsMetrics(env.DB)).toContain('hearthroom_review_ai_auto_approve_total{kind="new_card",outcome="manual"} 1');
+        return;
+      }
+      expect(decision).not.toBeNull();
       expect(await opsMetrics(env.DB)).not.toContain('hearthroom_review_ai_auto_approve_total{kind="new_card",outcome="published"}');
       const permit = (await env.DB.prepare('SELECT p.operation_id FROM work_publication_permits p JOIN hosting_versions v ON v.version_id=p.version_id WHERE v.submission_id=?')
         .bind(id).first<{operation_id: string}>())!;

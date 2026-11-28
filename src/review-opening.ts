@@ -81,9 +81,11 @@ export function openingRules(rules: OpeningRule[]) {
     } catch { /* Unsupported patterns leave the evidence partial. */ }
   }
   const skipped = applicable.length - compiled.length;
+  // The play surface may match locale-specific Han variants.
+  const localeSensitive = applicable.some((rule) => /\p{Script=Han}/u.test(String(rule.find)));
   return (input: string, names: { char: string; user: string }) => {
     let current = input.slice(0, MAX_GREETING);
-    let incomplete = current.length !== input.length || skipped > 0;
+    let incomplete = current.length !== input.length || skipped > 0 || localeSensitive;
     let hits = 0;
     for (const { regex, replace, sticky, trims } of compiled) {
       const matcher = regex.matcher(current);
@@ -111,6 +113,7 @@ export function openingRules(rules: OpeningRule[]) {
         end = nextEnd;
       }
       if (!count || count > MAX_MATCHES || length + current.length - end > MAX_MARKUP) continue;
+      if (/\{\{random:{1,2}/i.test(replace)) incomplete = true;
       hits += count;
       current = parts.join("") + current.slice(end);
     }
