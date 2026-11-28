@@ -2756,5 +2756,8 @@
   "d907370b8c6c1": "有首屏网页时读取完整内容的位置：相对于 API 源的 API 路径（`/open/v1/role/author-asset/opening?roleId=…`），以相同的 bearer token 读取。没有首屏网页时，以及发行方审核读取时，为 `\"\"`。",
   "d4ffaae2ea8cc": "仅限发行方审核读取（`/hosting/revisions/{roleId}/review`）：`openingPage` 只含较大网页的前 524288 字节（在 UTF-8 字符边界截断）时为 `true`；`openingPageBytes` 是完整大小。",
   "da2345ebd11f7": "`true` 会移除首屏网页，不论大小。不可与非空的 `openingPage` 同时使用（`invalid_param`）。",
-  "db0b8e5d702e8": "首屏网页 HTML，最多 100000000 个 UTF-8 字节（100 MB）（`validate_reject`，reason 为 `openingPage`）。保留与清除规则同 `AuthorAssetSaveRequest.openingPage`。整个试玩请求体上限为 48 MiB；更大的网页之后再用 `PUT /open/v1/role/{roleId}/opening-page` 推送。"
+  "db0b8e5d702e8": "首屏网页 HTML，最多 100000000 个 UTF-8 字节（100 MB）（`validate_reject`，reason 为 `openingPage`）。保留与清除规则同 `AuthorAssetSaveRequest.openingPage`。整个试玩请求体上限为 48 MiB；更大的网页之后再用 `PUT /open/v1/role/{roleId}/opening-page` 推送。",
+  "2530978c25cae": "读取卡片数据",
+  "2571eff8cdf40": "沿用卡片的可见与成人内容权限。返回审核通过版本取整后的字数、呈现方式统计与公开玩家数据。未满 20 位合格玩家时隐藏深度游玩数据，未满 5 份评分时隐藏评分。",
+  "d53c1816e6b14": "字数为 0 代表不到 1,000 字。null 代表当前无此数据。"
 }

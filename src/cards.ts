@@ -11,13 +11,16 @@ import {managedWork} from './work-policy';
 import {fenceManagedWork} from './work-fence';
 import {COVER_HONORS} from './rank-honors';
 import {NOV_20_COMPENSATION_DEPLOYED_AT,NOV_20_DAILY_COHORT_START,NOV_20_OUTAGE_BOARD_SINCE,NOV_20_OUTAGE_START,RANK_DURATION} from './rank-settlement';
+import { cardQualitySignal, type QualitySignalRow } from './card-quality';
 import type {RankHonor} from '../shared/rank-honors';
 
-export interface CardRow extends CoverFlags {
+export interface CardRow extends CoverFlags, QualitySignalRow {
   honors?:string;
   update_kind?: 'minor'|'major';
   update_note?: string;
   favorite_count?: number;
+  comment_revision?: string;
+  score_revision?: string;
   updated_at?: number;
   approved_version_id: string | null;
   approved_hosted_role_id: string | null;
@@ -98,7 +101,10 @@ const LATEST_ANNOUNCED_UPDATE = `(SELECT MAX(e.published_at) FROM works w JOIN c
 const FEED_EVENT_AT = `MAX(c.registered_at, COALESCE(${LATEST_ANNOUNCED_UPDATE}, 0))`;
 
 const CARD_METADATA = "cn.cover_author_sensitive, cn.cover_review_sensitive, (SELECT update_kind FROM hosting_versions WHERE version_id=c.approved_version_id) AS update_kind, (SELECT update_note FROM hosting_versions WHERE version_id=c.approved_version_id) AS update_note, CAST(c.id AS TEXT) AS id, " + UPDATED_AT + " AS updated_at, fe.labels AS fandom_labels, am.handle AS author_handle, am.is_official AS author_official, am.tip_links AS author_tip_links, am.display_name AS community_name, CASE WHEN am.display_name IS NOT NULL THEN am.avatar_url END AS community_avatar, cn.num AS num, (SELECT COUNT(*) FROM member_favorites mf WHERE mf.card_id=c.id) AS favorite_count";
-const CARD_COLUMNS = COVER_HONORS + " AS honors, c.*, " + CARD_METADATA;
+const QUALITY_JOINS = `LEFT JOIN card_quality_lengths ql ON ql.version_id=c.approved_version_id
+  LEFT JOIN card_quality_play qp ON qp.card_id=c.id`;
+const QUALITY_METADATA = 'ql.total_chars AS quality_chars, qp.players AS quality_players, qp.reached AS quality_reached';
+const CARD_COLUMNS = COVER_HONORS + " AS honors, c.*, " + CARD_METADATA + ", " + QUALITY_METADATA;
 // Capture card content and the visibility binding together, without presentation joins.
 const LIST_CARD_COLUMNS = "CAST(c.id AS TEXT) AS id, " + [
   'provider','source_role_id','approved_version_id','approved_hosted_role_id','zone',
@@ -126,7 +132,7 @@ export async function decorateCardRows(db:D1Database,rows:CardRow[]):Promise<Car
    json_extract(value,'$.author_num_id') AS author_num_id,json_extract(value,'$.fandom_qid') AS fandom_qid,
    json_extract(value,'$.approved_version_id') AS approved_version_id,json_extract(value,'$.registered_at') AS registered_at
   FROM json_each(?)
- ) SELECT ${COVER_HONORS} AS honors, ${CARD_METADATA} FROM c ${AUTHOR_JOIN}`)
+ ) SELECT ${COVER_HONORS} AS honors, ${CARD_METADATA}, ${QUALITY_METADATA} FROM c ${AUTHOR_JOIN} ${QUALITY_JOINS}`)
   .bind(JSON.stringify(captured)).all<Partial<CardRow>&{id:string}>();
  const byId=new Map(metadata.results.map(row=>[row.id,row]));
  return rows.map(row=>({...row,...byId.get(row.id)}));
@@ -135,7 +141,7 @@ export async function decorateCardRows(db:D1Database,rows:CardRow[]):Promise<Car
 /** Presentation rows only; callers must apply current access before returning. */
 export async function cardsByIds(db:D1Database,ids:string[]):Promise<CardRow[]>{
  if(!ids.length)return [];
- return (await db.prepare(`SELECT ${CARD_COLUMNS} FROM cards c ${AUTHOR_JOIN} WHERE c.id IN(SELECT value FROM json_each(?))`).bind(JSON.stringify(ids)).all<CardRow>()).results;
+ return (await db.prepare(`SELECT ${CARD_COLUMNS} FROM cards c ${AUTHOR_JOIN} ${QUALITY_JOINS} WHERE c.id IN(SELECT value FROM json_each(?))`).bind(JSON.stringify(ids)).all<CardRow>()).results;
 }
 
 /** 卡號長什麼樣：純數字。網址與搜尋框裡看到這種形狀就當卡號查，其餘當上游的卡片 ID。 */
@@ -160,11 +166,12 @@ const listed = (allowNsfw:boolean,alias='c') => `${alias}.status='approved' AND 
  ${allowNsfw?'':`AND ${alias}.${NOT_ADULT}`}`;
 
 /** 回應按請求語言解析好名稱與簡介，同時附上原始多語，讓客戶端能自己切換。 */
-export function toCard(row: CardRow, lang: string) {
+export function toCard(row: CardRow, lang: string, includeQuality = false) {
   const names = JSON.parse(row.names) as Localized;
   const summaries = JSON.parse(row.summaries) as Localized;
   return {
     id: String(row.id),
+    ...(includeQuality && row.status === 'approved' ? { qualitySignal: cardQualitySignal(row) } : {}),
     roleId: row.approved_hosted_role_id ?? row.source_role_id,
     sourceRoleId: row.source_role_id,
     /** 本站卡號：短、能唸出來、能在不准貼連結的地方報。撤銷再登記不換號（card_numbers）。 */
@@ -665,7 +672,7 @@ async function listCardRows<T>(db:D1Database,opts:ListOptions,columns:string){
     }
     // 多撈一筆就知道還有沒有下一頁，不必數完整組結果。
     return db
-      .prepare(`SELECT ${columns} FROM ${from} ${AUTHOR_JOIN} WHERE ${whereSql} ORDER BY ${orderBy} LIMIT ? OFFSET ?`)
+      .prepare(`SELECT ${columns} FROM ${from} ${AUTHOR_JOIN} ${columns === CARD_COLUMNS ? QUALITY_JOINS : ""} WHERE ${whereSql} ORDER BY ${orderBy} LIMIT ? OFFSET ?`)
       .bind(...binds, ...(search?.binds ?? []), ...(authorHeat ? [opts.authorMemberId, opts.authorMemberId] : []), ...orderBinds, opts.limit + 1, opts.offset)
       .all<T>();
   };
@@ -798,7 +805,7 @@ const CARD_ID_MATCHES = `SELECT id FROM cards WHERE id = ?1
 export async function getCard(db: D1Database, id: string, provider: ProviderId = "harbor") {
   if (CARD_NUMBER.test(id)) {
     return await db
-      .prepare(`SELECT ${CARD_COLUMNS} FROM cards c ${AUTHOR_JOIN} WHERE c.id = ?`)
+      .prepare(`SELECT ${CARD_COLUMNS} FROM cards c ${AUTHOR_JOIN} ${QUALITY_JOINS} WHERE c.id = ?`)
       .bind(Number(id))
       .first<CardRow>();
   }
@@ -807,7 +814,7 @@ export async function getCard(db: D1Database, id: string, provider: ProviderId =
     .prepare(`SELECT ${CARD_COLUMNS} FROM (
       ${CARD_ID_MATCHES}
       UNION SELECT card_id FROM hosting_versions WHERE hosted_revision_id = ?1 AND state = 'approved'
-    ) matches CROSS JOIN cards c ON c.id = matches.id ${AUTHOR_JOIN}
+    ) matches CROSS JOIN cards c ON c.id = matches.id ${AUTHOR_JOIN} ${QUALITY_JOINS}
     WHERE c.provider = ?2
     ORDER BY c.zone, c.registered_at DESC, c.id LIMIT 1`)
     .bind(id, provider)
@@ -826,7 +833,7 @@ export async function getPublicCard(db: D1Database, id: string, provider: Provid
       ${CARD_ID_MATCHES}
       UNION SELECT v.card_id FROM hosting_replicas r JOIN hosting_versions v ON v.version_id = r.version_id
       WHERE r.hosted_revision_id = ?1 AND r.state = 'ready' AND v.state = 'approved'
-    ) matches CROSS JOIN cards c ON c.id = matches.id ${AUTHOR_JOIN}
+    ) matches CROSS JOIN cards c ON c.id = matches.id ${AUTHOR_JOIN} ${QUALITY_JOINS}
     ORDER BY (c.id = ?1) DESC, (c.provider = ?2) DESC, c.id LIMIT 1`)
     .bind(id, provider)
     .first<CardRow>();

@@ -122,7 +122,7 @@ for (const kind of ["favorites", "feed"] as const) {
         if((row.rating==='R'||current.access==='unlisted')&&!allowAdult)continue;
         const visible=current.access==='unlisted'?await unlistedCardRow(c.env,row):row;
         if((JSON.parse(visible.tags) as string[]).some(tag=>hiddenNames.has(tag)))continue;
-        items.push(toCard(visible,c.req.query('lang')||'zh-Hant'));
+        items.push(toCard(visible,c.req.query('lang')||'zh-Hant',true));
       }
       return c.json({items,hasNext:favorites.results.length>limit,total:null,offset,limit});
     }

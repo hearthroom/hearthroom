@@ -2756,5 +2756,8 @@
   "d907370b8c6c1": "Where to read the full opening page when there is one: an API path relative to the API origin (`/open/v1/role/author-asset/opening?roleId=…`), read with the same bearer token. `\"\"` when there is no opening page, and on the issuer review read.",
   "d4ffaae2ea8cc": "Issuer review read only (`/hosting/revisions/{roleId}/review`): `true` when `openingPage` holds only the first 524288 bytes (cut on a UTF-8 character boundary) of a larger page; `openingPageBytes` is the full size.",
   "da2345ebd11f7": "`true` removes the opening page whatever its size. Must not be combined with a non-empty `openingPage` (`invalid_param`).",
-  "db0b8e5d702e8": "Opening page HTML, at most 100000000 UTF-8 bytes (100 MB) (`validate_reject` reason `openingPage`). Same keep and clear rules as `AuthorAssetSaveRequest.openingPage`. The whole trial body is limited to 48 MiB; push a larger page afterwards with `PUT /open/v1/role/{roleId}/opening-page`."
+  "db0b8e5d702e8": "Opening page HTML, at most 100000000 UTF-8 bytes (100 MB) (`validate_reject` reason `openingPage`). Same keep and clear rules as `AuthorAssetSaveRequest.openingPage`. The whole trial body is limited to 48 MiB; push a larger page afterwards with `PUT /open/v1/role/{roleId}/opening-page`.",
+  "2530978c25cae": "Read card statistics",
+  "2571eff8cdf40": "Uses the card visibility and adult-content permissions. Returns rounded character counts for the approved version, presentation counts, and public player statistics. Deep play is hidden below 20 qualified players. Rating is hidden below 5 ratings.",
+  "d53c1816e6b14": "Zero characters means fewer than 1,000. A null value means the statistic is unavailable."
 }

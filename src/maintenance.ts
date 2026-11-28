@@ -7,6 +7,7 @@ export { MAINTENANCE_KEY };
 
 class InvalidMaintenanceState extends Error {}
 export const PUBLIC_CANDIDATE_PROJECTION_KEY = 'public_candidate_projection_cache';
+const CARD_QUALITY_UI_KEY = 'card_quality_ui';
 
 function parseStoredMaintenance(value?: string | null): MaintenanceState {
   if (value === null || value === undefined) return maintenanceOff();
@@ -27,10 +28,15 @@ export async function readMaintenance(db: D1Database): Promise<MaintenanceState>
 async function readAdmission(db: D1Database) {
   const primary = typeof db.withSession === 'function' ? db.withSession('first-primary') : db;
   const row = await primary.prepare(`SELECT (SELECT value FROM community_settings WHERE key=?) AS value,
-    (SELECT value FROM community_settings WHERE key=?) AS public_projection`)
-    .bind(MAINTENANCE_KEY, PUBLIC_CANDIDATE_PROJECTION_KEY)
-    .first<{ value: string | null; public_projection: string | null }>();
-  return { maintenance: parseStoredMaintenance(row?.value), publicProjection: row?.public_projection === 'true' };
+    (SELECT value FROM community_settings WHERE key=?) AS public_projection,
+    (SELECT value FROM community_settings WHERE key=?) AS card_quality_ui`)
+    .bind(MAINTENANCE_KEY, PUBLIC_CANDIDATE_PROJECTION_KEY, CARD_QUALITY_UI_KEY)
+    .first<{ value: string | null; public_projection: string | null; card_quality_ui: string | null }>();
+  return {
+    maintenance: parseStoredMaintenance(row?.value),
+    publicProjection: row?.public_projection === 'true',
+    cardQualityUi: row?.card_quality_ui === 'true',
+  };
 }
 // 2026-11-24 D1 過載止血：每個 API 請求都先讀一次主庫的維護開關（一小時近十萬次）。同一個 Worker 實例 5 秒內共用一份；
 // 開關切換最多晚 5 秒生效。排程與資源庫照舊直接讀（readMaintenance）。
@@ -49,7 +55,7 @@ const STATIC = /\.(?:js|mjs|css|png|webp|jpe?g|gif|svg|ico|woff2?|ttf|map|webman
 const noStore={'Cache-Control':'no-store','Retry-After':'15'};
 /** Runs before sessions, identity reads, HTML metadata, proxy upgrades and Provider calls. */
 export async function maintenanceResponse(
-  request:Request,env:Env,ctx:ExecutionContext, controls?: { publicProjection: boolean },
+  request:Request,env:Env,ctx:ExecutionContext, controls?: { publicProjection: boolean; cardQualityUi?: boolean },
 ):Promise<Response|null> {
   const url=new URL(request.url),path=url.pathname;
   // Preserve local proxy refusals without a DB/Provider call.
@@ -65,7 +71,10 @@ export async function maintenanceResponse(
   try {
     const admission = await cachedAdmission(env.DB);
     state = admission.maintenance;
-    if (controls) controls.publicProjection = admission.publicProjection;
+    if (controls) {
+      controls.publicProjection = admission.publicProjection;
+      controls.cardQualityUi = admission.cardQualityUi;
+    }
   }
   catch (error) {
     ctx.waitUntil(bumpOp(env.DB,'maintenance','status','error'));

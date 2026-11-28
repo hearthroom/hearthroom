@@ -3697,6 +3697,9 @@
                       "properties": {
                         "workVisibility": {
                           "type": "boolean"
+                        },
+                        "cardQuality": {
+                          "type": "boolean"
                         }
                       }
                     }
@@ -4815,6 +4818,45 @@
           }
         }
       }
+    },
+    "/v1/cards/{id}/quality": {
+      "get": {
+        "tags": [
+          "Cards"
+        ],
+        "summary": "Read card statistics",
+        "description": "Uses the card visibility and adult-content permissions. Returns rounded character counts for the approved version, presentation counts, and public player statistics. Deep play is hidden below 20 qualified players. Rating is hidden below 5 ratings.",
+        "security": [],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Public card ID."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CardQualityDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Adult-content permission required."
+          },
+          "404": {
+            "description": "Card unavailable."
+          }
+        }
+      }
     }
   },
   "components": {
@@ -4995,6 +5037,9 @@
               "$ref": "#/components/schemas/RankHonorMark"
             },
             "description": "Settled honors only, one best band per day/week/month window. Clean wins equal-band ties."
+          },
+          "qualitySignal": {
+            "$ref": "#/components/schemas/CardQualitySignal"
           }
         }
       },
@@ -6150,6 +6195,225 @@
             }
           }
         ]
+      },
+      "CardQualityDeepPlay": {
+        "type": "object",
+        "required": [
+          "reached",
+          "players",
+          "turns"
+        ],
+        "properties": {
+          "reached": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "players": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "turns": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "CardQualityDeepPlayDetail": {
+        "type": "object",
+        "required": [
+          "reached",
+          "players",
+          "turns",
+          "medianTurns"
+        ],
+        "properties": {
+          "reached": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "players": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "turns": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "medianTurns": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      },
+      "CardQualitySignal": {
+        "description": "Zero characters means fewer than 1,000. A null value means the statistic is unavailable.",
+        "type": "object",
+        "required": [
+          "lengthCharacters",
+          "deepPlay"
+        ],
+        "properties": {
+          "lengthCharacters": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "deepPlay": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CardQualityDeepPlay"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "CardQualityLength": {
+        "type": "object",
+        "required": [
+          "total",
+          "setting",
+          "worldbook",
+          "openings",
+          "presentation"
+        ],
+        "properties": {
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "setting": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "worldbook": {
+            "type": "object",
+            "required": [
+              "entries",
+              "characters"
+            ],
+            "properties": {
+              "entries": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "characters": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "openings": {
+            "type": "object",
+            "required": [
+              "count",
+              "characters"
+            ],
+            "properties": {
+              "count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "characters": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "presentation": {
+            "type": "object",
+            "required": [
+              "openingPage",
+              "displayRules",
+              "panel"
+            ],
+            "properties": {
+              "openingPage": {
+                "type": "boolean"
+              },
+              "displayRules": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "panel": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      },
+      "CardQualityRating": {
+        "type": "object",
+        "required": [
+          "average",
+          "count"
+        ],
+        "properties": {
+          "average": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "CardQualityDetail": {
+        "type": "object",
+        "required": [
+          "length",
+          "deepPlay",
+          "rating",
+          "comments"
+        ],
+        "properties": {
+          "length": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CardQualityLength"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "deepPlay": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CardQualityDeepPlayDetail"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rating": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CardQualityRating"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "comments": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          }
+        }
       }
     }
   }

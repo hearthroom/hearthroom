@@ -1,6 +1,6 @@
 import { HttpError } from './types';
 export type TransferCall=(path:string,body?:unknown,method?:string)=>Promise<Record<string,any>>;
-export interface TransferBook { sourceId:string; metadata:Record<string,any>; entries:Record<string,any>[] }
+export interface TransferBook { sourceId:string; isActive?:boolean; metadata:Record<string,any>; entries:Record<string,any>[] }
 const string=(v:unknown)=>typeof v==='string'?v:'';
 export function canonicalEntry(e:Record<string,any>,preservePriority=false):Record<string,any> {
  if(!e || typeof e.content!=='string' || typeof e.name!=='string')throw new HttpError(409,'sync_unsupported_content');
@@ -36,7 +36,7 @@ export async function readBooks(call:TransferCall,roleId:string,preserveExecutio
   // Refuse a partial upstream page, never silently truncate a Lorebook.
   if(list.hasNextPage || (typeof list.total==='number'&&list.total>list.entries.length))throw new HttpError(409,'sync_unsupported_content');
   const tags=Array.isArray(detail.tags)?detail.tags:String(detail.tags||'').split(',').filter(Boolean);
-  books.push({sourceId:b.worldbookId,metadata:{name:detail.name,description:string(detail.description),iconUrl:string(detail.iconUrl),tags,language:string(detail.language),format:string(detail.format)},entries:list.entries.map((e:Record<string,any>)=>canonicalEntry(e,preserveExecution))});
+  books.push({sourceId:b.worldbookId,...(b.isActive===false?{isActive:false}:{}),metadata:{name:detail.name,description:string(detail.description),iconUrl:string(detail.iconUrl),tags,language:string(detail.language),format:string(detail.format)},entries:list.entries.map((e:Record<string,any>)=>canonicalEntry(e,preserveExecution))});
  }
  return books;
 }

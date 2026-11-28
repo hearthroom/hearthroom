@@ -32,6 +32,8 @@ import { bindMetricsDb, flushMetricsWithRetry, parseMetricsFlushMs } from './met
 import { HARBOR_PROXY_PREFIX, proxyHarborApi } from './harbor-api-proxy';
 import { accountAuthRoutes, accountAuthMaintenance, syncNickname } from './account-auth';
 import { snapshot } from './snapshot-cache';
+import { readCardQuality } from './card-quality';
+import { backfillCardQualityLengths } from './card-quality-backfill';
 import { cardLink, linkPreview } from './card-link';
 import { cardStateRoutes } from './card-state-routes';
 import { boardKey, readBoardCache, supportsSharedFirstScreen, writeBoardCache } from "./board-cache";
@@ -350,7 +352,10 @@ app.get("/v1/region", (c) => {
 app.get("/v1/providers", (c) =>
   c.json(
     { providers: configuredProviders(c.env).map((id) => ({ id, name: PROVIDER_NAMES[id] })),
-      ...(c.env.WORK_SHARING_ENABLED==='true'?{capabilities:{workVisibility:true}}:{}) },
+      ...(c.env.WORK_SHARING_ENABLED === 'true' || c.env.CARD_QUALITY_UI_ACTIVE ? { capabilities: {
+        ...(c.env.WORK_SHARING_ENABLED === 'true' ? { workVisibility: true } : {}),
+        ...(c.env.CARD_QUALITY_UI_ACTIVE ? { cardQuality: true } : {}),
+      } } : {}) },
     200,
     { "Cache-Control": "public, max-age=300" },
   ),
@@ -809,6 +814,32 @@ app.get('/v1/cards/:id/honors',async c=>{
  c.header('Cache-Control','private, no-store');
  return c.json({items:await allCardHonors(c.env.DB,Number(row.id))});
 });
+app.get('/v1/cards/:id/quality', async c => {
+  c.header('Cache-Control', 'private, no-store');
+  const row = await getCard(c.env.DB, c.req.param('id'), providerOf(c));
+  if (!row || row.public_blocked) throw new HttpError(404, 'card not found');
+  const access = await checkedCardAccess(c, row);
+  if (!access.reachable) throw new HttpError(404, 'card not found');
+  await assertRegionCard(c, row);
+  if ((isAdult(row) || access.access === 'unlisted') && !(await viewerAllowsNsfw(c, { card: true }))) {
+    throw new HttpError(403, 'adult_content');
+  }
+  // The unlisted link resolves to the saved source. Its old approved revision may have different content.
+  const quality = access.access === 'unlisted'
+    ? { length: null, deepPlay: null }
+    : await readCardQuality(c.env.DB, row.id, row.approved_version_id);
+  const target = { id: row.id, provider: providerOf(c), authorNumId: row.author_num_id,
+    adult: isAdult(row) || access.access === 'unlisted', rewardEligible: row.status === 'approved' };
+  const signals = await snapshot(c.env, ['card-quality-social', row.id, row.comment_revision, row.score_revision], 30, async () => {
+    const [score, comments] = await Promise.all([
+      readScore(c.env.DB, row.id, null),
+      countTop(c.env.DB, { kind: 'card', card: target }),
+    ]);
+    return { rating: score.sufficient && score.average !== null ? { average: score.average, count: score.count } : null, comments };
+  }, c.executionCtx);
+  return c.json({ ...quality, ...signals.value });
+});
+
 app.get("/v1/cards/:id", async (c) => {
   const link = await cardLink(c.env, c.req.param('id'), providerOf(c));
   let row = link.row;
@@ -867,7 +898,7 @@ app.get("/v1/cards/:id", async (c) => {
   // 過了成人門的人拿一把「加到主畫面」的鑰匙：manifest 與圖示是瀏覽器抓的，帶不了登入（src/shortcut.ts）
   const secret = c.env.SHORTCUT_SECRET;
   const shortcutKey = allowNsfw && secret ? await signShortcutKey(secret, row.id) : undefined;
-  const card = toCard(row, lang(c));
+  const card = toCard(row, lang(c), true);
   // 打賞連結只在單卡頁給（卡片頁的作者區塊用）；榜單一頁幾十張卡，用不到也不該多帶
   // 拿著連結才打得開：unlisted，或已從探索拿掉（delisted）但連結照樣能玩
   const audience = access?.access==='unlisted'||(access?.managed&&!access.indexable) ? 'link' : 'public';
@@ -3034,7 +3065,7 @@ export default {
     const scopedEnv = env.DB && metricsFlushMs > 0
       ? { ...env, DB: bindMetricsDb(env.DB, env.DB, ctx, metricsFlushMs) }
       : env;
-    const controls = { publicProjection: false };
+    const controls = { publicProjection: false, cardQualityUi: false };
     const maintenance = await maintenanceResponse(request, scopedEnv, ctx, controls);
     if (maintenance) return maintenance;
     const path = new URL(request.url).pathname;
@@ -3052,7 +3083,11 @@ export default {
     if (path === "/internal/community/draft-transfer-gate" || path === CARD_REWARD_PUBLICATION_PATH) {
       return app.fetch(request, scopedEnv, ctx);
     }
-    const d1 = withD1Session(request, controls.publicProjection ? { ...env, PUBLIC_CANDIDATE_PROJECTION_ACTIVE: true } : env);
+    const d1 = withD1Session(request, {
+      ...env,
+      ...(controls.publicProjection ? { PUBLIC_CANDIDATE_PROJECTION_ACTIVE: true } : {}),
+      ...(controls.cardQualityUi ? { CARD_QUALITY_UI_ACTIVE: true } : {}),
+    });
     const requestEnv = d1.env.DB && metricsFlushMs > 0
       ? { ...d1.env, DB: bindMetricsDb(d1.env.DB, env.DB, ctx, metricsFlushMs) }
       : d1.env;
@@ -3084,6 +3119,7 @@ export default {
       return;
     }
     if(event.cron===RANK_RETRY_CRON){
+      run(backfillCardQualityLengths(cronEnv, event.scheduledTime).catch(() => { console.warn('Card quality length backfill unavailable'); }));
       run(badgeStatsBackfill(cronEnv,event.scheduledTime).catch(async()=>{console.warn('Badge qualification backfill unavailable');await bumpOp(cronEnv.DB,'badge_stats','backfill','error');}));
       const phase=Math.floor(event.scheduledTime/60000)%3;
       const work=phase===0?rankMaintenance(cronEnv,event.scheduledTime):phase===1?rankPaymentMaintenance(cronEnv,event.scheduledTime):badgeStatsMaintenance(cronEnv,event.scheduledTime);

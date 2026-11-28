@@ -2756,5 +2756,8 @@
   "d907370b8c6c1": "有開場網頁時讀取完整內容的位置：相對於 API 來源的 API 路徑（`/open/v1/role/author-asset/opening?roleId=…`），以相同的 bearer token 讀取。沒有開場網頁時，以及發行方審核讀取時，為 `\"\"`。",
   "d4ffaae2ea8cc": "僅限發行方審核讀取（`/hosting/revisions/{roleId}/review`）：`openingPage` 只含較大網頁的前 524288 位元組（在 UTF-8 字元邊界截斷）時為 `true`；`openingPageBytes` 是完整大小。",
   "da2345ebd11f7": "`true` 會移除開場網頁，不論大小。不可與非空的 `openingPage` 併用（`invalid_param`）。",
-  "db0b8e5d702e8": "開場網頁 HTML，最多 100000000 個 UTF-8 位元組（100 MB）（`validate_reject`，reason 為 `openingPage`）。保留與清除規則同 `AuthorAssetSaveRequest.openingPage`。整個試玩本文上限為 48 MiB；更大的網頁之後再用 `PUT /open/v1/role/{roleId}/opening-page` 推送。"
+  "db0b8e5d702e8": "開場網頁 HTML，最多 100000000 個 UTF-8 位元組（100 MB）（`validate_reject`，reason 為 `openingPage`）。保留與清除規則同 `AuthorAssetSaveRequest.openingPage`。整個試玩本文上限為 48 MiB；更大的網頁之後再用 `PUT /open/v1/role/{roleId}/opening-page` 推送。",
+  "2530978c25cae": "讀取卡片數據",
+  "2571eff8cdf40": "沿用卡片的可見與成人內容權限。回傳核准版本取整後的字數、呈現方式統計與公開玩家數據。未滿 20 位合格玩家時隱藏深玩數據，未滿 5 份評分時隱藏評分。",
+  "d53c1816e6b14": "字數為 0 代表不到 1,000 字。null 代表目前無此數據。"
 }

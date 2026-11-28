@@ -51,6 +51,14 @@ describe('public card length', () => {
     });
   });
 
+  it('counts world mode member profiles and private settings in the same bucket', () => {
+    const profile = '模'.repeat(1400);
+    const world = { characters: [{ profile, description: '設'.repeat(1200) }, { profile }] };
+    for (const value of [world, JSON.stringify(world)]) {
+      expect(cardQualityLength({ document: { world: value } })).toMatchObject({ total: 3000, setting: 3000 });
+    }
+  });
+
   it.each([[0, 0], [999, 0], [1000, 1000], [3699, 4000], [9999, 10000], [12_349, 12_000], [99_999, 100_000], [104_999, 100_000], [1_104_999, 1_100_000]])(
     'rounds %i characters to %i', (input, output) => expect(roundQualityCharacters(input)).toBe(output),
   );

@@ -12,10 +12,10 @@ export function roundQualityCharacters(characters: number): number {
   return Math.round(characters / step) * step;
 }
 
-function exampleTurns(value: unknown): unknown[] {
-  if (typeof value !== 'string') return array(value);
-  try { return array(JSON.parse(value)); }
-  catch { return []; }
+function parse(value: unknown): unknown {
+  if (typeof value !== 'string') return value;
+  try { return JSON.parse(value); }
+  catch { return null; }
 }
 
 /** Same text and buckets for the sealed version and the editor's current draft. */
@@ -38,8 +38,13 @@ export function cardQualityLength(settings: Record<string, unknown>): CardQualit
     document.roleDetailDesc,
     hasText(document.customInstructions) ? document.customInstructions : document.jailbreak,
     document.roleOutputContract,
-    ...exampleTurns(document.talkExample).map(turn => record(turn).content),
+    ...array(parse(document.talkExample)).map(turn => record(turn).content),
   ]) setting += count(value).characters;
+
+  for (const memberValue of array(record(parse(document.world)).characters)) {
+    const member = record(memberValue);
+    setting += count(member.profile).characters + count(member.description).characters;
+  }
 
   let worldbookCharacters = 0;
   let entries = 0;

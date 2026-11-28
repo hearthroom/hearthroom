@@ -2756,5 +2756,8 @@
   "d907370b8c6c1": "첫 화면이 있을 때 전체를 읽을 위치입니다. API 출처 기준 상대 API 경로(`/open/v1/role/author-asset/opening?roleId=…`)이며 같은 bearer token으로 읽습니다. 첫 화면이 없을 때와 발행자 심사 읽기에서는 `\"\"`입니다.",
   "d4ffaae2ea8cc": "발행자 심사 읽기 전용(`/hosting/revisions/{roleId}/review`): `openingPage`가 더 큰 페이지의 앞 524288바이트(UTF-8 문자 경계에서 자름)만 담고 있으면 `true`입니다. `openingPageBytes`는 전체 크기입니다.",
   "da2345ebd11f7": "`true`이면 크기와 관계없이 첫 화면을 지웁니다. 비어 있지 않은 `openingPage`와 함께 쓸 수 없습니다(`invalid_param`).",
-  "db0b8e5d702e8": "첫 화면 HTML, 최대 100000000 UTF-8 바이트(100 MB)(`validate_reject`, reason은 `openingPage`). 유지와 삭제 규칙은 `AuthorAssetSaveRequest.openingPage`와 같습니다. 체험 본문 전체는 최대 48 MiB입니다. 더 큰 페이지는 나중에 `PUT /open/v1/role/{roleId}/opening-page`로 보내세요."
+  "db0b8e5d702e8": "첫 화면 HTML, 최대 100000000 UTF-8 바이트(100 MB)(`validate_reject`, reason은 `openingPage`). 유지와 삭제 규칙은 `AuthorAssetSaveRequest.openingPage`와 같습니다. 체험 본문 전체는 최대 48 MiB입니다. 더 큰 페이지는 나중에 `PUT /open/v1/role/{roleId}/opening-page`로 보내세요.",
+  "2530978c25cae": "카드 통계 읽기",
+  "2571eff8cdf40": "카드의 공개 범위와 성인 콘텐츠 권한을 적용합니다. 승인된 버전의 반올림한 글자 수, 표시 방식 수치, 공개 플레이어 통계를 반환합니다. 적격 플레이어가 20명 미만이면 플레이 지속 통계를, 평가가 5건 미만이면 평가를 숨깁니다.",
+  "d53c1816e6b14": "글자 수가 0이면 1,000자 미만입니다. 통계를 제공할 수 없으면 null입니다."
 }

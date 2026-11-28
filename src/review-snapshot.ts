@@ -1,4 +1,6 @@
 import { reviewLength } from './review-length';
+import { cardQualityLength } from '../shared/card-quality-length';
+import type { CardQualityLength } from '../shared/card-quality';
 /**
  * 審核讀取：本站自己的事，不靠供應商的分享介面。
  *
@@ -61,6 +63,7 @@ export function estimateTokens(s: string): number {
 }
 
 export interface ReviewSettings extends Record<string, unknown> {
+  qualityLength?: CardQualityLength;
   hashes: { card: string; welcome: string; worldbook: string; authorAsset: string; content: string };
 }
 
@@ -68,7 +71,7 @@ export interface ReviewSettings extends Record<string, unknown> {
  * 用作者自己的 token 讀整份設定，組成審核頁要的形狀。token 只活在這一串請求裡，不落庫。
  * 讀不到私有設定（不是作者本人、或供應商沒回）就整個失敗：審核人什麼都看不到，排進佇列也只是卡住。
  */
-export async function readForReview(env: Env, bearer: string, roleId: string, provider: ProviderId): Promise<ReviewSettings> {
+export async function readForReview(env: Env, bearer: string, roleId: string, provider: ProviderId, includeQuality = false): Promise<ReviewSettings> {
   const call: TransferCall = async (path) => {
     const res = await fetch(`${apiBaseOf(env, provider)}/open/v1${path}`, {
       headers: { Authorization: `Bearer ${bearer}`, language: "zh-Hans", "User-Agent": UA },
@@ -81,7 +84,7 @@ export async function readForReview(env: Env, bearer: string, roleId: string, pr
     return (await res.json()) as Record<string, any>;
   };
 
-  return projectForReview(call, roleId);
+  return projectForReview(call, roleId, includeQuality);
 }
 
 /**
@@ -90,21 +93,30 @@ export async function readForReview(env: Env, bearer: string, roleId: string, pr
  * 完整設定不存在本站：它可能很大（幾百條世界書加作者版面），本站資料庫單列只有 2 MB。
  */
 export async function readSealedForReview(env: Env, roleId: string, provider: ProviderId): Promise<ReviewSettings> {
+  return projectForReview(await sealedReviewCall(env, roleId, provider), roleId);
+}
+
+async function sealedReviewCall(env: Env, roleId: string, provider: ProviderId, timeout = 30_000): Promise<TransferCall> {
   if (!env.HOSTING_SERVICE_KEY) throw new HttpError(503, "hosting_unavailable");
   const res = await fetch(`${apiBaseOf(env, provider)}/open/v1/hosting/revisions/${encodeURIComponent(roleId)}/review`, {
     headers: { "X-Hosting-Key": env.HOSTING_SERVICE_KEY, "User-Agent": UA },
     redirect: "manual",
-    signal: AbortSignal.timeout(30000),
+    signal: AbortSignal.timeout(timeout),
   }).catch(() => { throw new HttpError(502, "sealed revision read failed"); });
   if (res.status === 404) throw new HttpError(404, "settings not found");
   if (!res.ok) throw new HttpError(502, `sealed revision read failed with ${res.status}`);
   const { responses } = (await res.json()) as { responses?: Record<string, Record<string, any>> };
-  const call: TransferCall = async (path) => {
+  return async (path) => {
     const hit = responses?.[path];
     if (!hit) throw new HttpError(404, "settings not found");
     return hit;
   };
-  return projectForReview(call, roleId);
+}
+
+export async function readSealedCardQuality(env: Env, revisionId: string): Promise<CardQualityLength> {
+  const call = await sealedReviewCall(env, revisionId, 'harbor', 7_000);
+  const { detail, greetings, books, asset } = await readReviewInputs(call, revisionId);
+  return cardQualityLength({ document: detail, greetings, worldbooks: books, authorAsset: asset });
 }
 
 /**
@@ -122,9 +134,28 @@ export function reviewRecord(settings: ReviewSettings): ReviewSettings {
   };
 }
 
-async function projectForReview(call: TransferCall, roleId: string): Promise<ReviewSettings> {
-  const r = await call(`/role/detail?roleId=${encodeURIComponent(roleId)}`);
+async function readReviewInputs(call: TransferCall, roleId: string) {
+  const query = encodeURIComponent(roleId);
+  const r = await call(`/role/detail?roleId=${query}`);
   if (!("roleDetailDesc" in r)) throw new HttpError(409, "private settings unavailable");
+  const greetings = {
+    welcome: text(r.roleWelcome),
+    alternates: list(r.welcomeAlternates ?? r.roleWelcomeAlternates ?? r.alternates),
+    prologue: list(r.rolePrologue ?? r.prologue),
+  };
+
+  const books = await readBooks(call, roleId);
+  let asset: Record<string, any> = {};
+  try {
+    asset = await call(`/role/author-asset?roleId=${encodeURIComponent(roleId)}`);
+  } catch (err) {
+    if (!(err instanceof HttpError && err.status === 404)) throw err; // 404＝這張卡沒有作者資產
+  }
+  return { detail: r, greetings, books, asset };
+}
+
+async function projectForReview(call: TransferCall, roleId: string, includeQuality = false): Promise<ReviewSettings> {
+  const { detail: r, greetings, books: rawBooks, asset: rawAsset } = await readReviewInputs(call, roleId);
   const document = {
     roleName: text(r.roleName), userName: text(r.userName), roleDesc: text(r.roleDesc),
     roleAvatar: text(r.roleAvatar), roleBackground: text(r.roleBackground), roleDetailDesc: text(r.roleDetailDesc),
@@ -142,13 +173,7 @@ async function projectForReview(call: TransferCall, roleId: string): Promise<Rev
     ...(text(r.roleBackgroundLandscape) ? { roleBackgroundLandscape: text(r.roleBackgroundLandscape) } : {}),
     ...(text(r.roleShareImage) ? { roleShareImage: text(r.roleShareImage) } : {}),
   };
-  const greetings = {
-    welcome: text(r.roleWelcome),
-    alternates: list(r.welcomeAlternates ?? r.roleWelcomeAlternates ?? r.alternates),
-    prologue: list(r.rolePrologue ?? r.prologue),
-  };
-
-  const books = (await readBooks(call, roleId)).map((b) => ({
+  const books = rawBooks.map((b) => ({
     worldbookId: b.sourceId,
     name: text(b.metadata.name), description: text(b.metadata.description), format: text(b.metadata.format),
     entries: b.entries.map((e, i) => ({
@@ -158,12 +183,6 @@ async function projectForReview(call: TransferCall, roleId: string): Promise<Rev
     })),
   }));
 
-  let rawAsset: Record<string, any> = {};
-  try {
-    rawAsset = await call(`/role/author-asset?roleId=${encodeURIComponent(roleId)}`);
-  } catch (err) {
-    if (!(err instanceof HttpError && err.status === 404)) throw err; // 404＝這張卡沒有作者資產
-  }
   const authorAsset = { ...canonicalAsset(rawAsset), status: text(rawAsset.status), version: Number(rawAsset.version) || 0 };
 
   const entries = books.flatMap((b) => b.entries);
@@ -192,7 +211,11 @@ async function projectForReview(call: TransferCall, roleId: string): Promise<Rev
     worldbook: books[0] ?? null, worldbooks: books, worldbookAvailable: true,
     authorAsset, hashes, costProfile,
   };
-  return {...settings, reviewLength:reviewLength(settings)};
+  return {
+    ...settings,
+    reviewLength: reviewLength(settings),
+    ...(includeQuality ? { qualityLength: cardQualityLength({ document, greetings, worldbooks: rawBooks, authorAsset: rawAsset }) } : {}),
+  };
 }
 
 /**

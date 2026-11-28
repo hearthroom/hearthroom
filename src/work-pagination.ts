@@ -84,5 +84,5 @@ export async function publicCandidatePage(env:Env,candidates:PublicCandidates,po
  if(hasNext&&nextRaw!==opts.offset+opts.limit&&!nextCursor)throw new HttpError(503,'visibility_provider_unavailable');
  const previousCursor=position.trail.length?await encode(env,{...common,raw:position.trail.at(-1)!,rank:Math.max(0,opts.offset-opts.limit),trail:position.trail.slice(0,-1)}):undefined;
  const presented=await decorateCardRows(env.DB,rows);
- return {items:presented.map(r=>toCard(r,opts.lang)),total:managed||candidates.filtered&&hasNext?null:candidates.total,hasNext,limit:opts.limit,offset:opts.offset,...(batch.partial?{partial:true}:{}),...(nextCursor?{nextCursor}:{}),...(previousCursor?{previousCursor}:{})};
+ return {items:presented.map(r=>toCard(r,opts.lang,true)),total:managed||candidates.filtered&&hasNext?null:candidates.total,hasNext,limit:opts.limit,offset:opts.offset,...(batch.partial?{partial:true}:{}),...(nextCursor?{nextCursor}:{}),...(previousCursor?{previousCursor}:{})};
 }

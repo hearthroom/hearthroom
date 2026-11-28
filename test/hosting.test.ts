@@ -18,6 +18,8 @@ it('reviews the sealed revision once, keeps published version during updates, an
  const first=await submitHosted(env,input);
  expect(read.mock.calls.map(call=>call[2])).toEqual([me.roleId,first.hostedRevisionId]);
  expect((await hostingDecision(env.DB,first.versionId)).status).toBe('pending');
+ expect(await env.DB.prepare('SELECT total_chars,setting_chars FROM card_quality_lengths WHERE version_id=?').bind(first.versionId).first())
+   .toEqual({total_chars:4000,setting_chars:4000});
  expect(await submitHosted(env,input)).toEqual(first);
  expect(hostGateway.seal).toHaveBeenCalledTimes(1);
  await expect(submitHosted(env,{...input,rating:ADULT_RATING})).rejects.toThrow('hosting_operation_conflict');

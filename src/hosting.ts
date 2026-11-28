@@ -1,3 +1,5 @@
+import { cardQualityLength } from '../shared/card-quality-length';
+import { qualityLengthStatement } from './card-quality';
 import { hasPublicationCover } from '../shared/publication-cover';
 import { missingPublicationFields } from '../shared/publication-fields';
 import { reviewCounts } from './review';
@@ -206,11 +208,12 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
  if(sealed.authorNumId!==input.account||sealed.roleId!==receipt.hostedRevisionId)throw new HttpError(502,'hosting_receipt_invalid');
  await assertPresetTag(db,sealed.tags,'sealed');
  await assertPublicationCover(db,sealed.backgroundUrl || sealed.avatarUrl,'sealed');
- const settings=await upstream.readForReview(env,input.token,receipt.hostedRevisionId,provider);
+ const settings=await upstream.readForReview(env,input.token,receipt.hostedRevisionId,provider,true);
  assertPublicationFields(settings);
  const length=await assertReviewLength(db,settings,'sealed',provider,input.role.roleId);
  settings.reviewLength=length;
  const counts=reviewCounts(settings);
+ const qualityLength=settings.qualityLength??cardQualityLength(settings);
  await prepareManagedPublication(env,provider,input.role.roleId,work.id,version.version_id,receipt.hostedRevisionId,consent??undefined);
  const submissionId=crypto.randomUUID();
  const privateDoc=(settings.document??{}) as Record<string,unknown>;
@@ -234,6 +237,7 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
    db.prepare("INSERT INTO ops_metrics(metric,operation,outcome,value) SELECT 'review_flip','retire','superseded',changes() WHERE changes()>0 ON CONFLICT(metric,operation,outcome) DO UPDATE SET value=value+excluded.value"),
    db.prepare("DELETE FROM review_snapshots WHERE submission_id IN (SELECT id FROM review_submissions WHERE card_id=? AND flip_of IS NOT NULL AND status='superseded')").bind(cardId),
    snapshot,
+   qualityLengthStatement(db,version!.version_id,qualityLength,submissionId),
    // 查重指紋跟審核單同一批：單子沒寫成就不留指紋
    ...indexStatements(db,{submissionId,cardId,memberId:input.memberId,text:String(privateDoc.roleDetailDesc??''),names:[String(privateDoc.roleName??''),String(privateDoc.userName??'')],now:input.now}),
    db.prepare("UPDATE cards SET status='pending' WHERE id=? AND approved_version_id IS NULL").bind(cardId),

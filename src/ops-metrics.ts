@@ -7,6 +7,16 @@ import { flushMetrics, recordOpsMetric } from "./metrics-buffer";
  * 表裡多出來的列（舊版本、手動寫入）不會變成 Prometheus 標籤。
  */
 const METRICS = {
+  card_quality_length: {
+    name: 'hearthroom_card_quality_length_total',
+    help: 'Rounded card length snapshots computed by outcome.',
+    label: 'operation', operations: ['backfill'], outcomes: ['success', 'error'],
+  },
+  card_quality_length_ms: {
+    name: 'hearthroom_card_quality_length_duration_milliseconds_total',
+    help: 'Total time spent in card length backfill batches that attempted calculation.',
+    label: 'operation', operations: ['backfill'], outcomes: ['elapsed'],
+  },
   cover_sensitive:{name:'hearthroom_cover_sensitive_flag_total',help:'Committed sensitive cover flag changes.',label:'source',operations:['author','review'],outcomes:['set','clear']},
   review_status:{name:'hearthroom_review_status_reads_total',help:'Author-only review summary reads.',label:'operation',operations:['read'],outcomes:['success','denied','error']},
   comment_pin:{name:'hearthroom_comment_pins_total',help:'Card author pin and unpin requests by bounded result.',label:'action',operations:['pin','unpin'],outcomes:['ok','limit','forbidden','error']},

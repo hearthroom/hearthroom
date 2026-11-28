@@ -2756,5 +2756,8 @@
   "d907370b8c6c1": "最初の画面があるとき、その全体を読む場所です。API のオリジンからの相対 API パス（`/open/v1/role/author-asset/opening?roleId=…`）で、同じ bearer token で読みます。最初の画面がないとき、および発行者の審査用読み取りでは `\"\"`。",
   "d4ffaae2ea8cc": "発行者の審査用読み取りのみ（`/hosting/revisions/{roleId}/review`）：`openingPage` が大きなページの先頭 524288 バイト（UTF-8 の文字境界で切断）だけを含むとき `true`。`openingPageBytes` は全体のサイズです。",
   "da2345ebd11f7": "`true` でサイズに関係なく最初の画面を削除します。空でない `openingPage` とは併用できません（`invalid_param`）。",
-  "db0b8e5d702e8": "最初の画面の HTML。最大 100000000 UTF-8 バイト（100 MB）（`validate_reject`、reason は `openingPage`）。保持と消去のルールは `AuthorAssetSaveRequest.openingPage` と同じです。試用の本文全体は 48 MiB が上限です。それより大きいページは後から `PUT /open/v1/role/{roleId}/opening-page` で送ってください。"
+  "db0b8e5d702e8": "最初の画面の HTML。最大 100000000 UTF-8 バイト（100 MB）（`validate_reject`、reason は `openingPage`）。保持と消去のルールは `AuthorAssetSaveRequest.openingPage` と同じです。試用の本文全体は 48 MiB が上限です。それより大きいページは後から `PUT /open/v1/role/{roleId}/opening-page` で送ってください。",
+  "2530978c25cae": "カードの統計を取得する",
+  "2571eff8cdf40": "カードの公開範囲と成人向けコンテンツの権限に従います。承認済みの版の丸めた文字数、表示形式の件数、公開プレイヤー統計を返します。対象が 20 人に満たない場合はプレイ継続の統計を、評価が 5 件に満たない場合は評価を表示しません。",
+  "d53c1816e6b14": "文字数が 0 の場合は 1,000 字未満です。統計が取得できない場合は null です。"
 }
