@@ -1,5 +1,6 @@
 import { siteRootOf } from '../../../shared/site-hosts';
 import { track } from "./track";
+import { deviceToken } from "./reward-device";
 /**
  * 舞台（Moonstage）的宿主接線。
  *
@@ -212,6 +213,7 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
       else void deps.router.push(target);
     };
     const host = stage.browserHost({
+      ...(provider === "harbor" && !deps.guest && !deps.reviewId ? { chatDeviceToken: deviceToken } : {}),
       ...(provider === "harbor" && !deps.guest && !deps.reviewId && deps.workshopAllowed
         ? { workshopWindow: { allowed: deps.workshopAllowed } } : {}),
       ui: {

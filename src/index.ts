@@ -27,6 +27,7 @@ import {qaSessionHint} from './test-accounts';
 import {applyQAIdentity} from './members';
 import { HEAT_CRON, syncHeat } from "./heat";
 import { transferGateRoutes, isTransferHeld } from './draft-transfer-gate';
+import { syncCardQualityPlay } from './card-quality-play-sync';
 import { bumpOp, bumpHarborProxy } from './ops-metrics';
 import { bindMetricsDb, flushMetricsWithRetry, parseMetricsFlushMs } from './metrics-buffer';
 import { HARBOR_PROXY_PREFIX, proxyHarborApi } from './harbor-api-proxy';
@@ -3085,7 +3086,11 @@ export default {
     }
     if(event.cron===RANK_RETRY_CRON){
       run(badgeStatsBackfill(cronEnv,event.scheduledTime).catch(async()=>{console.warn('Badge qualification backfill unavailable');await bumpOp(cronEnv.DB,'badge_stats','backfill','error');}));
-      const phase=Math.floor(event.scheduledTime/60000)%3;
+      const minute=Math.floor(event.scheduledTime/60000);
+      if (minute%10===7 && cronEnv.HOSTING_SERVICE_KEY) {
+        run(syncCardQualityPlay(cronEnv).catch(() => { console.warn('Card quality snapshot unavailable'); }));
+      }
+      const phase=minute%3;
       const work=phase===0?rankMaintenance(cronEnv,event.scheduledTime):phase===1?rankPaymentMaintenance(cronEnv,event.scheduledTime):badgeStatsMaintenance(cronEnv,event.scheduledTime);
       run(work.catch(async()=>{console.warn('Rank and badge maintenance unavailable');await bumpOp(cronEnv.DB,'rank_settlement','run','error');}));
       // 徽章積分重試：跟付榜單獎金同一拍，各自接錯
