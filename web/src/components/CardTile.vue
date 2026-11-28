@@ -413,16 +413,16 @@ const adultLabel = computed(() => ratingName("R", String(locale.value)));
 .card__hook--note:lang(ko) { word-break: keep-all; }
 
 /*
- * 品質信號那一行：說明可以省略，數字不省略；每張磚都有這一行（沒數字時是同高空白）。
- * 數字排在 DOM 前面、row-reverse 畫回「說明 數字」：說明至少要有 3em 才留著（放得下就照常、放不下全文就省略號），
- * 連 3em 都沒有（320 寬的英文「under 1,000 chars」）就整個換到被裁掉的第二行，數字完整留在第一行。
+ * 品質信號那一行：說明與數字都不截斷；每張磚都有這一行（沒數字時是同高空白）。
+ * 數字排在 DOM 前面、row-reverse 畫回「說明 數字」：說明放不下完整的字就整個換到被裁掉的第二行，
+ * 只留數字（135 寬英文「15k chars」，不出現「Card l…」，PM 2026-11-28）；完整說法在讀屏文字裡。
  */
 .card__quality {
   display: flex; flex-direction: row-reverse; flex-wrap: wrap; justify-content: flex-end; align-items: center; column-gap: 6px;
   height: 20px; margin: 2px 0 0; overflow: hidden;
   font-size: 12px; line-height: 20px; color: var(--text-2); white-space: nowrap;
 }
-.card__quality-label { flex: 1 1 3em; max-width: max-content; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.card__quality-label { flex: none; }
 .card__quality-value { flex: none; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
 .card__tags { display: flex; gap: 4px; margin: 1px 0 0; padding: 0; list-style: none; overflow: hidden; }
 /* 包著連結的 li 若是一般的 list-item，會多一條文字基線把標籤往下推 2px，跟直接當 li 的「+N」對不齊 */
