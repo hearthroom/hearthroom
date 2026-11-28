@@ -1,4 +1,5 @@
 import {listCardRowsByIds,decorateCardRows,listCardIds,toCard,type CardRow,type ListOptions} from './cards';
+import {listCardSocial} from './card-quality';
 import {hostingKey} from './hosting';
 import {type Env,HttpError} from './types';
 import {filterPublicRows,WORK_READ_BUDGET,type VisibilityReadSurface} from './work-read';
@@ -57,7 +58,7 @@ export function parsePublicCandidates(body:string):PublicCandidates|null{
   return value?.version===1&&Array.isArray(value.ids)&&value.ids.length<=WORK_READ_BUDGET&&value.ids.every(id=>typeof id==='string')&&Number.isSafeInteger(value.rawOffset)&&typeof value.more==='boolean'?value:null;
  }catch{return null;}
 }
-export async function publicCandidatePage(env:Env,candidates:PublicCandidates,position:Position&{binding:string},opts:{limit:number;offset:number;lang:string;allowNsfw:boolean;surface?:VisibilityReadSurface},source:ListOptions){
+export async function publicCandidatePage(env:Env,candidates:PublicCandidates,position:Position&{binding:string},opts:{limit:number;offset:number;lang:string;allowNsfw:boolean;surface?:VisibilityReadSurface;ctx?:Pick<ExecutionContext,'waitUntil'>;onSocial?:(layer:string)=>void},source:ListOptions){
  if(candidates.rawOffset!==position.raw)throw new HttpError(503,'visibility_provider_unavailable');
  const proven:{row:CardRow;raw:number}[]=[],seen=new Set<string>();
  let batch=candidates;
@@ -84,5 +85,7 @@ export async function publicCandidatePage(env:Env,candidates:PublicCandidates,po
  if(hasNext&&nextRaw!==opts.offset+opts.limit&&!nextCursor)throw new HttpError(503,'visibility_provider_unavailable');
  const previousCursor=position.trail.length?await encode(env,{...common,raw:position.trail.at(-1)!,rank:Math.max(0,opts.offset-opts.limit),trail:position.trail.slice(0,-1)}):undefined;
  const presented=await decorateCardRows(env.DB,rows);
- return {items:presented.map(r=>toCard(r,opts.lang,true)),total:managed||candidates.filtered&&hasNext?null:candidates.total,hasNext,limit:opts.limit,offset:opts.offset,...(batch.partial?{partial:true}:{}),...(nextCursor?{nextCursor}:{}),...(previousCursor?{previousCursor}:{})};
+ const social=await listCardSocial(env,presented,opts);
+ return {items:presented.map(r=>toCard(r,opts.lang,true,social?.[String(r.id)])),total:managed||candidates.filtered&&hasNext?null:candidates.total,hasNext,limit:opts.limit,offset:opts.offset,...(batch.partial?{partial:true}:{}),...(nextCursor?{nextCursor}:{}),...(previousCursor?{previousCursor}:{})};
 }
+

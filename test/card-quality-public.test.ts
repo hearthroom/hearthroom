@@ -1,6 +1,6 @@
 import { ADULT_CONSENT_VERSION } from '../shared/adult-consent';
 import { env, SELF } from 'cloudflare:test';
-import { afterEach, beforeEach, expect, it } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { resetMaintenanceMemo } from '../src/maintenance';
 import { getCard, upsertCard } from '../src/cards';
 import { identitiesFor, makeMember, resetDb, restoreUpstream, role, rolesOnProviders } from './helpers';
@@ -10,7 +10,7 @@ beforeEach(async () => {
   rolesOnProviders({ harbor: [{ roleId: 'quality-source', authorNumId: 11 }] });
   await upsertCard(env.DB, role({ roleId: 'quality-source', authorNumId: 11 }), Date.now(), { status: 'approved' });
 });
-afterEach(restoreUpstream);
+afterEach(() => { restoreUpstream(); vi.useRealTimers(); });
 
 const list = () => SELF.fetch('https://c.test/v1/cards?sort=new');
 const card = (path = '') => SELF.fetch('https://c.test/v1/cards/quality-source' + path);
@@ -21,7 +21,8 @@ it('projects unavailable statistics separately from a measured zero', async () =
   expect(await response.json()).toEqual({ length: null, deepPlay: null, rating: null, comments: 0 });
   const board = await list();
   expect(await board.json()).toMatchObject({ items: [{
-    sourceRoleId: 'quality-source', qualitySignal: { lengthCharacters: null, deepPlay: null },
+    sourceRoleId: 'quality-source', qualitySignal: { lengthCharacters: null, deepPlay: null,
+      detail: { length: null, deepPlay: null, rating: null, comments: 0 } },
   }] });
 });
 
@@ -50,7 +51,8 @@ it('never serializes small cohorts and reads only the approved version’s round
   await env.DB.prepare('UPDATE card_quality_play SET players=200,reached=165 WHERE card_id=?').bind(row.id).run();
   const deepPlay = { rate: 82 };
   const board = await (await list()).json<{ items: { qualitySignal: unknown }[] }>();
-  expect(board.items[0].qualitySignal).toEqual({ lengthCharacters: 14000, deepPlay });
+  expect(board.items[0].qualitySignal).toEqual({ lengthCharacters: 14000, deepPlay,
+    detail: { length, deepPlay: { ...deepPlay, medianTurns: 3 }, rating: null, comments: 0 } });
   const cardDetail = await (await card('?view=0')).json<{ qualitySignal: unknown }>();
   expect(cardDetail.qualitySignal).toEqual({ lengthCharacters: 14000, deepPlay });
   expect(await (await card('/quality')).json()).toEqual({ length, deepPlay: { ...deepPlay, medianTurns: 3 }, rating: null, comments: 0 });
@@ -105,4 +107,48 @@ it('does not expose statistics through numbers assigned by a retired provider', 
   const url = 'https://c.test/v1/cards/' + retired.id;
   expect((await SELF.fetch(url)).status).toBe(404);
   expect((await SELF.fetch(url + '/quality')).status).toBe(404);
+});
+
+it('carries the same preview data on the list as the card data endpoint, cached for the page', async () => {
+  vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 3_600_000 }); // 前面用例留下的同一頁快取已過期
+  const row = (await getCard(env.DB, 'quality-source'))!;
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO hosting_versions(version_id,work_id,member_id,operation_id,source_role_id,provider,card_id,created_at) VALUES('approved','work','author','approved','quality-source','harbor',?,1)").bind(row.id),
+    env.DB.prepare("UPDATE cards SET approved_version_id='approved' WHERE id=?").bind(row.id),
+    env.DB.prepare("INSERT INTO card_quality_lengths(version_id,total_chars,setting_chars,worldbook_entries,worldbook_chars,opening_count,opening_chars,opening_page,display_rules,panel) VALUES('approved',23000,3000,18,19000,3,1000,1,2,1)"),
+    env.DB.prepare('INSERT INTO card_quality_play(card_id,players,reached,median_turns,verified_at) VALUES(?,200,164,6.5,?)').bind(row.id, Date.now()),
+  ]);
+  const fans: string[] = [];
+  for (const account of [61, 62, 63, 64, 65]) fans.push(await makeMember(account));
+  await env.DB.batch(fans.map((member, i) => env.DB.prepare('INSERT INTO card_scores(card_id,member_id,score,created_at,updated_at) VALUES(?,?,?,1,1)').bind(row.id, member, i < 3 ? 5 : 4)));
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO comments(id,card_id,member_id,content,created_at) VALUES('q-1',?,?,'a',1),('q-2',?,?,'b',2)").bind(row.id, fans[0], row.id, fans[1]),
+    env.DB.prepare("INSERT INTO comments(id,card_id,member_id,content,created_at,root_id,parent_id) VALUES('q-3',?,?,'reply',3,'q-1','q-1')").bind(row.id, fans[2]),
+  ]);
+  const detail = async () => (await card('/quality')).json();
+  const listed = async () => (await (await list()).json<{ items: { qualitySignal: { detail?: unknown } }[] }>()).items[0].qualitySignal.detail;
+  const first = await detail();
+  expect(first).toEqual({
+    length: { total: 23000, setting: 3000, worldbook: { entries: 18, characters: 19000 }, openings: { count: 3, characters: 1000 }, presentation: { openingPage: true, displayRules: 2, panel: true } },
+    deepPlay: { rate: 82, medianTurns: 6.5 }, rating: { average: 4.6, count: 5 }, comments: 2,
+  });
+  expect(await listed()).toEqual(first);
+  // 整頁快取 5 分鐘：新留言先不反映在列表，卡片數據端點照舊即時
+  await env.DB.prepare("INSERT INTO comments(id,card_id,member_id,content,created_at) VALUES('q-4',?,?,'c',4)").bind(row.id, fans[3]).run();
+  expect(await listed()).toMatchObject({ comments: 2 });
+  expect(await detail()).toMatchObject({ comments: 3 });
+});
+
+it('carries the same preview data on a member’s favorites', async () => {
+  vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 7_200_000 }); // 前面用例留下的同一張卡快取已過期
+  const row = (await getCard(env.DB, 'quality-source'))!;
+  identitiesFor({ harbor: { 'favorite-viewer': 2043 } });
+  const viewer = await makeMember(2043);
+  await env.DB.prepare('INSERT INTO member_favorites(member_id,card_id,created_at) VALUES(?,?,1)').bind(viewer, row.id).run();
+  await env.DB.prepare("INSERT INTO comments(id,card_id,member_id,content,created_at) VALUES('f-1',?,?,'a',1)").bind(row.id, viewer).run();
+  const response = await SELF.fetch('https://c.test/v1/me/favorites', { headers: { Authorization: 'Bearer favorite-viewer' } });
+  expect(response.status).toBe(200);
+  const body = await response.json<{ items: { qualitySignal?: { detail?: unknown } }[] }>();
+  expect(body.items[0].qualitySignal?.detail).toEqual(await (await card('/quality')).json());
+  expect(body.items[0].qualitySignal?.detail).toMatchObject({ comments: 1 });
 });

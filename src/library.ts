@@ -12,6 +12,7 @@ import { flushMetrics, recordLibraryMetric } from "./metrics-buffer";
 import { bodyLimit } from "hono/body-limit";
 import { Hono } from "hono";
 import { getCard,cardsByIds,listCards, toCard, type CardRow } from "./cards";
+import { listCardSocial } from "./card-quality";
 import {currentCardAccess,currentCardsAccess,filterPublicRows,unlistedCardRow} from './work-read';
 import { upstream } from "./upstream";
 import { assertRegionCard, libraryAllowsNsfw, memberByHandle, memberHiddenTags, memberNsfw, requireMember } from "./members";
@@ -112,25 +113,29 @@ for (const kind of ["favorites", "feed"] as const) {
       const displayMap=new Map(displayRows.map(r=>[String(r.id),r]));
       const rows=favorites.results.slice(0,limit).map(r=>displayMap.get(String(r.id))!).filter(Boolean),policies=await currentCardsAccess(c.env,rows,'library');
       const allowAdult=libraryAllowsNsfw(access),hiddenNames=new Set(hidden.flatMap(k=>tagNamesFor(k)??[]));
-      const items=[];
+      const entries:({unavailable:true;bookmarkId:string}|{row:CardRow;visible:CardRow})[]=[];
       for(const row of rows){
         const current=policies.get(String(row.id))!;
         if(!current.reachable){
-          if(current.managed)items.push({unavailable:true,bookmarkId:String(row.id)});
+          if(current.managed)entries.push({unavailable:true,bookmarkId:String(row.id)});
           continue;
         }
         if((row.rating==='R'||current.access==='unlisted')&&!allowAdult)continue;
         const visible=current.access==='unlisted'?await unlistedCardRow(c.env,row):row;
         if((JSON.parse(visible.tags) as string[]).some(tag=>hiddenNames.has(tag)))continue;
-        items.push(toCard(visible,c.req.query('lang')||'zh-Hant',true));
+        entries.push({row,visible});
       }
+      // 預覽要的評分與留言數只給照常上榜的那幾張（連結版沒有過審的數字）
+      const social=await listCardSocial(c.env,entries.flatMap(e=>'row' in e&&e.visible===e.row?[e.row]:[]),{ctx:c.executionCtx});
+      const lang=c.req.query('lang')||'zh-Hant';
+      const items=entries.map(e=>'row' in e?toCard(e.visible,lang,true,e.visible===e.row?social?.[String(e.row.id)]:undefined):e);
       return c.json({items,hasNext:favorites.results.length>limit,total:null,offset,limit});
     }
     const allowNsfw=access.showNsfw&&!!access.ageVerifiedAt;
     const position=await publicPosition(c.env,c.req.url,offset,allowNsfw,member.id);
     const source={followedBy:member.id,sort:'feed' as const,limit,offset,allowNsfw,excludeTags:hidden.flatMap(k=>tagNamesFor(k)??[])};
     const candidates=await publicCandidates(c.env,source,position.raw);
-    const result=await publicCandidatePage(c.env,candidates,position,{limit,offset,lang:c.req.query('lang')||'zh-Hant',allowNsfw,surface:'library'},source);
+    const result=await publicCandidatePage(c.env,candidates,position,{limit,offset,lang:c.req.query('lang')||'zh-Hant',allowNsfw,surface:'library',ctx:c.executionCtx},source);
     const events=await feedEvents(c.env.DB,result.items.map(card=>card.id),allowNsfw);
     return c.json({...result,items:result.items.map(card=>({...card,feedEvent:events.get(card.id)}))});
   });

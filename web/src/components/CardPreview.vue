@@ -43,6 +43,9 @@ async function load() {
   const id = card.value?.id;
   if (!id) return;
   const mine = ++ticket;
+  // 列表已經帶了整組數據就直接用，不再多一次請求；舊伺服器或那次讀不到評分留言時才打單卡端點
+  const inline = card.value?.qualitySignal?.detail;
+  if (inline) { loading.value = false; failed.value = false; detail.value = inline; return; }
   loading.value = true; failed.value = false; detail.value = null;
   try {
     const got = await loadCardQuality(String(id));

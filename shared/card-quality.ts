@@ -19,6 +19,8 @@ export interface CardQualityDeepPlay {
 export interface CardQualitySignal {
   lengthCharacters: number | null;
   deepPlay: CardQualityDeepPlay | null;
+  /** Public card lists include the preview data so the preview opens without another request. Absent when it could not be read. */
+  detail?: CardQualityDetail;
 }
 
 export interface CardQualityDetail {

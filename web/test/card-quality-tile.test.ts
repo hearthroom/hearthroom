@@ -124,3 +124,13 @@ it("treats a card the server has no numbers for as empty, not as a load failure"
   expect(dialog.textContent).not.toContain("數據載入不了");
   expect(dialog.querySelector('a[href="/cards/9"]')).not.toBeNull();
 });
+
+it("opens the preview from the data the list already carries, without another request", async () => {
+  await mount([card(10, { qualitySignal: { lengthCharacters: 23000, deepPlay: { rate: 82 }, detail } })]);
+  root.querySelector<HTMLButtonElement>(".card__preview")!.click(); await settle();
+  const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
+  expect(f.quality).not.toHaveBeenCalled();
+  expect(dialog.querySelector(".cq__ghosts")).toBeNull();
+  const text = dialog.textContent ?? "";
+  for (const s of ["82%", "4.6", "132", "14 回合", "18 條・1.9 萬字"]) expect(text).toContain(s);
+});

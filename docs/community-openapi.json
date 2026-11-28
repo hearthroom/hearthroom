@@ -6255,6 +6255,10 @@
                 "type": "null"
               }
             ]
+          },
+          "detail": {
+            "description": "Public card lists include everything the card data endpoint returns, so a preview can open without another request. The rating and comment count can be up to five minutes old. Absent when they could not be read.",
+            "$ref": "#/components/schemas/CardQualityDetail"
           }
         }
       },

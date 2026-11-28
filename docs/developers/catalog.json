@@ -2760,5 +2760,6 @@
   "2530978c25cae": "Read card statistics",
   "2571eff8cdf40": "Uses the card visibility and adult-content permissions. Returns rounded character counts for the approved version, presentation counts, and public player statistics. Deep play is hidden below 20 qualified players. Rating is hidden below 5 ratings.",
   "d53c1816e6b14": "Zero characters means fewer than 1,000. A null value means the statistic is unavailable.",
+  "d2f11cb96c214": "Public card lists include everything the card data endpoint returns, so a preview can open without another request. The rating and comment count can be up to five minutes old. Absent when they could not be read.",
   "d76adf6f95c25": "Retention rate as a whole percentage, rounded down."
 }

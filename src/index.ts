@@ -616,7 +616,8 @@ app.get("/v1/cards", async (c) => {
   const timing = `${moderation.timing}, access;dur=${accessMs.toFixed(1)}, cache;dur=${(performance.now() - cacheStarted).toFixed(1)}`;
   const cachedCandidates=hit?parsePublicCandidates(hit.body):null;
   if (hit&&cachedCandidates) {
-    const body=JSON.stringify({...await publicCandidatePage(c.env,cachedCandidates,position,{limit,offset,lang:lang(c),allowNsfw},source),sort:sortKey});
+    let socialLayer='none';
+    const body=JSON.stringify({...await publicCandidatePage(c.env,cachedCandidates,position,{limit,offset,lang:lang(c),allowNsfw,ctx:c.executionCtx,onSocial:layer=>{socialLayer=layer;}},source),sort:sortKey});
     // 快取命中一樣是一次瀏覽行為；結果數這條路上沒有，但空不空看得出來——不標的話中間件會把每次命中都記成 ok，空結果率就偏低
     const q0 = c.req.query("q")?.trim();
     note(c, {
@@ -630,11 +631,12 @@ app.get("/v1/cards", async (c) => {
       zoneScope: c.req.query("zone") === "all" ? "all" : "current",
       offset: clamp(c.req.query("offset"), 0, 10_000),
     });
-    return boardResponse(body, allowNsfw, hit.layer, timing);
+    return boardResponse(body, allowNsfw, hit.layer, `${timing}, social;desc=${socialLayer}`);
   }
   const queryStarted = performance.now();
   const candidates = await publicCandidates(c.env,source,position.raw);
-  const page=await publicCandidatePage(c.env,candidates,position,{limit,offset,lang:lang(c),allowNsfw},source);
+  let socialLayer='none';
+  const page=await publicCandidatePage(c.env,candidates,position,{limit,offset,lang:lang(c),allowNsfw,ctx:c.executionCtx,onSocial:layer=>{socialLayer=layer;}},source);
   const q = c.req.query("q")?.trim();
   // 搜尋與榜單是兩種行為，分開記；結果數只有這裡拿得到（total 有篩選時是 null，中間件讀不到）
   note(c, {
@@ -651,7 +653,7 @@ app.get("/v1/cards", async (c) => {
   });
   const body=JSON.stringify({...page,sort:sortKey});
   if (sort !== "random") writeBoardCache(c.env,c.executionCtx,cacheKey,JSON.stringify(candidates));
-  return boardResponse(body, allowNsfw, "origin", `${timing}, query;dur=${(performance.now() - queryStarted).toFixed(1)}`);
+  return boardResponse(body, allowNsfw, "origin", `${timing}, query;dur=${(performance.now() - queryStarted).toFixed(1)}, social;desc=${socialLayer}`);
 });
 
 /**

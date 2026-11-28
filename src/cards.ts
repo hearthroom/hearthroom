@@ -11,10 +11,10 @@ import {managedWork} from './work-policy';
 import {fenceManagedWork} from './work-fence';
 import {COVER_HONORS} from './rank-honors';
 import {NOV_20_COMPENSATION_DEPLOYED_AT,NOV_20_DAILY_COHORT_START,NOV_20_OUTAGE_BOARD_SINCE,NOV_20_OUTAGE_START,RANK_DURATION} from './rank-settlement';
-import { FRESH_PLAY_SNAPSHOT, cardQualitySignal, type QualitySignalRow } from './card-quality';
+import { FRESH_PLAY_SNAPSHOT, QUALITY_COLUMNS, cardQualitySignal, qualityProjection, type CardSocial, type QualityRow } from './card-quality';
 import type {RankHonor} from '../shared/rank-honors';
 
-export interface CardRow extends CoverFlags, QualitySignalRow {
+export interface CardRow extends CoverFlags, QualityRow {
   honors?:string;
   update_kind?: 'minor'|'major';
   update_note?: string;
@@ -103,7 +103,7 @@ const FEED_EVENT_AT = `MAX(c.registered_at, COALESCE(${LATEST_ANNOUNCED_UPDATE},
 const CARD_METADATA = "cn.cover_author_sensitive, cn.cover_review_sensitive, (SELECT update_kind FROM hosting_versions WHERE version_id=c.approved_version_id) AS update_kind, (SELECT update_note FROM hosting_versions WHERE version_id=c.approved_version_id) AS update_note, CAST(c.id AS TEXT) AS id, " + UPDATED_AT + " AS updated_at, fe.labels AS fandom_labels, am.handle AS author_handle, am.is_official AS author_official, am.tip_links AS author_tip_links, am.display_name AS community_name, CASE WHEN am.display_name IS NOT NULL THEN am.avatar_url END AS community_avatar, cn.num AS num, (SELECT COUNT(*) FROM member_favorites mf WHERE mf.card_id=c.id) AS favorite_count";
 const QUALITY_JOINS = `LEFT JOIN card_quality_lengths ql ON ql.version_id=c.approved_version_id
   LEFT JOIN card_quality_play qp ON qp.card_id=c.id AND ${FRESH_PLAY_SNAPSHOT}`;
-const QUALITY_METADATA = 'ql.total_chars AS quality_chars, qp.players AS quality_players, qp.reached AS quality_reached';
+const QUALITY_METADATA = QUALITY_COLUMNS;
 const CARD_COLUMNS = COVER_HONORS + " AS honors, c.*, " + CARD_METADATA + ", " + QUALITY_METADATA;
 // Capture card content and the visibility binding together, without presentation joins.
 const LIST_CARD_COLUMNS = "CAST(c.id AS TEXT) AS id, " + [
@@ -166,12 +166,19 @@ const listed = (allowNsfw:boolean,alias='c') => `${alias}.status='approved' AND 
  ${allowNsfw?'':`AND ${alias}.${NOT_ADULT}`}`;
 
 /** 回應按請求語言解析好名稱與簡介，同時附上原始多語，讓客戶端能自己切換。 */
-export function toCard(row: CardRow, lang: string, includeQuality = false) {
+/**
+ * includeQuality：公開列表帶磚上的品質信號。social 有值時再附上預覽要的整組數據（qualitySignal.detail），
+ * 點預覽不必再打一次單卡端點；讀不到評分留言時不附，前端照舊單卡請求。
+ */
+export function toCard(row: CardRow, lang: string, includeQuality = false, social?: CardSocial) {
   const names = JSON.parse(row.names) as Localized;
   const summaries = JSON.parse(row.summaries) as Localized;
   return {
     id: String(row.id),
-    ...(includeQuality && row.status === 'approved' ? { qualitySignal: cardQualitySignal(row) } : {}),
+    ...(includeQuality && row.status === 'approved' ? { qualitySignal: {
+      ...cardQualitySignal(row),
+      ...(social ? { detail: { ...qualityProjection(row), ...social } } : {}),
+    } } : {}),
     roleId: row.approved_hosted_role_id ?? row.source_role_id,
     sourceRoleId: row.source_role_id,
     /** 本站卡號：短、能唸出來、能在不准貼連結的地方報。撤銷再登記不換號（card_numbers）。 */
