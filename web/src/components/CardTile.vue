@@ -17,6 +17,9 @@ import RankBadge from "./RankBadge.vue";
 import { fitCoverHonors } from "@/lib/cover-honor-fit";
 import { coverHonors, HONOR_COLORS } from "@/lib/honors";
 import { ratingName } from "@/lib/rating";
+import { useCardQualityCapability } from "@/lib/card-quality-capability";
+import { cardPreview, openCardPreview } from "@/lib/card-preview";
+import { qualityCharacters, qualityRatio } from "@/lib/card-quality-format";
 
 const props = defineProps<{
   card: CommunityCard;
@@ -118,6 +121,23 @@ onBeforeUnmount(() => { marksObserver?.disconnect(); window.removeEventListener(
 watch(marks, (el, before) => { if (before) marksObserver?.unobserve(before); if (el) marksObserver?.observe(el); });
 watch([honors, locale, () => props.rank, () => props.card.rating], async () => { await nextTick(); fitMarks(); });
 
+/*
+ * 卡片品質信號（任務 2026-11-28-card-quality-signals）：伺服器打開旗標後，每張磚在標籤與作者之間多一行，
+ * 未滿合格玩家門檻寫篇幅，滿了換成「聊滿 N 回合 X/Y」；封面右下角多一顆預覽鈕。旗標沒開時整張磚照舊。
+ * 這張卡還沒有數字（快照沒算到、私卡或連結版）時留一行同高的空白，同一排的磚才一樣高。
+ */
+const quality = useCardQualityCapability();
+const qualityLine = computed(() => {
+  const signal = props.card.qualitySignal;
+  if (signal?.deepPlay) return { label: t("quality.deep.label", { n: signal.deepPlay.turns }), value: qualityRatio(signal.deepPlay.reached, signal.deepPlay.players) };
+  if (typeof signal?.lengthCharacters === "number") return { label: t("quality.tile.length"), value: qualityCharacters(signal.lengthCharacters) };
+  return null;
+});
+const previewOpen = computed(() => cardPreview.value?.card.id === props.card.id);
+function openPreview(event: MouseEvent) {
+  openCardPreview({ card: props.card, opener: event.currentTarget as HTMLElement, concealed: concealed.value && hasArt.value });
+}
+
 /** 封面上的限制級縮成「R」方塊：文字藥丸約 52 寬，最窄的封面（135）放不下它和左上那一列 */
 const adultLabel = computed(() => ratingName("R", String(locale.value)));
 </script>
@@ -128,7 +148,7 @@ const adultLabel = computed(() => ratingName("R", String(locale.value)));
     名字的連結用 ::after 撐滿整張卡，標籤與作者疊在它上面。
   -->
   <!-- 進場用 settle 不用 rise：卡片就是首屏最大的內容，要一出現就看得見（見 base.css） -->
-  <article ref="cardElement" class="card settle">
+  <article ref="cardElement" class="card settle" :class="{ 'card--previewing': previewOpen }">
     <div class="card__art" :class="{ 'card__art--concealed': concealed && hasArt }">
       <img
         v-if="hasArt"
@@ -149,9 +169,10 @@ const adultLabel = computed(() => ratingName("R", String(locale.value)));
       <!-- 名次是個小徽章，前三名用慣例的金銀銅；不搶立繪的戲 -->
       <!-- 分級與精選都標在立繪角上：不跟名字搶那兩行的寬度 -->
       <span v-if="card.rating === 'R'" class="card__flag" role="img" :aria-label="adultLabel" :title="adultLabel">R</span>
-      <!-- 底下一列：精選標在左、時間在右，放同一個 flex 列裡。英日韓的精選標很長，各自絕對定位時會蓋掉時間；時間不縮，精選標截斷 -->
-      <div v-if="card.featured || shownAt" class="card__corner">
-      <span v-if="card.featured" class="card__featured" :title="$t('card.featuredHint')">{{ $t("card.featuredShort") }}</span>
+      <!-- 底下一列：精選標在左、時間在右，放同一個 flex 列裡。英日韓的精選標很長，各自絕對定位時會蓋掉時間；時間不縮，精選標截斷。
+           品質信號上線後（card__corner--quality）：由左到右是時間、精選、預覽鈕；精選放不下整個標就不顯示，不截成「精…」 -->
+      <div v-if="card.featured || shownAt || (quality && !selectOnly)" class="card__corner" :class="{ 'card__corner--quality': quality }">
+      <span v-if="card.featured" class="card__feat-slot"><span class="card__featured" :title="$t('card.featuredHint')">{{ $t("card.featuredShort") }}</span></span>
       <!-- 幾天前更新：目前上線那一版過審的時刻（跟「更新」榜同一個口徑）。標在立繪右下角（像影片縮圖的時長）：
          底下那一行在手機上只有 140px，作者、時間、對話數三樣放不下。畫面只放時鐘與相對時間，整句給提示與讀屏 -->
       <span v-if="shownAt" class="card__updated" :title="timeLabel">
@@ -162,6 +183,10 @@ const adultLabel = computed(() => ratingName("R", String(locale.value)));
         </svg>
         <time :datetime="new Date(shownAt).toISOString()" aria-hidden="true">{{ relativeTime(shownAt) }}</time>
       </span>
+      <!-- 預覽鈕：半透明深色玻璃配白色面板輪廓（不用眼睛，眼睛是「顯示敏感封面」）；點擊區用偽元素擴到 44 -->
+      <button v-if="quality && !selectOnly" type="button" class="card__preview" :aria-label="t('quality.preview', { name })" aria-haspopup="dialog" :aria-expanded="previewOpen" @click.stop.prevent="openPreview">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.2" y="2.2" width="11.6" height="11.6" rx="2.6" /><path d="M2.2 9.2h11.6" /></svg>
+      </button>
       </div>
       <!--
         左上先放目前名次或關注動態的事件類別，再按日、週、月排列榜單榮譽。
@@ -200,6 +225,13 @@ const adultLabel = computed(() => ratingName("R", String(locale.value)));
         </li>
         <li v-if="moreTags" class="tag tag--more">+{{ moreTags }}</li>
       </ul>
+
+      <p v-if="quality" class="card__quality" :aria-hidden="qualityLine ? undefined : 'true'">
+        <template v-if="qualityLine">
+          <span class="sr-only">{{ qualityLine.label }} {{ qualityLine.value }}</span>
+          <b class="card__quality-value" aria-hidden="true">{{ qualityLine.value }}</b><span class="card__quality-label" aria-hidden="true">{{ qualityLine.label }}</span>
+        </template>
+      </p>
 
       <div class="card__meta">
         <span v-if="showZone" class="card__by">{{ zoneLabel(card.zone) }}</span>
@@ -291,11 +323,30 @@ const adultLabel = computed(() => ratingName("R", String(locale.value)));
   }
 }
 
+.card--previewing { box-shadow: 0 0 0 2px var(--accent), var(--shadow-sm); }
 .card__body { display: grid; gap: 5px; padding: 10px 12px 11px; container-type: inline-size; }
 .card__corner {
   position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 2; pointer-events: none;
   display: flex; align-items: center; gap: 4px;
 }
+.card__feat-slot { display: flex; min-width: 0; }
+/*
+ * 品質信號版的底列：時間 → 精選 → 預覽鈕（靠右）。精選放在一格會換行的槽裡，前面墊一個零寬的項目：
+ * 整個標放得下就留在第一行，放不下就掉到第二行被裁掉（不截成「精…」，PM 2026-11-28 裁定）。
+ */
+.card__corner--quality .card__updated { order: 0; margin-left: 0; }
+.card__corner--quality .card__feat-slot { order: 1; flex: 1 1 0; flex-wrap: wrap; align-items: center; height: 20px; overflow: hidden; }
+.card__corner--quality .card__feat-slot::before { content: ""; width: 0; height: 20px; }
+.card__corner--quality .card__featured { flex: none; overflow: visible; text-overflow: clip; }
+.card__preview {
+  order: 2; position: relative; flex: none; margin-left: auto; pointer-events: auto;
+  display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; border: 0;
+  border-radius: var(--r-pill); background: rgba(16, 16, 19, 0.62); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+  color: #fff; cursor: pointer;
+}
+.card__preview::before { content: ""; position: absolute; inset: -6px; border-radius: var(--r-pill); }
+.card__preview svg { width: 16px; height: 16px; }
+.card__preview:hover { background: rgba(16, 16, 19, 0.78); }
 /* block 而不是 inline-flex：文字直接當 flex 項目時省略號不會出現 */
 .card__featured {
   display: block; min-width: 0; height: 20px; line-height: 20px; padding: 0 5px;
@@ -352,6 +403,18 @@ const adultLabel = computed(() => ratingName("R", String(locale.value)));
 .card__hook--note b { margin-right: 4px; font-size: 11px; font-weight: 600; color: var(--text-3); }
 .card__hook--note:lang(ko) { word-break: keep-all; }
 
+/*
+ * 品質信號那一行：說明可以省略，數字不省略；每張磚都有這一行（沒數字時是同高空白）。
+ * 數字排在 DOM 前面、row-reverse 畫回「說明 數字」：說明至少要有 3em 才留著（放得下就照常、放不下全文就省略號），
+ * 連 3em 都沒有（320 寬的英文「under 1,000 chars」）就整個換到被裁掉的第二行，數字完整留在第一行。
+ */
+.card__quality {
+  display: flex; flex-direction: row-reverse; flex-wrap: wrap; justify-content: flex-end; align-items: center; column-gap: 6px;
+  height: 20px; margin: 2px 0 0; overflow: hidden;
+  font-size: 12px; line-height: 20px; color: var(--text-2); white-space: nowrap;
+}
+.card__quality-label { flex: 1 1 3em; max-width: max-content; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.card__quality-value { flex: none; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
 .card__tags { display: flex; gap: 4px; margin: 1px 0 0; padding: 0; list-style: none; overflow: hidden; }
 /* 包著連結的 li 若是一般的 list-item，會多一條文字基線把標籤往下推 2px，跟直接當 li 的「+N」對不齊 */
 .card__tags > li { display: flex; min-width: 0; }

@@ -18,6 +18,7 @@ import { startHeaderPolling } from "@/lib/header-polling";
 import AdultToggle from "@/components/AdultToggle.vue";
 import AppearanceMenu from "@/components/AppearanceMenu.vue";
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
+import CardPreview from "@/components/CardPreview.vue";
 import RatingDialog from "@/components/RatingDialog.vue";
 import InstallToast from "@/components/InstallToast.vue";
 import LocaleSwitch from "@/components/LocaleSwitch.vue";
@@ -288,6 +289,8 @@ onMounted(() => document.addEventListener("keydown", onSlash));
   <NewcomerTour v-if="stageAvailable" />
   <!-- 桌寵兼嚮導：玩卡頁與沙盒（bare、卡片 App 網域）不出現，其他每一頁都在 -->
   <SukiPet :list-end-allowed="!onBoardPage || ['following', 'authors'].includes(String(route.query.mode)) || boardListEnd" :inert="headerOverlays.size > 0" v-if="!route.meta.bare && !isPlayHost() && !route.meta.readingNotice" />
+  <!-- 卡片預覽：任何清單裡的磚按封面右下角的鈕打開，全站只有一個 -->
+  <CardPreview />
   <ConfirmDialog />
   <RatingDialog />
   <!-- 裝到主畫面的提示：對話與遊戲頁是全螢幕的，不在那裡打擾 -->
