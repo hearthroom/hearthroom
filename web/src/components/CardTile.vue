@@ -19,7 +19,7 @@ import { coverHonors, HONOR_COLORS } from "@/lib/honors";
 import { ratingName } from "@/lib/rating";
 import { useCardQualityCapability } from "@/lib/card-quality-capability";
 import { cardPreview, openCardPreview } from "@/lib/card-preview";
-import { qualityCharacters, qualityPercent } from "@/lib/card-quality-format";
+import { qualityCharacters, qualityRate } from "@/lib/card-quality-format";
 
 const props = defineProps<{
   card: CommunityCard;
@@ -129,7 +129,7 @@ watch([honors, locale, () => props.rank, () => props.card.rating], async () => {
 const quality = useCardQualityCapability();
 const qualityLine = computed(() => {
   const signal = props.card.qualitySignal;
-  if (signal?.deepPlay) return { label: t("quality.retention.label"), value: qualityPercent(signal.deepPlay.reached, signal.deepPlay.players) };
+  if (signal?.deepPlay) return { label: t("quality.retention.label"), value: qualityRate(signal.deepPlay.rate) };
   if (typeof signal?.lengthCharacters === "number") return { label: t("quality.tile.length"), value: qualityCharacters(signal.lengthCharacters) };
   return null;
 });

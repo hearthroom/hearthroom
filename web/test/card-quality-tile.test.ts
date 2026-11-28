@@ -22,7 +22,7 @@ const card = (num: number, extra: Partial<CommunityCard> = {}) => ({
 } as CommunityCard);
 const detail: CardQualityDetail = {
   length: { total: 23000, setting: 3000, worldbook: { entries: 18, characters: 19000 }, openings: { count: 3, characters: 1000 }, presentation: { openingPage: true, displayRules: 2, panel: false } },
-  deepPlay: { reached: 164, players: 200, turns: 5, medianTurns: 14 },
+  deepPlay: { rate: 82, medianTurns: 14 },
   rating: { average: 4.62, count: 30 },
   comments: 132,
 };
@@ -44,7 +44,7 @@ const lines = () => [...root.querySelectorAll(".card__quality")].map((p) => p.qu
 it("adds one data line to every tile: length before the threshold, retention rate after, blank without numbers", async () => {
   await mount([
     card(1, { qualitySignal: { lengthCharacters: 14000, deepPlay: null } }),
-    card(2, { qualitySignal: { lengthCharacters: 23000, deepPlay: { reached: 164, players: 200, turns: 5 } } }),
+    card(2, { qualitySignal: { lengthCharacters: 23000, deepPlay: { rate: 82 } } }),
     card(3, { qualitySignal: null }),
   ]);
   expect(lines()).toEqual(["篇幅 1.4 萬字", "續玩率 82%", ""]);
@@ -63,7 +63,7 @@ it("keeps the old tile when the server has not turned the feature on", async () 
 
 it("opens the preview from the cover button, shows the data, and returns focus on Escape", async () => {
   f.quality.mockResolvedValue(detail);
-  await mount([card(7, { featured: true, qualitySignal: { lengthCharacters: 23000, deepPlay: { reached: 164, players: 200, turns: 5 } } })]);
+  await mount([card(7, { featured: true, qualitySignal: { lengthCharacters: 23000, deepPlay: { rate: 82 } } })]);
   const button = root.querySelector<HTMLButtonElement>(".card__preview")!;
   expect(button.getAttribute("aria-label")).toBe("預覽「合成卡 7」");
   // 底列：精選槽、時間、預覽鈕都在同一列（畫面順序由 CSS order 排成時間、精選、預覽鈕）
