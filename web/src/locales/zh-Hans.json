@@ -6430,6 +6430,5 @@
   "quality.pres.rules": "显示规则 {n} 条",
   "quality.dataTitle": "卡片数据",
   "quality.loadFailed": "数据加载不了",
-  "quality.retry": "重试",
-  "quality.editor.label": "列表上的篇幅"
+  "quality.retry": "重试"
 }
