@@ -4,10 +4,11 @@
  * 玩家數據 → 篇幅 → 呈現方式；沒有內容的區塊整塊不出現，不寫「無」。
  * 數字都是伺服器取整後的計數，這裡只換成各語言的寫法（lib/card-quality-format）。
  */
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import type { CardQualityDetail } from "../../../shared/card-quality";
-import { qualityCharacters, qualityPercent, qualityRatio } from "@/lib/card-quality-format";
+import { qualityCharacters, qualityPercent } from "@/lib/card-quality-format";
+import WorkshopIcon from "./workshop/WorkshopIcon.vue";
 
 const props = defineProps<{ detail: CardQualityDetail | null; loading?: boolean; failed?: boolean }>();
 const emit = defineEmits<{ retry: [] }>();
@@ -16,6 +17,10 @@ const { t, locale } = useI18n();
 const number = (n: number, digits = 0) => new Intl.NumberFormat(String(locale.value), { maximumFractionDigits: digits, minimumFractionDigits: digits }).format(n);
 
 const deep = computed(() => props.detail?.deepPlay ?? null);
+/* 續玩率旁的說明（問號鈕）：怎麼算、分子分母、誰算合格玩家；預設收起，換一張卡就收回去 */
+const helpId = `cq-help-${Math.random().toString(36).slice(2, 9)}`;
+const helpOpen = ref(false);
+watch(() => props.detail, () => { helpOpen.value = false; });
 const stats = computed(() => {
   const d = props.detail;
   if (!d) return [];
@@ -65,11 +70,17 @@ const hasPlayers = computed(() => Boolean(deep.value) || stats.value.length > 0)
         <h3 class="cq__h">{{ $t("quality.section.players") }}</h3>
         <div v-if="deep" class="cq__deep">
           <div class="cq__deep-top">
-            <span class="cq__deep-num">{{ qualityRatio(deep.reached, deep.players) }}</span>
-            <span class="cq__deep-pct">{{ qualityPercent(deep.reached, deep.players) }}</span>
-            <span class="cq__deep-label">{{ $t("quality.deep.label", { n: deep.turns }) }}</span>
+            <span class="cq__deep-label">{{ $t("quality.retention.label") }}</span>
+            <span class="cq__deep-num">{{ qualityPercent(deep.reached, deep.players) }}</span>
+            <button type="button" class="cq__help" :aria-label="$t('quality.retention.help')" :aria-expanded="helpOpen" :aria-controls="helpId" @click="helpOpen = !helpOpen">
+              <WorkshopIcon name="info" />
+            </button>
           </div>
-          <p class="cq__deep-sent">{{ $t("quality.deep.sentence", { players: number(deep.players), reached: number(deep.reached), n: deep.turns }) }}</p>
+          <div v-show="helpOpen" :id="helpId" class="cq__help-body">
+            <p>{{ $t("quality.retention.explain", { n: deep.turns }) }}</p>
+            <p class="cq__help-count">{{ $t("quality.retention.count", { players: number(deep.players), reached: number(deep.reached) }) }}</p>
+            <p class="cq__help-rules">{{ $t("quality.retention.rules") }}</p>
+          </div>
         </div>
         <dl v-if="stats.length" class="cq__stats" :style="{ gridTemplateColumns: `repeat(${stats.length}, minmax(0, 1fr))` }">
           <div v-for="s in stats" :key="s.key" class="cq__stat">
@@ -107,11 +118,21 @@ const hasPlayers = computed(() => Boolean(deep.value) || stats.value.length > 0)
 .cq__sec { min-width: 0; }
 
 .cq__deep { display: grid; gap: 2px; padding: var(--s-3) 14px; border-radius: var(--r-md); background: var(--surface-2); }
-.cq__deep-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.cq__deep-top { display: flex; align-items: center; gap: var(--s-2); }
 .cq__deep-num { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
-.cq__deep-pct { font-size: 15px; font-weight: 600; color: var(--text-2); font-variant-numeric: tabular-nums; }
 .cq__deep-label { font-size: 13px; font-weight: 600; color: var(--text-2); }
-.cq__deep-sent { margin: 0; font-size: 13px; line-height: 1.6; color: var(--text-2); }
+/* 問號鈕：圖示 16、點擊區 30（--h-sm），不搶數字 */
+.cq__help {
+  display: flex; align-items: center; justify-content: center; flex: none;
+  width: var(--h-sm); height: var(--h-sm); margin: -4px 0 -4px -4px; padding: 0; border: 0; border-radius: var(--r-pill);
+  background: none; color: var(--text-3); cursor: pointer;
+}
+.cq__help:hover, .cq__help[aria-expanded="true"] { color: var(--accent-text); }
+.cq__help svg { width: 16px; height: 16px; }
+.cq__help-body { display: grid; gap: 4px; margin-top: var(--s-1); font-size: 13px; line-height: 1.6; color: var(--text-2); }
+.cq__help-body p { margin: 0; }
+.cq__help-count { font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+.cq__help-rules { font-size: 12px; color: var(--text-3); }
 .cq__deep + .cq__stats { margin-top: var(--s-2); }
 
 .cq__stats { display: grid; gap: var(--s-2); margin: 0; }
@@ -125,8 +146,8 @@ const hasPlayers = computed(() => Boolean(deep.value) || stats.value.length > 0)
 .cq__row dt { min-width: 0; color: var(--text-2); }
 .cq__row dd { flex: none; margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
 .cq__note { margin: 6px 0 0; font-size: 12px; line-height: 1.6; color: var(--text-3); }
-.cq__note:lang(ko), .cq__deep-sent:lang(ko) { word-break: keep-all; }
-.cq__note:lang(ja), .cq__deep-sent:lang(ja) { word-break: auto-phrase; }
+.cq__note:lang(ko), .cq__help-body:lang(ko) { word-break: keep-all; }
+.cq__note:lang(ja), .cq__help-body:lang(ja) { word-break: auto-phrase; }
 
 .cq__chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
 
